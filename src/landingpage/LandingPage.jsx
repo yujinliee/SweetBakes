@@ -7,6 +7,10 @@ import loginIcon from '../assets/landingpage/login.svg'
 import loginIconBlack from '../assets/landingpage/login_black.svg'
 import heroImage from '../assets/landingpage/main_hero.svg'
 import happinessLine from '../assets/landingpage/happiness_line.svg'
+import cakesImage from '../assets/landingpage/cakes.svg'
+import cupcakesImage from '../assets/landingpage/cupcakes.svg'
+import partyImage from '../assets/landingpage/party_package.svg'
+import textureBackground from '../assets/landingpage/texture_background.svg'
 import mapsImage from '../assets/landingpage/maps.svg'
 import footerMark from '../assets/landingpage/sweetbakes_footer.svg'
 import './LandingPage.css'
@@ -16,6 +20,29 @@ function LandingPage() {
   const [isShopOpen, setIsShopOpen] = useState(false)
   const heroRef = useRef(null)
   const shopMenuRef = useRef(null)
+  const offerings = [
+    {
+      title: 'Cakes',
+      cta: 'Order Cakes',
+      description:
+        "Bring your dream cake to life by customizing every design detail. From elegant celebrations to fun themed occasions, we'll create a cake that reflects your unique style and vision.",
+      image: cakesImage,
+    },
+    {
+      title: 'Cupcakes',
+      cta: 'Order Cupcakes',
+      description:
+        'Customize every cupcake to match your celebration. Whether you prefer elegant, playful, or themed designs, each box is carefully crafted to complement your special occasion.',
+      image: cupcakesImage,
+    },
+    {
+      title: 'Party Packages',
+      cta: 'Order Package',
+      description:
+        'Create a complete dessert experience by customizing a party package that fits your celebration. Personalize your cake and cupcakes to achieve a cohesive look for your special event.',
+      image: partyImage,
+    },
+  ]
 
   useEffect(() => {
     const getScrollThreshold = () => {
@@ -52,6 +79,33 @@ function LandingPage() {
     }
   }, [])
 
+  useEffect(() => {
+    const showcaseItems = document.querySelectorAll('.offer-showcase')
+
+    if (!('IntersectionObserver' in window)) {
+      showcaseItems.forEach((item) => item.classList.add('offer-showcase--visible'))
+      return undefined
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('offer-showcase--visible')
+            observer.unobserve(entry.target)
+          }
+        })
+      },
+      { threshold: 0.24 },
+    )
+
+    showcaseItems.forEach((item) => observer.observe(item))
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [])
+
   return (
     <div className="page-shell">
       <header className={`topbar${isScrolled ? ' topbar--scrolled' : ''}`}>
@@ -61,7 +115,9 @@ function LandingPage() {
           </a>
 
           <nav className="nav" aria-label="Primary">
-            <a href="#home">Home</a>
+            <a href="#home">
+              <span className="nav-link-text">Home</span>
+            </a>
             <div
               className={`nav-dropdown${isShopOpen ? ' nav-dropdown--open' : ''}`}
               ref={shopMenuRef}
@@ -75,7 +131,7 @@ function LandingPage() {
                 aria-haspopup="true"
                 onClick={() => setIsShopOpen((current) => !current)}
               >
-                Shop
+                <span className="nav-link-text">Shop</span>
               </button>
               <div className="nav-dropdown-menu" id="shop-dropdown-menu">
                 <a href="#contact" onClick={() => setIsShopOpen(false)}>
@@ -89,8 +145,12 @@ function LandingPage() {
                 </a>
               </div>
             </div>
-            <a href="#location">Location</a>
-            <a href="#contact">Contact</a>
+            <a href="#location">
+              <span className="nav-link-text">Location</span>
+            </a>
+            <a href="#contact">
+              <span className="nav-link-text">Contact</span>
+            </a>
           </nav>
 
           <div className="topbar-actions" aria-label="Quick actions">
@@ -174,9 +234,49 @@ function LandingPage() {
           </div>
         </section>
 
+        <section className="section section--open order-section" id="shop">
+          <div className="section-heading order-section-heading animate-up">
+            <h2>Start Your Order</h2>
+            <p>
+              Whether you're looking for a ready-made treat or a personalized creation,
+              we've got something for every celebration.
+            </p>
+          </div>
+
+          <div className="offer-showcases">
+            {offerings.map((item, index) => (
+              <article
+                className={`offer-showcase${index % 2 === 1 ? ' offer-showcase--reverse' : ''}`}
+                key={item.title}
+              >
+                <div className="offer-showcase-copy">
+                  <h3>{item.title}</h3>
+                  <p>{item.description}</p>
+                  <a className="offer-showcase-link" href="#contact">
+                    <span>{item.cta}</span>
+                    <span aria-hidden="true">→</span>
+                  </a>
+                </div>
+                <div className="offer-showcase-media">
+                  <div className="offer-showcase-composition">
+                    <img
+                      className="offer-showcase-texture"
+                      src={textureBackground}
+                      alt=""
+                      aria-hidden="true"
+                    />
+                    <div className="offer-showcase-image-frame">
+                      <img src={item.image} alt={item.title} />
+                    </div>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+
         <section className="section quote-section" aria-labelledby="testimonial-title">
           <div className="section-heading animate-up">
-            <p className="eyebrow">Customer love</p>
             <h2 id="testimonial-title">What our customers say</h2>
           </div>
           <blockquote className="animate-up" style={{ '--delay': '100ms' }}>
@@ -189,9 +289,8 @@ function LandingPage() {
         </section>
 
         <section className="section section--open location-section" id="location">
-          <div className="section-heading animate-up">
-            <p className="eyebrow">Visit us</p>
-            <h2>Pickups, inquiries, and custom orders</h2>
+          <div className="section-heading location-heading animate-up">
+            <h2>Location</h2>
             <p>
               Stop by the shop to discuss flavors, themes, and the details of your
               next cake order in person.
@@ -203,8 +302,46 @@ function LandingPage() {
             <div className="location-copy">
               <h3>Diamond Village, Salawag, Dasmariñas City</h3>
               <p>Diamond Village Salawag Dasmariñas Cavite, Philippines, 4114</p>
-              <a href="tel:+639278700399">0927 870 0399</a>
-              <a href="mailto:rhonanarvaez@gmail.com">rhonanarvaez@gmail.com</a>
+              <div className="location-contact-list" aria-label="Location contact details">
+                <a className="location-contact-row" href="tel:+639278700399">
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M22 16.92V20a2 2 0 0 1-2.18 2A19.79 19.79 0 0 1 3 5.18 2 2 0 0 1 5 3h3.09a2 2 0 0 1 2 1.72l.45 3a2 2 0 0 1-.57 1.74l-1.32 1.32a16 16 0 0 0 4.57 4.57l1.32-1.32a2 2 0 0 1 1.74-.57l3 .45A2 2 0 0 1 22 16.92Z"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  <span>0927 870 0399</span>
+                </a>
+                <a className="location-contact-row" href="mailto:rhonanarvaez@gmail.com">
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M4 6h16v12H4V6Zm16 1-8 6-8-6"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  <span>rhonanarvaez@gmail.com</span>
+                </a>
+              </div>
             </div>
           </div>
         </section>
