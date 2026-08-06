@@ -7,12 +7,22 @@ import loginIcon from '../assets/landingpage/login.svg'
 import loginIconBlack from '../assets/landingpage/login_black.svg'
 import heroImage from '../assets/landingpage/main_hero.svg'
 import happinessLine from '../assets/landingpage/happiness_line.svg'
+import dividerLine from '../assets/landingpage/divider.svg'
 import cakesImage from '../assets/landingpage/cakes.svg'
 import cupcakesImage from '../assets/landingpage/cupcakes.svg'
 import partyImage from '../assets/landingpage/party_package.svg'
 import textureBackground from '../assets/landingpage/texture_background.svg'
+import masonryImage44 from '../assets/landingpage/masonry/image 44.png'
+import masonryImage45 from '../assets/landingpage/masonry/image 45.png'
+import masonryImage46 from '../assets/landingpage/masonry/image 46.png'
+import masonryImage47 from '../assets/landingpage/masonry/image 47.png'
+import masonryImage48 from '../assets/landingpage/masonry/image 48.png'
+import masonryImage49 from '../assets/landingpage/masonry/image 49.png'
+import masonryRectangle78 from '../assets/landingpage/masonry/Rectangle 78.png'
+import masonryRectangle83 from '../assets/landingpage/masonry/Rectangle 83.png'
 import mapsImage from '../assets/landingpage/maps.svg'
 import footerMark from '../assets/landingpage/sweetbakes_footer.svg'
+import footerBackground from '../assets/landingpage/footer_bg.png'
 import './LandingPage.css'
 
 function LandingPage() {
@@ -41,6 +51,64 @@ function LandingPage() {
       description:
         'Create a complete dessert experience by customizing a party package that fits your celebration. Personalize your cake and cupcakes to achieve a cohesive look for your special event.',
       image: partyImage,
+    },
+  ]
+  const galleryItems = [
+    {
+      title: 'Floral Celebration Cake',
+      description: 'Soft florals and custom toppers for a romantic centerpiece.',
+      label: 'Birthday',
+      image: masonryImage46,
+      shape: 'portrait',
+    },
+    {
+      title: 'Signature Cupcake Box',
+      description: 'A curated set of decorated cupcakes for sweet gifting.',
+      label: 'Cupcakes',
+      image: masonryImage45,
+      shape: 'square',
+    },
+    {
+      title: 'Party Dessert Table',
+      description: 'A coordinated cake and cupcake spread for larger gatherings.',
+      label: 'Party',
+      image: masonryImage44,
+      shape: 'landscape',
+    },
+    {
+      title: 'Pastel Cake Details',
+      description: 'Delicate color, polished finishes, and handmade accents.',
+      label: 'Custom cake',
+      image: masonryRectangle83,
+      shape: 'square',
+    },
+    {
+      title: 'Celebration Cupcakes',
+      description: 'Playful frosting, themed toppers, and fresh-baked texture.',
+      label: 'Celebration',
+      image: masonryImage48,
+      shape: 'portrait',
+    },
+    {
+      title: 'Complete Sweet Package',
+      description: 'Designed as one cohesive dessert moment for your event.',
+      label: 'Package',
+      image: masonryImage49,
+      shape: 'landscape',
+    },
+    {
+      title: 'Delicate Dessert Styling',
+      description: 'A polished finish for intimate gatherings and special moments.',
+      label: 'Occasion',
+      image: masonryRectangle78,
+      shape: 'portrait',
+    },
+    {
+      title: 'Handcrafted Sweet Details',
+      description: 'Thoughtful colors and textures made for memorable celebrations.',
+      label: 'Details',
+      image: masonryImage47,
+      shape: 'square',
     },
   ]
 
@@ -100,6 +168,51 @@ function LandingPage() {
     )
 
     showcaseItems.forEach((item) => observer.observe(item))
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [])
+
+  useEffect(() => {
+    const galleryItems = document.querySelectorAll('.gallery-item')
+    const galleryDivider = document.querySelector('.gallery-divider')
+    const gallerySection = document.querySelector('.gallery-section')
+    const locationDivider = document.querySelector('.location-divider')
+    const locationSection = document.querySelector('.location-section')
+
+    if (!('IntersectionObserver' in window)) {
+      galleryItems.forEach((item) => item.classList.add('gallery-item--visible'))
+      galleryDivider?.classList.add('gallery-divider--visible')
+      locationDivider?.classList.add('location-divider--visible')
+      return undefined
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            if (entry.target.classList.contains('gallery-section')) {
+              galleryDivider?.classList.add('gallery-divider--visible')
+            } else if (entry.target.classList.contains('location-section')) {
+              locationDivider?.classList.add('location-divider--visible')
+            } else {
+              entry.target.classList.add('gallery-item--visible')
+            }
+            observer.unobserve(entry.target)
+          }
+        })
+      },
+      { threshold: 0.18 },
+    )
+
+    if (gallerySection) {
+      observer.observe(gallerySection)
+    }
+    if (locationSection) {
+      observer.observe(locationSection)
+    }
+    galleryItems.forEach((item) => observer.observe(item))
 
     return () => {
       observer.disconnect()
@@ -275,20 +388,48 @@ function LandingPage() {
           </div>
         </section>
 
-        <section className="section quote-section" aria-labelledby="testimonial-title">
-          <div className="section-heading animate-up">
-            <h2 id="testimonial-title">What our customers say</h2>
+        <section className="section section--open gallery-section" aria-labelledby="gallery-title">
+          <div className="gallery-divider" aria-hidden="true">
+            <img src={dividerLine} alt="" />
           </div>
-          <blockquote className="animate-up" style={{ '--delay': '100ms' }}>
-            Bright pink cake decorated with 3D fondant sun, moon, and cloud toppers
-            for christenings or birthdays.
-          </blockquote>
-          <p className="quote-author animate-up" style={{ '--delay': '180ms' }}>
-            Michael Jackson
-          </p>
+          <div className="section-heading gallery-heading animate-up">
+            <h2 id="gallery-title">Our Creations</h2>
+            <p>Every cake is handcrafted with love for every celebration.</p>
+          </div>
+
+          <div className="gallery-grid" aria-label="Sweet Bakes creation gallery">
+            <div className="gallery-track">
+              {[0, 1].map((copyIndex) => (
+                <div
+                  className="gallery-loop"
+                  key={`gallery-loop-${copyIndex}`}
+                  aria-hidden={copyIndex === 1 ? 'true' : undefined}
+                >
+                  {galleryItems.map((item, index) => (
+                    <article
+                      className={`gallery-item gallery-item--${item.shape} gallery-item--tile-${index + 1} gallery-item--visible`}
+                      key={`${copyIndex}-${item.title}`}
+                      style={{ '--gallery-delay': `${index * 70}ms` }}
+                    >
+                      <img src={item.image} alt={copyIndex === 0 ? item.title : ''} />
+                      <div className="gallery-overlay">
+                        <p>{item.label}</p>
+                        <h3>{item.title}</h3>
+                        <strong>View Details &rarr;</strong>
+                        <span>{item.description}</span>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
         </section>
 
         <section className="section section--open location-section" id="location">
+          <div className="location-divider" aria-hidden="true">
+            <img src={dividerLine} alt="" />
+          </div>
           <div className="section-heading location-heading animate-up">
             <h2>Location</h2>
             <p>
@@ -347,21 +488,82 @@ function LandingPage() {
         </section>
       </main>
 
-      <footer className="footer" id="contact">
-        <img className="footer-mark" src={footerMark} alt="Sweet Bakes" />
+      <footer
+        className="footer"
+        id="contact"
+        style={{ '--footer-bg': `url(${footerBackground})` }}
+      >
         <div className="footer-grid">
-          <div className="animate-up">
-            <h2>Sweet Bakes</h2>
-            <p>
+          <div className="footer-brand-column animate-up">
+            <div className="footer-brand-lockup">
+              <img src={footerMark} alt="Sweet Bakes logo" />
+              <h2>Sweet Bakes</h2>
+            </div>
+            <p className="footer-description">
               Crafting delicious cakes and cupcakes for every celebration, made with
               quality ingredients and a touch of sweetness.
             </p>
+            <p className="footer-copyright">&copy; 2026 Sweet Bakes. All Rights Reserved.</p>
           </div>
-          <div className="animate-up" style={{ '--delay': '90ms' }}>
+          <div className="footer-contact-column animate-up" style={{ '--delay': '90ms' }}>
             <h3>Hey, Bestie!</h3>
             <p>Follow us on Facebook for exclusive updates.</p>
-            <p>0927 870 0399</p>
-            <p>rhonanarvaez@gmail.com</p>
+            <div className="footer-contact-list">
+              <div className="footer-contact-row">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M14 8.5H16V5.2C15.65 5.15 14.45 5 13.1 5C10.3 5 8.38 6.76 8.38 10V13H5.25V16.7H8.38V24H12.2V16.7H15.35L15.85 13H12.2V10.36C12.2 9.29 12.49 8.5 14 8.5Z"
+                    fill="currentColor"
+                  />
+                </svg>
+                <span>Sweet Bakes Facebook page</span>
+              </div>
+              <a className="footer-contact-row" href="tel:+639278700399">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M22 16.92V20a2 2 0 0 1-2.18 2A19.79 19.79 0 0 1 3 5.18 2 2 0 0 1 5 3h3.09a2 2 0 0 1 2 1.72l.45 3a2 2 0 0 1-.57 1.74l-1.32 1.32a16 16 0 0 0 4.57 4.57l1.32-1.32a2 2 0 0 1 1.74-.57l3 .45A2 2 0 0 1 22 16.92Z"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                <span>0927 870 0399</span>
+              </a>
+              <a className="footer-contact-row" href="mailto:rhonanarvaez@gmail.com">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M4 6h16v12H4V6Zm16 1-8 6-8-6"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                <span>rhonanarvaez@gmail.com</span>
+              </a>
+            </div>
           </div>
         </div>
       </footer>
