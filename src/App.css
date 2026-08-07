@@ -36,7 +36,6 @@
 .hero-actions .button,
 .location-copy a {
   transition:
-    transform 0.2s ease,
     opacity 0.2s ease,
     box-shadow 0.2s ease;
 }
@@ -48,10 +47,13 @@
 }
 
 .nav a:hover,
-.topbar-actions button:hover,
-.hero-actions .button:hover,
 .location-copy a:hover {
   transform: translateY(-1px);
+}
+
+.topbar-actions button:hover,
+.hero-actions .button:hover {
+  transform: none;
 }
 
 .topbar-actions {
