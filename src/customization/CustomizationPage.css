@@ -1,0 +1,40 @@
+@import '../cupcakepage/CupcakePage.css';
+
+.customization-product-panel[hidden] {
+  display: none;
+}
+
+.customization-main:has(.step3-content) {
+  width: min(1240px, calc(100% - 56px));
+}
+
+.customization-main:has(.customization-product-panel--active .step3-content) {
+  width: 100%;
+  max-width: none;
+}
+
+@media (max-width: 980px) {
+  .customization-main:has(.step3-content) {
+    width: min(100% - 40px, 1120px);
+  }
+
+  .customization-main:has(.customization-product-panel--active .step3-content) {
+    width: 100%;
+  }
+}
+
+@media (max-width: 760px) {
+  .customization-main:has(.step3-content) {
+    width: min(100% - 32px, 680px);
+  }
+
+  .customization-main:has(.customization-product-panel--active .step3-content) {
+    width: min(100% - 32px, 680px);
+  }
+}
+
+@media (max-width: 520px) {
+  .customization-main:has(.step3-content) {
+    width: min(100% - 28px, 440px);
+  }
+}

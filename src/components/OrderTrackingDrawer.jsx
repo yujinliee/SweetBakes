@@ -23,6 +23,19 @@ const layerLabels = {
   3: '3 Layers',
 }
 
+const quantityLabels = {
+  6: '6 pcs',
+  12: '12 pcs',
+  18: '18 pcs',
+  24: '24 pcs',
+}
+
+const packageLabels = {
+  packageA: 'Package A',
+  packageB: 'Package B',
+  packageC: 'Package C',
+}
+
 const formatDate = (value) => {
   if (!value) {
     return ''
@@ -98,9 +111,19 @@ function OrderTrackingDrawer({ initialRequestNumber = '', onClose }) {
   }, [requestClose])
 
   const theme =
-    matchedRequest?.designDetails.theme === 'Other'
+    matchedRequest?.designDetails?.theme === 'Other'
       ? matchedRequest.designDetails.otherTheme
-      : matchedRequest?.designDetails.theme
+      : matchedRequest?.designDetails?.theme
+  const isCupcakeRequest = matchedRequest?.productType === 'Cupcakes'
+  const isPackageRequest = matchedRequest?.productType === 'Party Package'
+  const packageCakeTheme =
+    matchedRequest?.packageCustomization?.packageCakeTheme === 'Other'
+      ? matchedRequest.packageCustomization.packageCakeOtherTheme
+      : matchedRequest?.packageCustomization?.packageCakeTheme
+  const packageCupcakeTheme =
+    matchedRequest?.packageCustomization?.packageCupcakeTheme === 'Other'
+      ? matchedRequest.packageCustomization.packageCupcakeOtherTheme
+      : matchedRequest?.packageCustomization?.packageCupcakeTheme
   const currentStatus = matchedRequest?.status || 'Pending Review'
   const currentStatusIndex = Math.max(statusSteps.indexOf(currentStatus), 0)
 
@@ -221,25 +244,85 @@ function OrderTrackingDrawer({ initialRequestNumber = '', onClose }) {
                 <section className="order-track-summary">
                   <h3>Order Summary</h3>
                   <dl>
-                    {matchedRequest.selections.flavor ? (
+                    {isPackageRequest ? (
+                      <>
+                        <div>
+                          <dt>Product Type</dt>
+                          <dd>Party Package</dd>
+                        </div>
+                        <div>
+                          <dt>Package</dt>
+                          <dd>
+                            {packageLabels[matchedRequest.packageSelection.selectedPackage]}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Cake</dt>
+                          <dd>
+                            {[
+                              flavorLabels[
+                                matchedRequest.packageCustomization.packageCakeFlavor
+                              ],
+                              matchedRequest.packageCustomization.packageCakeSize
+                                ? `${matchedRequest.packageCustomization.packageCakeSize}"`
+                                : '',
+                              layerLabels[
+                                matchedRequest.packageCustomization.packageCakeLayers
+                              ],
+                              packageCakeTheme,
+                            ]
+                              .filter(Boolean)
+                              .join(' / ')}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Cupcakes</dt>
+                          <dd>
+                            {[
+                              flavorLabels[
+                                matchedRequest.packageCustomization.packageCupcakeFlavor
+                              ],
+                              matchedRequest.packageSelection.cupcakeQuantity
+                                ? `${matchedRequest.packageSelection.cupcakeQuantity} pcs`
+                                : '',
+                              packageCupcakeTheme,
+                            ]
+                              .filter(Boolean)
+                              .join(' / ')}
+                          </dd>
+                        </div>
+                      </>
+                    ) : isCupcakeRequest ? (
+                      <div>
+                        <dt>Product Type</dt>
+                        <dd>Cupcakes</dd>
+                      </div>
+                    ) : null}
+                    {!isPackageRequest && matchedRequest.selections.flavor ? (
                       <div>
                         <dt>Flavor</dt>
                         <dd>{flavorLabels[matchedRequest.selections.flavor]}</dd>
                       </div>
                     ) : null}
-                    {matchedRequest.selections.size ? (
+                    {!isPackageRequest && isCupcakeRequest && matchedRequest.selections.quantity ? (
+                      <div>
+                        <dt>Quantity</dt>
+                        <dd>{quantityLabels[matchedRequest.selections.quantity]}</dd>
+                      </div>
+                    ) : null}
+                    {!isPackageRequest && !isCupcakeRequest && matchedRequest.selections.size ? (
                       <div>
                         <dt>Size</dt>
                         <dd>{matchedRequest.selections.size}&quot;</dd>
                       </div>
                     ) : null}
-                    {matchedRequest.selections.layers ? (
+                    {!isPackageRequest && !isCupcakeRequest && matchedRequest.selections.layers ? (
                       <div>
                         <dt>Layers</dt>
                         <dd>{layerLabels[matchedRequest.selections.layers]}</dd>
                       </div>
                     ) : null}
-                    {theme ? (
+                    {!isPackageRequest && theme ? (
                       <div>
                         <dt>Theme</dt>
                         <dd>{theme}</dd>

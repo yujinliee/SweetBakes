@@ -23,9 +23,14 @@ import masonryRectangle83 from '../assets/landingpage/masonry/Rectangle 83.png'
 import mapsImage from '../assets/landingpage/maps.svg'
 import footerMark from '../assets/landingpage/sweetbakes_footer.svg'
 import footerBackground from '../assets/landingpage/footer_bg.png'
+import Chatbot from '../components/Chatbot/Chatbot.jsx'
 import './LandingPage.css'
 
 const cakeStepOneHref = '/cakes?start=1'
+const cakesHref = '/cakes'
+const cupcakesHref = '/cupcakes'
+const packagesHref = '/customize?type=packages'
+const topbarAnimationDuration = 450
 
 export function SiteTopbar({
   scrollTargetRef,
@@ -35,13 +40,18 @@ export function SiteTopbar({
   contactHref = '#contact',
   latestRequest = '',
   onTrackOrder,
+  onNavigate,
 }) {
   const [isScrolled, setIsScrolled] = useState(forceScrolled)
+  const [topbarMotion, setTopbarMotion] = useState('')
   const [isShopOpen, setIsShopOpen] = useState(false)
   const shopMenuRef = useRef(null)
+  const isScrolledRef = useRef(forceScrolled)
+  const topbarMotionTimeoutRef = useRef(null)
 
   useEffect(() => {
     if (forceScrolled) {
+      isScrolledRef.current = true
       return undefined
     }
 
@@ -52,7 +62,30 @@ export function SiteTopbar({
     }
 
     const handleScroll = () => {
-      setIsScrolled(window.scrollY >= getScrollThreshold())
+      const nextIsScrolled = window.scrollY >= getScrollThreshold()
+
+      if (nextIsScrolled === isScrolledRef.current) {
+        return
+      }
+
+      window.clearTimeout(topbarMotionTimeoutRef.current)
+
+      if (nextIsScrolled) {
+        isScrolledRef.current = true
+        setIsScrolled(true)
+        setTopbarMotion('topbar--scrolled-entering')
+        topbarMotionTimeoutRef.current = window.setTimeout(() => {
+          setTopbarMotion('')
+        }, topbarAnimationDuration)
+        return
+      }
+
+      isScrolledRef.current = false
+      setTopbarMotion('topbar--scrolled-exiting')
+      topbarMotionTimeoutRef.current = window.setTimeout(() => {
+        setIsScrolled(false)
+        setTopbarMotion('')
+      }, topbarAnimationDuration)
     }
 
     handleScroll()
@@ -60,6 +93,7 @@ export function SiteTopbar({
     window.addEventListener('resize', handleScroll)
 
     return () => {
+      window.clearTimeout(topbarMotionTimeoutRef.current)
       window.removeEventListener('scroll', handleScroll)
       window.removeEventListener('resize', handleScroll)
     }
@@ -80,7 +114,10 @@ export function SiteTopbar({
   }, [])
 
   return (
-    <header className={`topbar${isScrolled ? ' topbar--scrolled' : ''}`}>
+    <header
+      className={`topbar${isScrolled ? ' topbar--scrolled' : ''}${topbarMotion ? ` ${topbarMotion}` : ''}`}
+    >
+      <span className="topbar-background" aria-hidden="true" />
       <div className="topbar-inner">
         <a className="brand" href={homeHref} aria-label="Sweet Bakes home">
           <img src={logo} alt="Sweet Bakes" />
@@ -106,13 +143,26 @@ export function SiteTopbar({
               <span className="nav-link-text">Shop</span>
             </button>
             <div className="nav-dropdown-menu" id="shop-dropdown-menu">
-              <a href={cakeStepOneHref} onClick={() => setIsShopOpen(false)}>
+              <a href={cakesHref} onClick={() => setIsShopOpen(false)}>
                 <span>Cakes</span>
               </a>
-              <a href={cakeStepOneHref} onClick={() => setIsShopOpen(false)}>
+              <a href={cupcakesHref} onClick={() => setIsShopOpen(false)}>
                 <span>Cupcakes</span>
               </a>
-              <a href={contactHref} onClick={() => setIsShopOpen(false)}>
+              <a
+                href={packagesHref}
+                onClick={(event) => {
+                  event.preventDefault()
+                  setIsShopOpen(false)
+                  if (onNavigate) {
+                    onNavigate(packagesHref)
+                    return
+                  }
+
+                  window.history.pushState({}, '', packagesHref)
+                  window.dispatchEvent(new PopStateEvent('popstate'))
+                }}
+              >
                 <span>Party Packages</span>
               </a>
             </div>
@@ -127,26 +177,26 @@ export function SiteTopbar({
 
         <div className="topbar-actions" aria-label="Quick actions">
           <button type="button" aria-label="Search">
-            <img
-              src={searchIcon}
-              alt=""
-              aria-hidden="true"
-              className={isScrolled ? 'topbar-icon topbar-icon--dark' : 'topbar-icon'}
-            />
+            <span className="topbar-icon-stack" aria-hidden="true">
+              <img className="topbar-icon topbar-icon--light" src={searchIcon} alt="" />
+              <img
+                className="topbar-icon topbar-icon--dark"
+                src={searchIcon}
+                alt=""
+              />
+            </span>
           </button>
           <button type="button" aria-label="Shopping Cart">
-            <img
-              src={isScrolled ? cartIconBlack : cartIcon}
-              alt=""
-              aria-hidden="true"
-            />
+            <span className="topbar-icon-stack" aria-hidden="true">
+              <img className="topbar-icon topbar-icon--light" src={cartIcon} alt="" />
+              <img className="topbar-icon topbar-icon--dark" src={cartIconBlack} alt="" />
+            </span>
           </button>
           <button type="button" aria-label="Login">
-            <img
-              src={isScrolled ? loginIconBlack : loginIcon}
-              alt=""
-              aria-hidden="true"
-            />
+            <span className="topbar-icon-stack" aria-hidden="true">
+              <img className="topbar-icon topbar-icon--light" src={loginIcon} alt="" />
+              <img className="topbar-icon topbar-icon--dark" src={loginIconBlack} alt="" />
+            </span>
           </button>
           {latestRequest ? (
             <button
@@ -280,7 +330,7 @@ export function SiteFooter() {
   )
 }
 
-function LandingPage({ latestRequest, onTrackOrder }) {
+function LandingPage({ latestRequest, onTrackOrder, onNavigate }) {
   const heroRef = useRef(null)
   const offerings = [
     {
@@ -444,6 +494,7 @@ function LandingPage({ latestRequest, onTrackOrder }) {
         latestRequest={latestRequest}
         scrollTargetRef={heroRef}
         onTrackOrder={onTrackOrder}
+        onNavigate={onNavigate}
       />
 
       <main>
@@ -640,6 +691,7 @@ function LandingPage({ latestRequest, onTrackOrder }) {
       </main>
 
       <SiteFooter />
+      <Chatbot onNavigate={onNavigate} onTrackOrder={onTrackOrder} />
     </div>
   )
 }

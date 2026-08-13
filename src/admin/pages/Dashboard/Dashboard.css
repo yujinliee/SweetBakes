@@ -1,0 +1,49 @@
+.admin-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-dashboard-grid article {
+  display: grid;
+  gap: 4px;
+  min-height: 104px;
+  padding: 16px;
+  border: 1px solid #e8ded8;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.admin-dashboard-grid small {
+  color: #8a7a74;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 16px;
+  text-transform: uppercase;
+}
+
+.admin-dashboard-grid span {
+  color: #75645e;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.admin-dashboard-grid strong {
+  color: #3a2e2e;
+  font-size: 26px;
+  line-height: 32px;
+}
+
+.admin-dashboard-panel {
+  padding: 16px;
+  border: 1px solid #e8ded8;
+  border-radius: 10px;
+  background: #fff;
+}
+
+@media (max-width: 760px) {
+  .admin-dashboard-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

@@ -82,6 +82,10 @@
   color: #3a2e2e;
 }
 
+.cake-tab:not(.cake-tab--active):hover {
+  color: #8a8582;
+}
+
 .cake-tab--active::after {
   transform: scaleX(1);
 }
@@ -447,23 +451,34 @@
 }
 
 .cake-order-method-option {
+  position: relative;
   display: flex;
   min-width: 0;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 2px;
-  border: 1px solid #efe7e2;
+  border: none;
+  outline: none;
   border-radius: 10px;
   background: #fff;
   color: #75645e;
+  box-shadow: none;
   text-align: center;
   cursor: pointer;
   transition:
     background-color 250ms ease,
-    border-color 250ms ease,
-    box-shadow 250ms ease,
     color 250ms ease;
+}
+
+.cake-order-method-option + .cake-order-method-option::before {
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 0;
+  width: 1px;
+  background: #eadfd9;
+  content: '';
 }
 
 .cake-order-method-option input {
@@ -473,10 +488,14 @@
 }
 
 .cake-order-method-option--selected {
-  border-color: #d2bee3;
   background: #e9ddf3;
   color: #3a2e2e;
-  box-shadow: inset 0 1px 5px rgba(96, 64, 89, 0.08);
+  box-shadow: none;
+}
+
+.cake-order-method-option--selected + .cake-order-method-option::before,
+.cake-order-method-option--selected::before {
+  opacity: 0;
 }
 
 .cake-order-method-heading {

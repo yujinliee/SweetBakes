@@ -1,0 +1,9 @@
+.admin-settings-panel {
+  padding: 16px;
+  border: 1px solid #e8ded8;
+  border-radius: 10px;
+  background: #fff;
+  color: #75645e;
+  font-size: 14px;
+  line-height: 22px;
+}

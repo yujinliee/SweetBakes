@@ -183,7 +183,13 @@ const saveSubmittedRequest = (request) => {
   )
 }
 
-function CakePage({ latestRequest, onRequestSubmitted, onTrackOrder }) {
+function CakePage({
+  latestRequest,
+  onRequestSubmitted,
+  onTrackOrder,
+  embedded = false,
+  onProductChange,
+}) {
   const [shouldCleanStartUrl] = useState(shouldStartAtStepOne)
   const [savedDraft] = useState(() => {
     const draft = readCakeDraft()
@@ -454,6 +460,104 @@ function CakePage({ latestRequest, onRequestSubmitted, onTrackOrder }) {
     }
   }, [currentStep, selections, designDetails, customerInfo, step2Touched, step3Touched])
 
+  const customizationContent = (
+    <>
+      <StepProgress currentStep={currentStep} />
+
+      <div className={`cake-customization-grid${currentStep === 3 ? ' step3-content' : ''}`}>
+        <div
+          className={`cake-preview-column${
+            currentStep === 3 ? ' step3-left available-dates-sticky' : ''
+          }${currentStep === 4 ? ' step4-left' : ''}`}
+        >
+          {currentStep !== 3 ? (
+            <CakePreview
+              imageSrc={previewImage}
+              flavor={selections.flavor}
+              layers={selections.layers}
+            />
+          ) : null}
+          {currentStep === 2 ? (
+            <CakeReferenceUpload
+              referenceImages={designDetails.referenceImages}
+              onReferenceImagesChange={(files) =>
+                setDesignDetails((current) => ({
+                  ...current,
+                  referenceImages: files,
+                }))
+              }
+            />
+          ) : null}
+          {currentStep === 3 ? (
+            <CakeAvailabilityCalendar
+              selectedDate={customerInfo.preferredDate}
+              validationError={
+                step3Touched.preferredDate && !customerInfo.preferredDate
+                  ? 'Please select an available date.'
+                  : ''
+              }
+              onDateChange={(date) =>
+                setCustomerInfo((current) => ({
+                  ...current,
+                  preferredDate: date,
+                }))
+              }
+            />
+          ) : null}
+          {currentStep === 4 ? (
+            <CakeReferenceReview referenceImages={designDetails.referenceImages} />
+          ) : null}
+        </div>
+        {currentStep === 1 ? (
+          <CakeBaseForm
+            selections={selections}
+            onSelectionsChange={setSelections}
+            onContinue={() => goToStep(2)}
+          />
+        ) : currentStep === 2 ? (
+          <CakeDesignForm
+            details={designDetails}
+            onDetailsChange={setDesignDetails}
+            validationTouched={step2Touched}
+            onValidationTouchedChange={setStep2Touched}
+            onBack={() => goToStep(1)}
+            onContinue={() => goToStep(3)}
+          />
+        ) : currentStep === 3 ? (
+          <CakeCustomerForm
+            customerInfo={customerInfo}
+            onCustomerInfoChange={setCustomerInfo}
+            validationTouched={step3Touched}
+            onValidationTouchedChange={setStep3Touched}
+            onBack={() => goToStep(2)}
+            onContinue={() => goToStep(4)}
+          />
+        ) : (
+          <CakeReviewForm
+            selections={selections}
+            designDetails={designDetails}
+            customerInfo={customerInfo}
+            onBack={() => goToStep(3)}
+            onSubmit={handleSubmitRequest}
+          />
+        )}
+      </div>
+      {submittedRequest ? (
+        <CakeSuccessModal
+          request={submittedRequest}
+          onTrackOrder={(requestNumber) => {
+            setSubmittedRequest(null)
+            onTrackOrder?.(requestNumber)
+          }}
+        />
+      ) : null}
+    </>
+  )
+
+  if (embedded) {
+    return customizationContent
+  }
+
   return (
     <div className="page-shell cake-page-shell">
       <SiteTopbar
@@ -468,101 +572,20 @@ function CakePage({ latestRequest, onRequestSubmitted, onTrackOrder }) {
       <main className="cake-main">
         <header className="cake-page-header">
           <h1>Custom Creations</h1>
-          <CakeTabs activeTab="Cakes" />
+          <CakeTabs
+            activeTab="Cakes"
+            onTabChange={(tab) => {
+              if (tab === 'Cupcakes') {
+                onProductChange?.('cupcakes')
+              }
+            }}
+          />
         </header>
 
-        <StepProgress currentStep={currentStep} />
-
-        <div className={`cake-customization-grid${currentStep === 3 ? ' step3-content' : ''}`}>
-          <div
-            className={`cake-preview-column${
-              currentStep === 3 ? ' step3-left available-dates-sticky' : ''
-            }${currentStep === 4 ? ' step4-left' : ''}`}
-          >
-            {currentStep !== 3 ? (
-              <CakePreview
-                imageSrc={previewImage}
-                flavor={selections.flavor}
-                layers={selections.layers}
-              />
-            ) : null}
-            {currentStep === 2 ? (
-              <CakeReferenceUpload
-                referenceImages={designDetails.referenceImages}
-                onReferenceImagesChange={(files) =>
-                  setDesignDetails((current) => ({
-                    ...current,
-                    referenceImages: files,
-                  }))
-                }
-              />
-            ) : null}
-            {currentStep === 3 ? (
-              <CakeAvailabilityCalendar
-                selectedDate={customerInfo.preferredDate}
-                validationError={
-                  step3Touched.preferredDate && !customerInfo.preferredDate
-                    ? 'Please select an available date.'
-                    : ''
-                }
-                onDateChange={(date) =>
-                  setCustomerInfo((current) => ({
-                    ...current,
-                    preferredDate: date,
-                  }))
-                }
-              />
-            ) : null}
-            {currentStep === 4 ? (
-              <CakeReferenceReview referenceImages={designDetails.referenceImages} />
-            ) : null}
-          </div>
-          {currentStep === 1 ? (
-            <CakeBaseForm
-              selections={selections}
-              onSelectionsChange={setSelections}
-              onContinue={() => goToStep(2)}
-            />
-          ) : currentStep === 2 ? (
-            <CakeDesignForm
-              details={designDetails}
-              onDetailsChange={setDesignDetails}
-              validationTouched={step2Touched}
-              onValidationTouchedChange={setStep2Touched}
-              onBack={() => goToStep(1)}
-              onContinue={() => goToStep(3)}
-            />
-          ) : currentStep === 3 ? (
-            <CakeCustomerForm
-              customerInfo={customerInfo}
-              onCustomerInfoChange={setCustomerInfo}
-              validationTouched={step3Touched}
-              onValidationTouchedChange={setStep3Touched}
-              onBack={() => goToStep(2)}
-              onContinue={() => goToStep(4)}
-            />
-          ) : (
-            <CakeReviewForm
-              selections={selections}
-              designDetails={designDetails}
-              customerInfo={customerInfo}
-              onBack={() => goToStep(3)}
-              onSubmit={handleSubmitRequest}
-            />
-          )}
-        </div>
+        {customizationContent}
       </main>
 
       <SiteFooter />
-      {submittedRequest ? (
-        <CakeSuccessModal
-          request={submittedRequest}
-          onTrackOrder={(requestNumber) => {
-            setSubmittedRequest(null)
-            onTrackOrder?.(requestNumber)
-          }}
-        />
-      ) : null}
     </div>
   )
 }

@@ -1,0 +1,62 @@
+.admin-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 64px;
+  padding: 12px 24px;
+  border-bottom: 1px solid #e8ded8;
+  background: #fff;
+}
+
+.admin-topbar p {
+  margin: 0 0 2px;
+  color: #a86495;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1.4px;
+  line-height: 16px;
+  text-transform: uppercase;
+}
+
+.admin-topbar h1 {
+  margin: 0;
+  color: #3a2e2e;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 24px;
+}
+
+.admin-topbar-profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-topbar-profile > span {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 999px;
+  background: #eadcf7;
+  color: #3a2e2e;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.admin-topbar-profile div {
+  display: grid;
+  gap: 1px;
+}
+
+.admin-topbar-profile strong {
+  color: #3a2e2e;
+  font-size: 13px;
+  line-height: 17px;
+}
+
+.admin-topbar-profile small {
+  color: #8a7a74;
+  font-size: 12px;
+  line-height: 15px;
+}

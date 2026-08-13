@@ -1,0 +1,174 @@
+@import '../cakepage/CakePage.css';
+
+.package-option-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.package-radio {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+  padding: 16px 18px;
+  border: 1px solid #e8e3e3;
+  border-radius: 8px;
+  background: #fff;
+  transition:
+    background-color 240ms ease,
+    border-color 240ms ease,
+    box-shadow 240ms ease;
+}
+
+.package-radio:hover,
+.package-radio:focus-within {
+  border-color: #d8c9e6;
+  background: #fffaf7;
+}
+
+.package-radio:has(input:checked) {
+  border-color: #d8c9e6;
+  background: #fbf7fd;
+  box-shadow: 0 8px 18px rgba(168, 100, 149, 0.08);
+}
+
+.package-radio .cake-radio-control {
+  flex: 0 0 auto;
+}
+
+.package-option-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.package-title {
+  color: #3a2e2e;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.package-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-left: 27px;
+  color: #75645e;
+  font-size: 0.86rem;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.package-customize-flow {
+  margin-top: 76px;
+}
+
+.package-customize-heading {
+  margin-bottom: 38px;
+}
+
+.package-customize-heading h2 {
+  font-size: clamp(2rem, 3vw, 3rem);
+}
+
+.package-customize-section + .package-customize-section {
+  margin-top: 58px;
+}
+
+.package-section-heading {
+  margin-bottom: 34px;
+}
+
+.package-section-heading h2 {
+  font-size: clamp(1.75rem, 2.6vw, 2.45rem);
+}
+
+.package-customize-grid {
+  margin-top: 0;
+}
+
+.package-sticky-preview-column {
+  position: sticky;
+  top: 120px;
+  height: fit-content;
+  z-index: 2;
+}
+
+.package-continuous-form {
+  max-width: 620px;
+}
+
+.package-continuous-form form {
+  margin: 0;
+}
+
+.package-sticky-preview-column .cake-reference-upload {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.package-reference-upload-copy {
+  margin: -6px 0 14px;
+  color: #75645e;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.88rem;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.package-reference-review h3 {
+  margin: 0 0 14px;
+  color: #3a2e2e;
+  font-family: 'Poppins', sans-serif;
+  font-size: clamp(1.12rem, 1.4vw, 1.25rem);
+  font-weight: 600;
+}
+
+.package-preview-fade {
+  animation: packagePreviewFade 180ms ease both;
+}
+
+.cake-preview .package-preview-image {
+  width: 112%;
+  height: 112%;
+  object-fit: contain;
+  object-position: center;
+  transform: scale(1.03);
+}
+
+.package-included-quantity {
+  margin: 0;
+  color: #574944;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.package-customize-actions {
+  margin-top: 50px;
+}
+
+@keyframes packagePreviewFade {
+  from {
+    opacity: 0.42;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 760px) {
+  .package-sticky-preview-column {
+    position: static;
+    top: auto;
+  }
+
+  .package-option-list {
+    grid-template-columns: 1fr;
+  }
+}

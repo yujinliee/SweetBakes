@@ -1,6 +1,6 @@
 const tabs = ['Cakes', 'Cupcakes', 'Party Packages']
 
-function CakeTabs({ activeTab = 'Cakes', onTabChange }) {
+function CupcakeTabs({ activeTab = 'Cupcakes', onTabChange }) {
   return (
     <div className="cake-tabs" role="tablist" aria-label="Product type">
       {tabs.map((tab) => (
@@ -19,4 +19,4 @@ function CakeTabs({ activeTab = 'Cakes', onTabChange }) {
   )
 }
 
-export default CakeTabs
+export default CupcakeTabs
