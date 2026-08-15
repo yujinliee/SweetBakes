@@ -10,22 +10,34 @@ function Dashboard() {
 
       <div className="admin-dashboard-grid">
         <article>
-          <small>Total Orders</small>
+          <div className="admin-metric-header">
+            <span className="admin-metric-icon" aria-hidden="true" />
+            <small>Total Orders</small>
+          </div>
           <strong>0</strong>
           <span>All requests</span>
         </article>
         <article>
-          <small>Pending Orders</small>
+          <div className="admin-metric-header">
+            <span className="admin-metric-icon" aria-hidden="true" />
+            <small>Pending Orders</small>
+          </div>
           <strong>0</strong>
           <span>Needs review</span>
         </article>
         <article>
-          <small>Total Products</small>
+          <div className="admin-metric-header">
+            <span className="admin-metric-icon" aria-hidden="true" />
+            <small>Total Products</small>
+          </div>
           <strong>0</strong>
           <span>Catalog items</span>
         </article>
         <article>
-          <small>Customers</small>
+          <div className="admin-metric-header">
+            <span className="admin-metric-icon" aria-hidden="true" />
+            <small>Customers</small>
+          </div>
           <strong>0</strong>
           <span>Saved records</span>
         </article>

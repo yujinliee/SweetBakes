@@ -5,6 +5,11 @@
   background: #f7f2ee;
   color: #3a2e2e;
   font-family: 'Poppins', sans-serif;
+  transition: grid-template-columns 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.admin-shell--sidebar-collapsed {
+  grid-template-columns: 76px minmax(0, 1fr);
 }
 
 .admin-workspace {
@@ -15,14 +20,16 @@
 
 .admin-main {
   width: 100%;
+  max-width: 1500px;
   box-sizing: border-box;
   flex: 1;
-  padding: 24px;
+  margin: 0 auto;
+  padding: 24px 28px 28px;
 }
 
 .admin-page {
   display: grid;
-  gap: 16px;
+  gap: 18px;
 }
 
 .admin-page-toolbar {
@@ -39,16 +46,16 @@
 .admin-page-heading h2 {
   margin: 0 0 4px;
   color: #3a2e2e;
-  font-size: 24px;
+  font-size: 30px;
   font-weight: 600;
-  line-height: 30px;
+  line-height: 38px;
 }
 
 .admin-page-heading p {
   margin: 0;
   color: #75645e;
-  font-size: 14px;
-  line-height: 22px;
+  font-size: 13px;
+  line-height: 20px;
 }
 
 .admin-section-heading {
@@ -75,12 +82,17 @@
 }
 
 .admin-empty-panel {
-  padding: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 82px;
+  padding: 18px 16px;
   border: 1px dashed #e8ded8;
-  border-radius: 8px;
+  border-radius: 10px;
   color: #75645e;
   font-size: 14px;
   line-height: 22px;
+  background: #fff;
 }
 
 @media (max-width: 900px) {
@@ -89,7 +101,7 @@
   }
 
   .admin-main {
-    padding: 20px;
+    padding: 20px 20px 24px;
   }
 
   .admin-page-toolbar {

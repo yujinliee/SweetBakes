@@ -1,4 +1,4 @@
-import AdminLogin from './auth/AdminLogin.jsx'
+import { useEffect } from 'react'
 import ProtectedAdminRoute from './auth/ProtectedAdminRoute.jsx'
 import AdminLayout from './components/AdminLayout/AdminLayout.jsx'
 import Customers from './pages/Customers/Customers.jsx'
@@ -22,7 +22,7 @@ const adminPageMap = {
 
 function AdminRoutes({ onNavigate }) {
   if (window.location.pathname === '/admin/login') {
-    return <AdminLogin onNavigate={onNavigate} />
+    return <AdminLoginRedirect onNavigate={onNavigate} />
   }
 
   const Page = adminPageMap[window.location.pathname] || Dashboard
@@ -34,6 +34,14 @@ function AdminRoutes({ onNavigate }) {
       </AdminLayout>
     </ProtectedAdminRoute>
   )
+}
+
+function AdminLoginRedirect({ onNavigate }) {
+  useEffect(() => {
+    onNavigate?.('/login')
+  }, [onNavigate])
+
+  return null
 }
 
 export default AdminRoutes

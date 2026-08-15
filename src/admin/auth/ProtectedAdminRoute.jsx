@@ -6,7 +6,7 @@ function ProtectedAdminRoute({ children, onNavigate }) {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      onNavigate?.('/admin/login')
+      onNavigate?.('/login')
     }
   }, [isAuthenticated, onNavigate])
 

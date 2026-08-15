@@ -1,4 +1,5 @@
 import './AdminSidebar.css'
+import footerLogo from '../../../assets/landingpage/sweetbakes_footer.svg'
 
 const adminNavItems = [
   { label: 'Dashboard', href: '/admin/dashboard', icon: 'dashboard' },
@@ -34,25 +35,66 @@ function SidebarIcon({ name }) {
   )
 }
 
-function AdminSidebar({ currentPath, onNavigate, onLogout }) {
+function AdminSidebar({ currentPath, isCollapsed, onNavigate, onLogout, onToggleCollapse }) {
   return (
-    <aside className="admin-sidebar" aria-label="Admin navigation">
-      <a
-        className="admin-sidebar-brand"
-        href="/admin/dashboard"
-        onClick={(event) => {
-          event.preventDefault()
-          onNavigate?.('/admin/dashboard')
-        }}
-      >
-        <span>Sweet Bakes</span>
-        <small>Admin</small>
-      </a>
+    <aside
+      className={`admin-sidebar${isCollapsed ? ' admin-sidebar--collapsed' : ''}`}
+      aria-label="Admin navigation"
+    >
+      <div className="admin-sidebar-brand-row">
+        <button
+          className="admin-sidebar-logo"
+          type="button"
+          aria-label={isCollapsed ? 'Expand admin sidebar' : 'Collapse admin sidebar'}
+          aria-expanded={!isCollapsed}
+          onClick={onToggleCollapse}
+        >
+          <span className="admin-sidebar-logo-visual" aria-hidden="true">
+            <img
+              className="admin-sidebar-logo-mark"
+              src={footerLogo}
+              alt=""
+              aria-hidden="true"
+            />
+            <svg className="admin-sidebar-logo-hover-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M4.5 5.5h15v13h-15v-13Zm5.6 0v13M8.6 8.8l-2.5 2.7 2.5 2.7"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </span>
+          <span className="admin-sidebar-logo-text">SweetBakes</span>
+        </button>
+
+        {!isCollapsed && (
+          <button
+            className="admin-sidebar-collapse-btn"
+            type="button"
+            aria-label={isCollapsed ? 'Expand admin sidebar' : 'Collapse admin sidebar'}
+            onClick={onToggleCollapse}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M4.5 5.5h15v13h-15v-13Zm5.6 0v13M8.6 8.8l-2.5 2.7 2.5 2.7"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        )}
+      </div>
 
       <nav className="admin-sidebar-nav">
         {adminNavItems.map((item) => (
           <a
             className={currentPath === item.href ? 'admin-sidebar-link admin-sidebar-link--active' : 'admin-sidebar-link'}
+            data-tooltip={item.label}
             href={item.href}
             key={item.href}
             onClick={(event) => {
@@ -61,14 +103,19 @@ function AdminSidebar({ currentPath, onNavigate, onLogout }) {
             }}
           >
             <SidebarIcon name={item.icon} />
-            {item.label}
+            <span className="admin-sidebar-label">{item.label}</span>
           </a>
         ))}
       </nav>
 
-      <button className="admin-sidebar-logout" type="button" onClick={onLogout}>
+      <button
+        className="admin-sidebar-logout"
+        type="button"
+        data-tooltip="Logout"
+        onClick={onLogout}
+      >
         <SidebarIcon name="settings" />
-        Logout
+        <span className="admin-sidebar-label">Logout</span>
       </button>
     </aside>
   )

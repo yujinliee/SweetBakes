@@ -87,7 +87,7 @@ function App() {
 
   const page =
     window.location.pathname.startsWith('/admin') ? (
-      <AdminRoutes onNavigate={navigate} key={locationKey} />
+      <AdminRoutes onNavigate={navigate} />
     ) : window.location.pathname === '/cakes' ? (
       <CustomizationPage
         initialProduct="cakes"

@@ -3,107 +3,349 @@
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  width: 232px;
-  padding: 22px 14px 18px;
-  border-right: 1px solid #e8ded8;
-  background: #fffdf8;
+  width: 100%;
+  padding: 0;
+  border-right: 0;
+  background: #121212;
+  overflow: visible;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.admin-sidebar-brand {
-  display: grid;
-  justify-items: center;
-  gap: 3px;
-  margin-bottom: 28px;
-  color: #3a2e2e;
-  text-align: center;
-  text-decoration: none;
+.admin-sidebar-brand-row {
+  display: flex;
+  align-items: center;
+  min-height: 42px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 24px 16px 0 18px;
+  gap: 12px;
+  transition:
+    padding 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    gap 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.admin-sidebar-brand span {
+.admin-sidebar-logo {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex: 0 0 auto;
+  min-height: 42px;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0;
+  gap: 9px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    justify-content 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    padding 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.admin-sidebar-logo-mark {
+  display: block;
+  object-fit: contain;
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+}
+
+.admin-sidebar-logo-visual {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 42px;
+  width: 42px;
+  height: 42px;
+}
+
+.admin-sidebar-logo-visual .admin-sidebar-logo-mark {
+  position: absolute;
+  inset: 0;
+  width: 42px;
+  height: 42px;
+}
+
+.admin-sidebar-logo-hover-icon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 28px;
+  height: 28px;
+  transform: translate(-50%, -50%);
+  color: rgba(242, 242, 242, 0.88);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease, color 180ms ease;
+}
+
+.admin-sidebar-logo-visual .admin-sidebar-logo-mark {
+  opacity: 1;
+  transition: opacity 180ms ease;
+}
+
+.admin-sidebar-logo-text {
+  overflow: visible;
+  min-width: 0;
+  flex-shrink: 1;
+  color: #fff;
+  font-family: 'Poppins', sans-serif;
   font-size: 18px;
   font-weight: 700;
-  line-height: 24px;
+  line-height: 1;
+  white-space: nowrap;
+  opacity: 1;
+  transform: translateX(0);
+  transition:
+    max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.2s ease,
+    transform 0.3s ease;
 }
 
-.admin-sidebar-brand small {
-  color: #75645e;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 1.8px;
-  line-height: 16px;
-  text-transform: uppercase;
+.admin-sidebar-collapse-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: rgba(143, 141, 141, 0.78);
+  cursor: pointer;
+  transition:
+    color 180ms ease,
+    transform 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.admin-sidebar-collapse-btn:hover {
+  color: #fff;
+}
+
+.admin-sidebar-collapse-btn svg {
+  width: 32px;
+  height: 32px;
 }
 
 .admin-sidebar-nav {
   display: grid;
-  gap: 5px;
+  gap: 4px;
   flex: 1;
   align-content: start;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0 18px;
+  margin-top: 26px;
+  transition:
+    padding 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    margin-top 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .admin-sidebar-link {
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 38px;
-  padding: 9px 12px;
-  border-radius: 8px;
-  color: #574944;
-  font-size: 14px;
+  gap: 14px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 12px;
+  position: relative;
+  border-radius: 9px;
+  color: #f2f2f2;
+  font-size: 16px;
   font-weight: 600;
   line-height: 18px;
   text-decoration: none;
+  transition:
+    background-color 180ms ease,
+    color 180ms ease,
+    width 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    padding 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    gap 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.admin-sidebar-link:hover,
-.admin-sidebar-link--active {
-  background: #eadcf7;
-  color: #3a2e2e;
+.admin-sidebar-link:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+
+.admin-sidebar-link--active,
+.admin-sidebar-link--active:hover {
+  background: rgba(150, 105, 180, 0.25);
+  color: #d8b4f8;
 }
 
 .admin-sidebar-icon {
   flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   color: currentColor;
 }
 
+.admin-sidebar-label {
+  overflow: hidden;
+  max-width: 140px;
+  white-space: nowrap;
+  opacity: 1;
+  transform: translateX(0);
+  transition:
+    max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.2s ease,
+    transform 0.3s ease;
+}
+
 .admin-sidebar-logout {
-  width: 100%;
+  box-sizing: border-box;
+  width: auto;
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-top: 18px;
-  min-height: 38px;
-  padding: 9px 12px;
-  border: 1px solid #e8ded8;
-  border-radius: 8px;
-  background: #fff;
-  color: #574944;
+  gap: 14px;
+  margin: auto 18px 20px;
+  min-height: 48px;
+  padding: 0 12px;
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9px;
+  background: transparent;
+  color: #f4f4f4;
   font-family: 'Poppins', sans-serif;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
   line-height: 18px;
   text-align: left;
   cursor: pointer;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    width 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    margin 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    padding 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    gap 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .admin-sidebar-logout:hover {
-  border-color: #d8c9e6;
-  background: #fff8e6;
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.admin-sidebar--collapsed .admin-sidebar-logo:hover .admin-sidebar-logo-mark,
+.admin-sidebar--collapsed .admin-sidebar-logo:focus-visible .admin-sidebar-logo-mark {
+  opacity: 0;
+}
+
+.admin-sidebar--collapsed .admin-sidebar-logo:hover .admin-sidebar-logo-hover-icon,
+.admin-sidebar--collapsed .admin-sidebar-logo:focus-visible .admin-sidebar-logo-hover-icon {
+  opacity: 1;
+  color: #fff;
+}
+
+.admin-sidebar--collapsed .admin-sidebar-collapse-btn {
+  margin-left: 0;
+}
+
+.admin-sidebar--collapsed .admin-sidebar-logo-text,
+.admin-sidebar--collapsed .admin-sidebar-label {
+  max-width: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-8px);
+}
+
+.admin-sidebar--collapsed .admin-sidebar-nav {
+  padding: 0 18px;
+}
+
+.admin-sidebar--collapsed .admin-sidebar-link,
+.admin-sidebar--collapsed .admin-sidebar-logout {
+  justify-content: flex-start;
+  gap: 14px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 12px;
+  margin-right: 0;
+  margin-left: 0;
+}
+
+.admin-sidebar--collapsed .admin-sidebar-link .admin-sidebar-icon {
+  position: relative;
+  z-index: 1;
+}
+
+.admin-sidebar--collapsed .admin-sidebar-link--active,
+.admin-sidebar--collapsed .admin-sidebar-link--active:hover {
+  background: transparent;
+  color: #d8b4f8;
+}
+
+.admin-sidebar--collapsed .admin-sidebar-link--active::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 5px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(150, 105, 180, 0.25);
+  transform: translateY(-50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.admin-sidebar--collapsed .admin-sidebar-logout {
+  margin-top: auto;
+  margin-bottom: 20px;
+}
+
+.admin-sidebar--collapsed .admin-sidebar-link::after,
+.admin-sidebar--collapsed .admin-sidebar-logout::after {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 10px);
+  z-index: 20;
+  padding: 7px 9px;
+  border-radius: 7px;
+  background: #202020;
+  color: #fff;
+  content: attr(data-tooltip);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(4px, -50%);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+  white-space: nowrap;
+}
+
+.admin-sidebar--collapsed .admin-sidebar-link:hover::after,
+.admin-sidebar--collapsed .admin-sidebar-logout:hover::after {
+  opacity: 1;
+  transform: translate(0, -50%);
 }
 
 @media (max-width: 900px) {
   .admin-sidebar {
     min-height: auto;
     width: 100%;
-    padding: 18px 14px;
+    padding: 0;
     border-right: 0;
-    border-bottom: 1px solid #e8ded8;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .admin-sidebar-brand-row {
+    padding: 18px 12px 0 18px;
   }
 
   .admin-sidebar-nav {
     grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    margin-top: 18px;
   }
 }

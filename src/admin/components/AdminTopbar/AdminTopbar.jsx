@@ -11,21 +11,15 @@ const pageLabels = {
   '/admin/settings': 'Settings',
 }
 
-function AdminTopbar({ currentPath }) {
-  const pageLabel = pageLabels[currentPath] || 'Dashboard'
+function AdminTopbar({ currentPath = window.location.pathname }) {
+  const currentLabel = pageLabels[currentPath] || 'Dashboard'
 
   return (
     <header className="admin-topbar">
-      <div>
-        <p>Admin / {pageLabel}</p>
-        <h1>Sweet Bakes Management</h1>
-      </div>
-      <div className="admin-topbar-profile" aria-label="Current admin">
-        <span aria-hidden="true">SB</span>
-        <div>
-          <strong>Admin</strong>
-          <small>Staff</small>
-        </div>
+      <div className="admin-topbar-context" aria-label="Current page context">
+        <span>Admin</span>
+        <span className="admin-topbar-context-separator">/</span>
+        <strong>{currentLabel}</strong>
       </div>
     </header>
   )

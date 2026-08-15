@@ -1,17 +1,21 @@
-const adminAuthStorageKey = 'sweetBakesAdmin'
+import {
+  adminAuthenticatedStorageKey,
+  TEMP_ADMIN,
+  userRoleStorageKey,
+} from '../../auth/tempAuth.js'
 
-export const adminCredentials = {
-  email: 'admin@sweetbakes.com',
-  password: 'admin123',
-}
+export const adminCredentials = TEMP_ADMIN
 
 export const isAdminAuthenticated = () =>
-  window.localStorage.getItem(adminAuthStorageKey) === 'true'
+  window.sessionStorage.getItem(adminAuthenticatedStorageKey) === 'true' &&
+  window.sessionStorage.getItem(userRoleStorageKey) === 'admin'
 
 export const setAdminAuthenticated = () => {
-  window.localStorage.setItem(adminAuthStorageKey, 'true')
+  window.sessionStorage.setItem(adminAuthenticatedStorageKey, 'true')
+  window.sessionStorage.setItem(userRoleStorageKey, 'admin')
 }
 
 export const clearAdminAuthenticated = () => {
-  window.localStorage.removeItem(adminAuthStorageKey)
+  window.sessionStorage.removeItem(adminAuthenticatedStorageKey)
+  window.sessionStorage.removeItem(userRoleStorageKey)
 }

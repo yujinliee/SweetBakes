@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import './LoginPage.css'
 import { SiteTopbar } from '../landingpage/LandingPage.jsx'
+import { TEMP_ADMIN } from '../auth/tempAuth.js'
+import { setAdminAuthenticated } from '../admin/auth/adminAuth.js'
 
 function GoogleIcon() {
   return (
@@ -27,6 +29,9 @@ function GoogleIcon() {
 
 function LoginPage({ latestRequest, onTrackOrder, onNavigate, onCustomerLogin, isCustomerAuthenticated = false }) {
   const [showPassword, setShowPassword] = useState(false)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
 
   const handleGoogleLogin = () => {
     console.log('Google authentication will be connected later.')
@@ -34,7 +39,28 @@ function LoginPage({ latestRequest, onTrackOrder, onNavigate, onCustomerLogin, i
 
   const handleLoginSubmit = (event) => {
     event.preventDefault()
-    onCustomerLogin?.()
+
+    const trimmedEmail = email.trim()
+
+    if (trimmedEmail === TEMP_ADMIN.email && password === TEMP_ADMIN.password) {
+      setAdminAuthenticated()
+      setError('')
+      onNavigate?.('/admin/dashboard')
+      return
+    }
+
+    if (trimmedEmail === TEMP_ADMIN.email) {
+      setError('Invalid email or password.')
+      return
+    }
+
+    if (trimmedEmail && password) {
+      setError('')
+      onCustomerLogin?.()
+      return
+    }
+
+    setError('Invalid email or password.')
   }
 
   const handleCreateAccount = (event) => {
@@ -81,6 +107,11 @@ function LoginPage({ latestRequest, onTrackOrder, onNavigate, onCustomerLogin, i
                 name="email"
                 placeholder="Enter your email address"
                 autoComplete="email"
+                value={email}
+                onChange={(event) => {
+                  setEmail(event.target.value)
+                  setError('')
+                }}
               />
             </label>
 
@@ -93,6 +124,11 @@ function LoginPage({ latestRequest, onTrackOrder, onNavigate, onCustomerLogin, i
                   name="password"
                   placeholder="Enter your password"
                   autoComplete="current-password"
+                  value={password}
+                  onChange={(event) => {
+                    setPassword(event.target.value)
+                    setError('')
+                  }}
                 />
                 <button
                   className="password-toggle"
@@ -132,6 +168,12 @@ function LoginPage({ latestRequest, onTrackOrder, onNavigate, onCustomerLogin, i
               Forgot Password?
             </button>
           </div>
+
+          {error ? (
+            <p className="login-error" role="alert">
+              {error}
+            </p>
+          ) : null}
 
           <button className="login-submit" type="submit">
             Sign In
