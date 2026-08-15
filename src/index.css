@@ -32,8 +32,16 @@
   }
 }
 
+html {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+
 body {
   margin: 0;
+  padding: 0;
+  width: 100%;
   min-width: 320px;
   background: var(--bg);
 }
@@ -41,7 +49,8 @@ body {
 #root {
   width: 100%;
   max-width: 100%;
-  margin: 0 auto;
+  margin: 0;
+  padding: 0;
   text-align: center;
   min-height: 100svh;
   box-sizing: border-box;

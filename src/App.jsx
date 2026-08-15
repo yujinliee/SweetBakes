@@ -3,17 +3,32 @@ import AdminRoutes from './admin/AdminRoutes.jsx'
 import OrderTrackingDrawer from './components/OrderTrackingDrawer.jsx'
 import CustomizationPage from './customization/CustomizationPage.jsx'
 import LandingPage from './landingpage/LandingPage.jsx'
+import LoginPage from './loginpage/LoginPage.jsx'
+import RegisterPage from './registerpage/RegisterPage.jsx'
 
 const latestRequestStorageKey = 'sweetbakes_latest_request'
+const customerAuthStorageKey = 'sweetbakes_customer_authenticated'
 
 const getCurrentLocationKey = () =>
   `${window.location.pathname}${window.location.search}${window.location.hash}`
+
+const getCustomerAuthenticated = () =>
+  window.localStorage.getItem(customerAuthStorageKey) === 'true'
+
+const scrollToPageTop = () => {
+  window.scrollTo({
+    top: 0,
+    left: 0,
+    behavior: 'instant',
+  })
+}
 
 function App() {
   const [locationKey, setLocationKey] = useState(getCurrentLocationKey)
   const [latestRequest, setLatestRequest] = useState(
     () => window.localStorage.getItem(latestRequestStorageKey) || '',
   )
+  const [isCustomerAuthenticated, setIsCustomerAuthenticated] = useState(getCustomerAuthenticated)
   const [trackingDrawer, setTrackingDrawer] = useState({
     isOpen: false,
     requestNumber: '',
@@ -29,6 +44,10 @@ function App() {
     }
   }, [])
 
+  useEffect(() => {
+    scrollToPageTop()
+  }, [locationKey])
+
   const navigate = (href) => {
     const nextUrl = new URL(href, window.location.origin)
     const nextLocationKey = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`
@@ -38,6 +57,7 @@ function App() {
     }
 
     setLocationKey(nextLocationKey)
+    scrollToPageTop()
   }
 
   const openTrackOrder = (requestNumber = '') => {
@@ -50,6 +70,12 @@ function App() {
   const saveLatestRequest = (requestNumber) => {
     window.localStorage.setItem(latestRequestStorageKey, requestNumber)
     setLatestRequest(requestNumber)
+  }
+
+  const handleCustomerLogin = () => {
+    window.localStorage.setItem(customerAuthStorageKey, 'true')
+    setIsCustomerAuthenticated(true)
+    navigate('/')
   }
 
   const closeTrackOrder = () => {
@@ -69,6 +95,7 @@ function App() {
         onRequestSubmitted={saveLatestRequest}
         onTrackOrder={openTrackOrder}
         onNavigate={navigate}
+        isCustomerAuthenticated={isCustomerAuthenticated}
         key={locationKey}
       />
     ) : window.location.pathname === '/cupcakes' ? (
@@ -78,6 +105,7 @@ function App() {
         onRequestSubmitted={saveLatestRequest}
         onTrackOrder={openTrackOrder}
         onNavigate={navigate}
+        isCustomerAuthenticated={isCustomerAuthenticated}
         key={locationKey}
       />
     ) : window.location.pathname === '/customize' ? (
@@ -86,6 +114,24 @@ function App() {
         onRequestSubmitted={saveLatestRequest}
         onTrackOrder={openTrackOrder}
         onNavigate={navigate}
+        isCustomerAuthenticated={isCustomerAuthenticated}
+        key={locationKey}
+      />
+    ) : window.location.pathname === '/login' ? (
+      <LoginPage
+        latestRequest={latestRequest}
+        onTrackOrder={openTrackOrder}
+        onNavigate={navigate}
+        onCustomerLogin={handleCustomerLogin}
+        isCustomerAuthenticated={isCustomerAuthenticated}
+        key={locationKey}
+      />
+    ) : window.location.pathname === '/register' ? (
+      <RegisterPage
+        latestRequest={latestRequest}
+        onTrackOrder={openTrackOrder}
+        onNavigate={navigate}
+        isCustomerAuthenticated={isCustomerAuthenticated}
         key={locationKey}
       />
     ) : (
@@ -93,6 +139,7 @@ function App() {
         latestRequest={latestRequest}
         onTrackOrder={openTrackOrder}
         onNavigate={navigate}
+        isCustomerAuthenticated={isCustomerAuthenticated}
         key={locationKey}
       />
     )

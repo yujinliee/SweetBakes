@@ -1,8 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import logo from '../assets/landingpage/sweetbakes_logo.svg'
-import searchIcon from '../assets/landingpage/search.svg'
-import cartIcon from '../assets/landingpage/cart.svg'
-import cartIconBlack from '../assets/landingpage/cart_black.svg'
 import loginIcon from '../assets/landingpage/login.svg'
 import loginIconBlack from '../assets/landingpage/login_black.svg'
 import heroImage from '../assets/landingpage/main_hero.svg'
@@ -20,7 +17,7 @@ import masonryImage48 from '../assets/landingpage/masonry/image 48.png'
 import masonryImage49 from '../assets/landingpage/masonry/image 49.png'
 import masonryRectangle78 from '../assets/landingpage/masonry/Rectangle 78.png'
 import masonryRectangle83 from '../assets/landingpage/masonry/Rectangle 83.png'
-import mapsImage from '../assets/landingpage/maps.svg'
+import mapsImage from '../assets/landingpage/maps.png'
 import footerMark from '../assets/landingpage/sweetbakes_footer.svg'
 import footerBackground from '../assets/landingpage/footer_bg.png'
 import Chatbot from '../components/Chatbot/Chatbot.jsx'
@@ -30,10 +27,15 @@ const cakeStepOneHref = '/cakes?start=1'
 const cakesHref = '/cakes'
 const cupcakesHref = '/cupcakes'
 const packagesHref = '/customize?type=packages'
-const topbarAnimationDuration = 450
+const loginHref = '/login'
+const directionsHref =
+  'https://www.google.com/maps/dir/?api=1&destination=Diamond%20Village%20Salawag%20Dasmari%C3%B1as%20Cavite%2C%20Dasmari%C3%B1as%2C%20Philippines%2C%204114'
+const topbarScrollThreshold = 5
+const topbarExitDuration = 220
+
+const getIsTopbarScrolled = () => window.scrollY > topbarScrollThreshold
 
 export function SiteTopbar({
-  scrollTargetRef,
   forceScrolled = false,
   homeHref = '#home',
   locationHref = '#location',
@@ -42,62 +44,67 @@ export function SiteTopbar({
   onTrackOrder,
   onNavigate,
 }) {
-  const [isScrolled, setIsScrolled] = useState(forceScrolled)
+  const [isScrolled, setIsScrolled] = useState(getIsTopbarScrolled)
   const [topbarMotion, setTopbarMotion] = useState('')
   const [isShopOpen, setIsShopOpen] = useState(false)
   const shopMenuRef = useRef(null)
-  const isScrolledRef = useRef(forceScrolled)
+  const isScrolledRef = useRef(forceScrolled || getIsTopbarScrolled())
   const topbarMotionTimeoutRef = useRef(null)
+  const topbarIsScrolled = forceScrolled || isScrolled
+  const hasTrackOrder = Boolean(onTrackOrder)
+
+  const handleLoginNavigation = (event) => {
+    event.preventDefault()
+
+    if (onNavigate) {
+      onNavigate(loginHref)
+      return
+    }
+
+    window.history.pushState({}, '', loginHref)
+    window.dispatchEvent(new PopStateEvent('popstate'))
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: 'instant',
+    })
+  }
 
   useEffect(() => {
     if (forceScrolled) {
-      isScrolledRef.current = true
       return undefined
     }
 
-    const getScrollThreshold = () => {
-      const heroHeight = scrollTargetRef?.current?.offsetHeight ?? window.innerHeight
-
-      return heroHeight * 0.88
-    }
-
     const handleScroll = () => {
-      const nextIsScrolled = window.scrollY >= getScrollThreshold()
+      const nextIsScrolled = getIsTopbarScrolled()
 
       if (nextIsScrolled === isScrolledRef.current) {
         return
       }
 
       window.clearTimeout(topbarMotionTimeoutRef.current)
+      isScrolledRef.current = nextIsScrolled
+      setIsScrolled(nextIsScrolled)
 
       if (nextIsScrolled) {
-        isScrolledRef.current = true
-        setIsScrolled(true)
         setTopbarMotion('topbar--scrolled-entering')
-        topbarMotionTimeoutRef.current = window.setTimeout(() => {
-          setTopbarMotion('')
-        }, topbarAnimationDuration)
         return
       }
 
-      isScrolledRef.current = false
       setTopbarMotion('topbar--scrolled-exiting')
       topbarMotionTimeoutRef.current = window.setTimeout(() => {
-        setIsScrolled(false)
         setTopbarMotion('')
-      }, topbarAnimationDuration)
+      }, topbarExitDuration)
     }
 
     handleScroll()
     window.addEventListener('scroll', handleScroll, { passive: true })
-    window.addEventListener('resize', handleScroll)
 
     return () => {
       window.clearTimeout(topbarMotionTimeoutRef.current)
       window.removeEventListener('scroll', handleScroll)
-      window.removeEventListener('resize', handleScroll)
     }
-  }, [forceScrolled, scrollTargetRef])
+  }, [forceScrolled])
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -115,7 +122,7 @@ export function SiteTopbar({
 
   return (
     <header
-      className={`topbar${isScrolled ? ' topbar--scrolled' : ''}${topbarMotion ? ` ${topbarMotion}` : ''}`}
+      className={`topbar${topbarIsScrolled ? ' topbar--scrolled' : ''}${topbarMotion ? ` ${topbarMotion}` : ''}`}
     >
       <span className="topbar-background" aria-hidden="true" />
       <div className="topbar-inner">
@@ -161,6 +168,11 @@ export function SiteTopbar({
 
                   window.history.pushState({}, '', packagesHref)
                   window.dispatchEvent(new PopStateEvent('popstate'))
+                  window.scrollTo({
+                    top: 0,
+                    left: 0,
+                    behavior: 'instant',
+                  })
                 }}
               >
                 <span>Party Packages</span>
@@ -176,29 +188,42 @@ export function SiteTopbar({
         </nav>
 
         <div className="topbar-actions" aria-label="Quick actions">
-          <button type="button" aria-label="Search">
-            <span className="topbar-icon-stack" aria-hidden="true">
-              <img className="topbar-icon topbar-icon--light" src={searchIcon} alt="" />
-              <img
-                className="topbar-icon topbar-icon--dark"
-                src={searchIcon}
-                alt=""
-              />
-            </span>
-          </button>
-          <button type="button" aria-label="Shopping Cart">
-            <span className="topbar-icon-stack" aria-hidden="true">
-              <img className="topbar-icon topbar-icon--light" src={cartIcon} alt="" />
-              <img className="topbar-icon topbar-icon--dark" src={cartIconBlack} alt="" />
-            </span>
-          </button>
-          <button type="button" aria-label="Login">
-            <span className="topbar-icon-stack" aria-hidden="true">
-              <img className="topbar-icon topbar-icon--light" src={loginIcon} alt="" />
-              <img className="topbar-icon topbar-icon--dark" src={loginIconBlack} alt="" />
-            </span>
-          </button>
-          {latestRequest ? (
+          {hasTrackOrder ? (
+            <a
+              className="topbar-login topbar-login-link"
+              href={loginHref}
+              aria-label="Login"
+              onClick={handleLoginNavigation}
+            >
+              <span className="topbar-icon-stack" aria-hidden="true">
+                <img
+                  className="topbar-icon topbar-login-icon topbar-icon--light"
+                  src={loginIcon}
+                  alt=""
+                />
+                <img
+                  className="topbar-icon topbar-login-icon topbar-icon--dark"
+                  src={loginIconBlack}
+                  alt=""
+                />
+              </span>
+            </a>
+          ) : (
+            <a
+              className="topbar-login-text"
+              href={loginHref}
+              onClick={handleLoginNavigation}
+            >
+              <span className="topbar-login-pill-label">Login</span>
+              <span className="topbar-login-pill-arrow" aria-hidden="true">
+                <svg viewBox="0 0 18 18" focusable="false">
+                  <path d="M6.5 11.5L11.5 6.5" />
+                  <path d="M7.5 6.5H11.5V10.5" />
+                </svg>
+              </span>
+            </a>
+          )}
+          {hasTrackOrder ? (
             <button
               className="topbar-track-order"
               type="button"
@@ -230,12 +255,12 @@ export function SiteTopbar({
                 </defs>
                 <rect
                   className="track-order-border-trail"
+                  x="2"
+                  y="2"
+                  width="96"
+                  height="36"
+                  rx="6"
                   pathLength="100"
-                  x="3"
-                  y="3"
-                  width="94"
-                  height="34"
-                  rx="9"
                 />
               </svg>
             </button>
@@ -269,7 +294,12 @@ export function SiteFooter() {
           <h3>Hey, Bestie!</h3>
           <p>Follow us on Facebook for exclusive updates.</p>
           <div className="footer-contact-list">
-            <div className="footer-contact-row">
+            <a
+              className="footer-contact-row footer-facebook-link"
+              href="https://www.facebook.com/rhonatnarvaez0403"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               <svg
                 width="18"
                 height="18"
@@ -284,7 +314,7 @@ export function SiteFooter() {
                 />
               </svg>
               <span>Sweet Bakes Facebook page</span>
-            </div>
+            </a>
             <a className="footer-contact-row" href="tel:+639278700399">
               <svg
                 width="18"
@@ -330,8 +360,24 @@ export function SiteFooter() {
   )
 }
 
-function LandingPage({ latestRequest, onTrackOrder, onNavigate }) {
-  const heroRef = useRef(null)
+function LandingPage({ latestRequest, onTrackOrder, onNavigate, isCustomerAuthenticated = false }) {
+  const handlePageNavigation = (event, href) => {
+    event.preventDefault()
+
+    if (onNavigate) {
+      onNavigate(href)
+      return
+    }
+
+    window.history.pushState({}, '', href)
+    window.dispatchEvent(new PopStateEvent('popstate'))
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: 'instant',
+    })
+  }
+
   const offerings = [
     {
       title: 'Cakes',
@@ -339,7 +385,7 @@ function LandingPage({ latestRequest, onTrackOrder, onNavigate }) {
       description:
         "Bring your dream cake to life by customizing every design detail. From elegant celebrations to fun themed occasions, we'll create a cake that reflects your unique style and vision.",
       image: cakesImage,
-      href: cakeStepOneHref,
+      href: cakesHref,
     },
     {
       title: 'Cupcakes',
@@ -347,7 +393,7 @@ function LandingPage({ latestRequest, onTrackOrder, onNavigate }) {
       description:
         'Customize every cupcake to match your celebration. Whether you prefer elegant, playful, or themed designs, each box is carefully crafted to complement your special occasion.',
       image: cupcakesImage,
-      href: cakeStepOneHref,
+      href: cupcakesHref,
     },
     {
       title: 'Party Packages',
@@ -355,6 +401,7 @@ function LandingPage({ latestRequest, onTrackOrder, onNavigate }) {
       description:
         'Create a complete dessert experience by customizing a party package that fits your celebration. Personalize your cake and cupcakes to achieve a cohesive look for your special event.',
       image: partyImage,
+      href: packagesHref,
     },
   ]
   const galleryItems = [
@@ -445,15 +492,12 @@ function LandingPage({ latestRequest, onTrackOrder, onNavigate }) {
 
   useEffect(() => {
     const galleryItems = document.querySelectorAll('.gallery-item')
-    const galleryDivider = document.querySelector('.gallery-divider')
+    const galleryDivider = document.querySelector('.gallery-divider:not(.gallery-divider--bottom)')
     const gallerySection = document.querySelector('.gallery-section')
-    const locationDivider = document.querySelector('.location-divider')
-    const locationSection = document.querySelector('.location-section')
 
     if (!('IntersectionObserver' in window)) {
       galleryItems.forEach((item) => item.classList.add('gallery-item--visible'))
       galleryDivider?.classList.add('gallery-divider--visible')
-      locationDivider?.classList.add('location-divider--visible')
       return undefined
     }
 
@@ -463,8 +507,6 @@ function LandingPage({ latestRequest, onTrackOrder, onNavigate }) {
           if (entry.isIntersecting) {
             if (entry.target.classList.contains('gallery-section')) {
               galleryDivider?.classList.add('gallery-divider--visible')
-            } else if (entry.target.classList.contains('location-section')) {
-              locationDivider?.classList.add('location-divider--visible')
             } else {
               entry.target.classList.add('gallery-item--visible')
             }
@@ -478,9 +520,6 @@ function LandingPage({ latestRequest, onTrackOrder, onNavigate }) {
     if (gallerySection) {
       observer.observe(gallerySection)
     }
-    if (locationSection) {
-      observer.observe(locationSection)
-    }
     galleryItems.forEach((item) => observer.observe(item))
 
     return () => {
@@ -492,13 +531,13 @@ function LandingPage({ latestRequest, onTrackOrder, onNavigate }) {
     <div className="page-shell">
       <SiteTopbar
         latestRequest={latestRequest}
-        scrollTargetRef={heroRef}
         onTrackOrder={onTrackOrder}
         onNavigate={onNavigate}
+        isCustomerAuthenticated={isCustomerAuthenticated}
       />
 
       <main>
-        <section className="hero" id="home" ref={heroRef}>
+        <section className="hero" id="home">
           <img className="hero-image" src={heroImage} alt="Sweet Bakes cake collection" />
           <div className="hero-overlay" />
           <div className="hero-frame">
@@ -524,7 +563,7 @@ function LandingPage({ latestRequest, onTrackOrder, onNavigate }) {
               </p>
               <div className="hero-actions">
                 <a className="button button-primary" href={cakeStepOneHref}>
-                  <span>Order Cakes &amp; Cupcakes</span>
+                  <span>Customize Yours Now</span>
                   <svg
                     className="button-icon"
                     width="18"
@@ -567,7 +606,11 @@ function LandingPage({ latestRequest, onTrackOrder, onNavigate }) {
                 <div className="offer-showcase-copy">
                   <h3>{item.title}</h3>
                   <p>{item.description}</p>
-                  <a className="offer-showcase-link" href={item.href ?? '#contact'}>
+                  <a
+                    className="offer-showcase-link"
+                    href={item.href}
+                    onClick={(event) => handlePageNavigation(event, item.href)}
+                  >
                     <span>{item.cta}</span>
                     <span aria-hidden="true">→</span>
                   </a>
@@ -615,10 +658,8 @@ function LandingPage({ latestRequest, onTrackOrder, onNavigate }) {
                     >
                       <img src={item.image} alt={copyIndex === 0 ? item.title : ''} />
                       <div className="gallery-overlay">
-                        <p>{item.label}</p>
                         <h3>{item.title}</h3>
                         <strong>View Details &rarr;</strong>
-                        <span>{item.description}</span>
                       </div>
                     </article>
                   ))}
@@ -628,70 +669,73 @@ function LandingPage({ latestRequest, onTrackOrder, onNavigate }) {
           </div>
         </section>
 
-        <section className="section section--open location-section" id="location">
-          <div className="location-divider" aria-hidden="true">
-            <img src={dividerLine} alt="" />
-          </div>
-          <div className="section-heading location-heading animate-up">
-            <h2>Location</h2>
-            <p>
-              Stop by the shop to discuss flavors, themes, and the details of your
-              next cake order in person.
-            </p>
-          </div>
+        <div className="creations-bottom-divider" aria-hidden="true">
+          <img className="creations-bottom-divider-image" src={dividerLine} alt="" />
+        </div>
 
-          <div className="location-card animate-up" style={{ '--delay': '120ms' }}>
-            <img src={mapsImage} alt="Sweet Bakes store location map" />
-            <div className="location-copy">
-              <h3>Diamond Village, Salawag, Dasmariñas City</h3>
-              <p>Diamond Village Salawag Dasmariñas Cavite, Philippines, 4114</p>
-              <div className="location-contact-list" aria-label="Location contact details">
-                <a className="location-contact-row" href="tel:+639278700399">
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M22 16.92V20a2 2 0 0 1-2.18 2A19.79 19.79 0 0 1 3 5.18 2 2 0 0 1 5 3h3.09a2 2 0 0 1 2 1.72l.45 3a2 2 0 0 1-.57 1.74l-1.32 1.32a16 16 0 0 0 4.57 4.57l1.32-1.32a2 2 0 0 1 1.74-.57l3 .45A2 2 0 0 1 22 16.92Z"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                  <span>0927 870 0399</span>
-                </a>
-                <a className="location-contact-row" href="mailto:rhonanarvaez@gmail.com">
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M4 6h16v12H4V6Zm16 1-8 6-8-6"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                  <span>rhonanarvaez@gmail.com</span>
-                </a>
-              </div>
+        <section className="section section--open location-section" id="location">
+          <div className="location-container">
+            <div className="location-details">
+              <h2>Location</h2>
+              <p className="location-address">
+                <svg
+                  className="location-address-icon"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M12 21s7-5.33 7-12a7 7 0 1 0-14 0c0 6.67 7 12 7 12Z"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M12 11.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                <span>
+                  Diamond Village, Salawag,
+                <br />
+                Dasmariñas City
+                </span>
+              </p>
+              <a
+                className="location-directions"
+                href={directionsHref}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <span>Get Directions</span>
+                <span aria-hidden="true">&rarr;</span>
+              </a>
+            </div>
+
+            <div className="location-map-wrapper" aria-label="Sweet Bakes location map">
+              <img
+                className="location-map"
+                src={mapsImage}
+                alt="Map showing Sweet Bakes near Diamond Village, Salawag"
+              />
             </div>
           </div>
         </section>
       </main>
 
       <SiteFooter />
-      <Chatbot onNavigate={onNavigate} onTrackOrder={onTrackOrder} />
+      <Chatbot
+        onNavigate={onNavigate}
+        onTrackOrder={onTrackOrder}
+        isCustomerAuthenticated={isCustomerAuthenticated}
+      />
     </div>
   )
 }

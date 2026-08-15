@@ -1,0 +1,163 @@
+@import '../loginpage/LoginPage.css';
+
+.register-card {
+  padding: 22px 40px 20px;
+}
+
+.register-page .login-page-content {
+  height: calc(100vh - 86px);
+  min-height: 0;
+  margin: 86px auto 0;
+  overflow: hidden;
+  padding: 0 40px 18px;
+}
+
+.register-card .login-brand {
+  margin-bottom: 6px;
+}
+
+.register-card .login-heading {
+  margin-bottom: 16px;
+}
+
+.register-description {
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.register-fields {
+  gap: 12px;
+}
+
+.name-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.register-card .login-field-group {
+  gap: 6px;
+}
+
+.register-card .login-field,
+.register-card .login-password-control {
+  height: 42px;
+}
+
+.register-card .login-password-control {
+  position: relative;
+  width: 100%;
+  border: 1px solid #ded8d5;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.register-card .login-password-control .login-field {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 0 46px 0 14px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+}
+
+.register-terms-option {
+  margin-top: 10px;
+  line-height: 18px;
+}
+
+.register-terms-option button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #8d5fba;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.register-terms-option button:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.register-submit {
+  height: 46px;
+  margin-top: 14px;
+}
+
+.register-divider {
+  margin: 14px 0;
+}
+
+.register-sign-in {
+  margin-top: 12px;
+}
+
+.register-card .google-login-button {
+  height: 46px;
+}
+
+@media (max-width: 600px) {
+  .register-card {
+    padding: 24px 24px;
+  }
+
+  .register-description {
+    white-space: normal;
+  }
+
+  .name-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-height: 750px) {
+  .register-page .login-page-content {
+    height: calc(100vh - 78px);
+    margin-top: 78px;
+    padding-top: 0;
+    padding-bottom: 14px;
+  }
+
+  .register-card {
+    padding-top: 18px;
+    padding-bottom: 18px;
+  }
+
+  .register-card .login-heading {
+    margin-bottom: 12px;
+  }
+
+  .register-fields {
+    gap: 10px;
+  }
+
+  .register-card .login-field,
+  .register-card .login-password-control {
+    height: 40px;
+  }
+
+  .register-terms-option {
+    margin-top: 8px;
+  }
+
+  .register-submit {
+    height: 42px;
+    margin-top: 12px;
+  }
+
+  .register-divider {
+    margin: 10px 0;
+  }
+
+  .register-card .google-login-button {
+    height: 42px;
+  }
+
+  .register-sign-in {
+    margin-top: 10px;
+  }
+}

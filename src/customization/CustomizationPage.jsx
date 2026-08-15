@@ -48,6 +48,7 @@ function CustomizationPage({
   onRequestSubmitted,
   onTrackOrder,
   onNavigate,
+  isCustomerAuthenticated = false,
 }) {
   const [activeProduct, setActiveProduct] = useState(() => getInitialProduct(initialProduct))
 
@@ -70,6 +71,7 @@ function CustomizationPage({
         latestRequest={latestRequest}
         onTrackOrder={onTrackOrder}
         onNavigate={onNavigate}
+        isCustomerAuthenticated={isCustomerAuthenticated}
       />
 
       <main className="cake-main customization-main">
