@@ -1260,8 +1260,14 @@ main {
 .gallery-grid {
   position: relative;
   overflow: hidden;
-  width: min(1080px, 100%);
+  width: 100%;
   height: 460px;
+  margin: 0 auto;
+}
+
+.gallery-nav-wrapper {
+  position: relative;
+  width: min(1080px, 100%);
   margin: 0 auto;
 }
 
@@ -1269,7 +1275,7 @@ main {
   display: flex;
   width: max-content;
   height: 100%;
-  animation: galleryMarquee 64s linear infinite;
+  transition: transform 400ms ease;
   will-change: transform;
 }
 
@@ -1391,14 +1397,46 @@ main {
   transform: translateY(0);
 }
 
-@keyframes galleryMarquee {
-  from {
-    transform: translateX(0);
-  }
+.gallery-arrow {
+  position: absolute;
+  top: 50%;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid rgba(58, 46, 46, 0.14);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  color: #3a2e2e;
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition:
+    background-color 200ms ease,
+    border-color 200ms ease,
+    opacity 200ms ease;
+  box-shadow: 0 2px 8px rgba(58, 46, 46, 0.08);
+}
 
-  to {
-    transform: translateX(-50%);
-  }
+.gallery-arrow--left {
+  left: -18px;
+}
+
+.gallery-arrow--right {
+  right: -18px;
+}
+
+.gallery-arrow:hover:not(:disabled) {
+  background: #fff;
+  border-color: rgba(58, 46, 46, 0.26);
+}
+
+.gallery-arrow:disabled {
+  opacity: 0.3;
+  cursor: default;
+  pointer-events: none;
 }
 
 @keyframes dividerPathReveal {
@@ -1748,10 +1786,6 @@ main {
   .gallery-grid {
     overflow-x: auto;
   }
-
-  .gallery-track {
-    animation: none;
-  }
 }
 
 @media (min-width: 901px) and (min-height: 950px) {
@@ -1829,10 +1863,6 @@ main {
 
   .gallery-grid {
     height: 444px;
-  }
-
-  .gallery-track {
-    animation-duration: 66s;
   }
 
   .gallery-loop {
@@ -2021,19 +2051,9 @@ main {
   }
 
   .gallery-grid {
-    overflow-x: auto;
     height: 272px;
-    overscroll-behavior-inline: contain;
-    scrollbar-width: none;
   }
 
-  .gallery-grid::-webkit-scrollbar {
-    display: none;
-  }
-
-  .gallery-track {
-    animation: none;
-  }
 
   .gallery-loop {
     display: grid;
@@ -2055,11 +2075,19 @@ main {
     grid-row: span 1;
   }
 
-  .gallery-overlay {
-    padding: 20px;
+  .gallery-arrow {
+    width: 30px;
+    height: 30px;
   }
 
-  .offer-showcase-media,
+  .gallery-arrow--left {
+    left: -15px;
+  }
+
+  .gallery-arrow--right {
+    right: -15px;
+  }
+
   .offer-showcase--reverse .offer-showcase-media {
     padding: 18px;
   }

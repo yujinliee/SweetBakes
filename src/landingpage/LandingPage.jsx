@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import logo from '../assets/landingpage/sweetbakes_logo.svg'
 import loginIcon from '../assets/landingpage/login.svg'
 import loginIconBlack from '../assets/landingpage/login_black.svg'
@@ -23,7 +23,11 @@ import footerBackground from '../assets/landingpage/footer_bg.png'
 import Chatbot from '../components/Chatbot/Chatbot.jsx'
 import './LandingPage.css'
 
-const cakeStepOneHref = '/cakes?start=1'
+const cakeStepOneHref = '/customize'
+const heroCustomizeHref = '/customize'
+const homeCakesHref = '/customize?category=cakes'
+const homeCupcakesHref = '/customize?category=cupcakes'
+const homePackagesHref = '/customize?category=packages'
 const cakesHref = '/cakes'
 const cupcakesHref = '/cupcakes'
 const packagesHref = '/customize?type=packages'
@@ -360,6 +364,83 @@ export function SiteFooter() {
   )
 }
 
+function GalleryNav({ items }) {
+  const trackRef = useRef(null)
+  const [index, setIndex] = useState(0)
+  const [trackWidth, setTrackWidth] = useState(0)
+  const [gridWidth, setGridWidth] = useState(0)
+
+  const measure = useCallback(() => {
+    if (trackRef.current) {
+      setTrackWidth(trackRef.current.scrollWidth)
+      setGridWidth(trackRef.current.parentElement.clientWidth)
+    }
+  }, [])
+
+  useEffect(() => {
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [measure])
+
+  const stepSize = gridWidth * 0.72
+  const maxIndex = trackWidth > gridWidth ? Math.ceil((trackWidth - gridWidth) / stepSize) : 0
+
+  const goTo = (next) => {
+    const clamped = Math.max(0, Math.min(next, maxIndex))
+    setIndex(clamped)
+    if (trackRef.current) {
+      trackRef.current.style.transform = `translateX(-${clamped * stepSize}px)`
+    }
+  }
+
+  return (
+    <div className="gallery-nav-wrapper">
+      <button
+        className="gallery-arrow gallery-arrow--left"
+        aria-label="Previous"
+        disabled={index === 0}
+        onClick={() => goTo(index - 1)}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      <div className="gallery-grid" aria-label="Sweet Bakes creation gallery">
+        <div className="gallery-track" ref={trackRef}>
+          <div className="gallery-loop">
+            {items.map((item, index) => (
+              <article
+                className={`gallery-item gallery-item--${item.shape} gallery-item--tile-${index + 1} gallery-item--visible`}
+                key={item.title}
+                style={{ '--gallery-delay': `${index * 70}ms` }}
+              >
+                <img src={item.image} alt={item.title} />
+                <div className="gallery-overlay">
+                  <h3>{item.title}</h3>
+                  <strong>View Details &rarr;</strong>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <button
+        className="gallery-arrow gallery-arrow--right"
+        aria-label="Next"
+        disabled={index >= maxIndex}
+        onClick={() => goTo(index + 1)}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+    </div>
+  )
+}
+
 function LandingPage({ latestRequest, onTrackOrder, onNavigate, isCustomerAuthenticated = false }) {
   const handlePageNavigation = (event, href) => {
     event.preventDefault()
@@ -385,7 +466,7 @@ function LandingPage({ latestRequest, onTrackOrder, onNavigate, isCustomerAuthen
       description:
         "Bring your dream cake to life by customizing every design detail. From elegant celebrations to fun themed occasions, we'll create a cake that reflects your unique style and vision.",
       image: cakesImage,
-      href: cakesHref,
+      href: homeCakesHref,
     },
     {
       title: 'Cupcakes',
@@ -393,7 +474,7 @@ function LandingPage({ latestRequest, onTrackOrder, onNavigate, isCustomerAuthen
       description:
         'Customize every cupcake to match your celebration. Whether you prefer elegant, playful, or themed designs, each box is carefully crafted to complement your special occasion.',
       image: cupcakesImage,
-      href: cupcakesHref,
+      href: homeCupcakesHref,
     },
     {
       title: 'Party Packages',
@@ -401,7 +482,7 @@ function LandingPage({ latestRequest, onTrackOrder, onNavigate, isCustomerAuthen
       description:
         'Create a complete dessert experience by customizing a party package that fits your celebration. Personalize your cake and cupcakes to achieve a cohesive look for your special event.',
       image: partyImage,
-      href: packagesHref,
+      href: homePackagesHref,
     },
   ]
   const galleryItems = [
@@ -562,7 +643,11 @@ function LandingPage({ latestRequest, onTrackOrder, onNavigate, isCustomerAuthen
                 Design your perfect cake or cupcake with your preferred flavor, theme, and message. Freshly made, carefully finished, and styled for the most memorable celebrations.
               </p>
               <div className="hero-actions">
-                <a className="button button-primary" href={cakeStepOneHref}>
+                <a
+                  className="button button-primary"
+                  href={heroCustomizeHref}
+                  onClick={(event) => handlePageNavigation(event, heroCustomizeHref)}
+                >
                   <span>Customize Yours Now</span>
                   <svg
                     className="button-icon"
@@ -642,31 +727,7 @@ function LandingPage({ latestRequest, onTrackOrder, onNavigate, isCustomerAuthen
             <p>Every cake is handcrafted with love for every celebration.</p>
           </div>
 
-          <div className="gallery-grid" aria-label="Sweet Bakes creation gallery">
-            <div className="gallery-track">
-              {[0, 1].map((copyIndex) => (
-                <div
-                  className="gallery-loop"
-                  key={`gallery-loop-${copyIndex}`}
-                  aria-hidden={copyIndex === 1 ? 'true' : undefined}
-                >
-                  {galleryItems.map((item, index) => (
-                    <article
-                      className={`gallery-item gallery-item--${item.shape} gallery-item--tile-${index + 1} gallery-item--visible`}
-                      key={`${copyIndex}-${item.title}`}
-                      style={{ '--gallery-delay': `${index * 70}ms` }}
-                    >
-                      <img src={item.image} alt={copyIndex === 0 ? item.title : ''} />
-                      <div className="gallery-overlay">
-                        <h3>{item.title}</h3>
-                        <strong>View Details &rarr;</strong>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </div>
+          <GalleryNav items={galleryItems} />
         </section>
 
         <div className="creations-bottom-divider" aria-hidden="true">

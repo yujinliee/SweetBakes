@@ -18,21 +18,59 @@ const productFromLabel = {
   'Party Packages': 'packages',
 }
 
-const productRoutes = {
-  cakes: '/cakes',
-  cupcakes: '/cupcakes',
-  packages: '/customize?type=packages',
+const normalizeProduct = (value) => {
+  if (!value) {
+    return null
+  }
+
+  const normalizedValue = String(value).trim().toLowerCase()
+
+  if (normalizedValue === 'cake' || normalizedValue === 'cakes') {
+    return 'cakes'
+  }
+
+  if (normalizedValue === 'cupcake' || normalizedValue === 'cupcakes') {
+    return 'cupcakes'
+  }
+
+  if (
+    normalizedValue === 'package' ||
+    normalizedValue === 'packages' ||
+    normalizedValue === 'party-package' ||
+    normalizedValue === 'party packages'
+  ) {
+    return 'packages'
+  }
+
+  return null
+}
+
+const getVisibleProducts = (initialProduct) => {
+  if (initialProduct) {
+    const normalizedProduct = normalizeProduct(initialProduct)
+    return normalizedProduct ? [normalizedProduct] : ['cakes', 'cupcakes', 'packages']
+  }
+
+  const searchParams = new URLSearchParams(window.location.search)
+  const categoryParam = normalizeProduct(searchParams.get('category') || searchParams.get('type'))
+
+  if (categoryParam) {
+    return [categoryParam]
+  }
+
+  return ['cakes', 'cupcakes', 'packages']
 }
 
 const getInitialProduct = (initialProduct) => {
   if (initialProduct) {
-    return initialProduct
+    return normalizeProduct(initialProduct) || 'cakes'
   }
 
-  const searchType = new URLSearchParams(window.location.search).get('type')
+  const searchParams = new URLSearchParams(window.location.search)
+  const categoryParam = normalizeProduct(searchParams.get('category') || searchParams.get('type'))
 
-  if (searchType === 'cakes' || searchType === 'cupcakes' || searchType === 'packages') {
-    return searchType
+  if (categoryParam) {
+    return categoryParam
   }
 
   if (window.location.pathname === '/cupcakes') {
@@ -51,14 +89,21 @@ function CustomizationPage({
   isCustomerAuthenticated = false,
 }) {
   const [activeProduct, setActiveProduct] = useState(() => getInitialProduct(initialProduct))
+  const visibleProducts = getVisibleProducts(initialProduct)
+  const visibleProductSet = new Set(visibleProducts)
 
   const handleProductChange = (nextProduct) => {
-    if (!nextProduct || nextProduct === activeProduct) {
+    const normalizedProduct = normalizeProduct(nextProduct)
+
+    if (!normalizedProduct || !visibleProductSet.has(normalizedProduct)) {
       return
     }
 
-    setActiveProduct(nextProduct)
-    window.history.replaceState({}, '', productRoutes[nextProduct])
+    if (normalizedProduct === activeProduct) {
+      return
+    }
+
+    setActiveProduct(normalizedProduct)
   }
 
   return (
@@ -80,6 +125,7 @@ function CustomizationPage({
           <CakeTabs
             activeTab={productLabels[activeProduct]}
             onTabChange={(tab) => handleProductChange(productFromLabel[tab])}
+            visibleTabs={visibleProducts.map((product) => productLabels[product])}
           />
         </header>
 
