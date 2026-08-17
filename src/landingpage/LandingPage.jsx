@@ -436,10 +436,12 @@ function GalleryNav({ pages }) {
   const scrollRef = useRef(null)
   const [page, setPage] = useState(0)
   const maxPage = pages.length - 1
+  const isPointerDown = useRef(false)
   const isDragging = useRef(false)
   const startX = useRef(0)
   const startScrollLeft = useRef(0)
   const dragMoved = useRef(false)
+  const DRAG_THRESHOLD = 5
 
   // Sync page index from scroll position
   useEffect(() => {
@@ -453,22 +455,30 @@ function GalleryNav({ pages }) {
     return () => el.removeEventListener('scroll', onScroll)
   }, [maxPage])
 
-  // Wheel: native deltaX passes through; vertical wheel over gallery -> horizontal
+  // Wheel / trackpad:
+  //  - Horizontal gestures: rely on native deltaX scrolling (do NOT preventDefault).
+  //  - Vertical gestures over the gallery: convert to horizontal while more pages
+  //    remain in that direction; at the ends, let normal vertical page scroll resume.
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
     const onWheel = (e) => {
-      if (Math.abs(e.deltaX) > 0) {
-        // native horizontal trackpad â€” let browser handle, just prevent page scroll
-        e.preventDefault()
-        el.scrollLeft += e.deltaX
+      const horizontalIntent = Math.abs(e.deltaX) > Math.abs(e.deltaY)
+      if (horizontalIntent) {
+        // Native laptop-trackpad horizontal swipe — the browser scrolls el itself.
         return
       }
       const canRight = el.scrollLeft < el.scrollWidth - el.clientWidth - 1
-      const canLeft  = el.scrollLeft > 1
+      const canLeft = el.scrollLeft > 1
       if ((e.deltaY > 0 && canRight) || (e.deltaY < 0 && canLeft)) {
         e.preventDefault()
-        el.scrollLeft += e.deltaY
+        // Mouse wheels often report in lines; trackpads report in pixels.
+        const pixelsPerLine = 16
+        const delta =
+          e.deltaMode === 1
+            ? e.deltaY * pixelsPerLine
+            : e.deltaY
+        el.scrollLeft += delta
       }
     }
     el.addEventListener('wheel', onWheel, { passive: false })
@@ -479,24 +489,52 @@ function GalleryNav({ pages }) {
     scrollRef.current?.scrollTo({ left: idx * scrollRef.current.clientWidth, behavior: 'smooth' })
   }
 
-  // Pointer drag (desktop mouse)
+  // Mouse / pen drag. We only commit to a drag once the pointer actually crosses
+  // the threshold and only then take pointer capture. This way a plain click on a
+  // card still reaches its link, while a genuine drag never opens it.
   const onPointerDown = (e) => {
     if (e.pointerType === 'touch') return
-    isDragging.current = true
+    isPointerDown.current = true
+    isDragging.current = false
     dragMoved.current = false
     startX.current = e.clientX
     startScrollLeft.current = scrollRef.current.scrollLeft
-    scrollRef.current.setPointerCapture(e.pointerId)
   }
   const onPointerMove = (e) => {
-    if (!isDragging.current) return
+    if (!isPointerDown.current) return
     const dx = e.clientX - startX.current
-    if (Math.abs(dx) > 4) dragMoved.current = true
-    scrollRef.current.scrollLeft = startScrollLeft.current - dx
+    if (!isDragging.current && Math.abs(dx) > DRAG_THRESHOLD) {
+      isDragging.current = true
+      dragMoved.current = true
+      // `scroll-behavior: smooth` would animate every scrollLeft update and fight
+      // the pointer — disable it for the duration of the drag.
+      scrollRef.current.style.scrollBehavior = 'auto'
+      scrollRef.current.setPointerCapture?.(e.pointerId)
+    }
+    if (isDragging.current) {
+      scrollRef.current.scrollLeft = startScrollLeft.current - dx
+    }
   }
-  const onPointerUp = () => { isDragging.current = false }
+  const onPointerUp = (e) => {
+    if (isDragging.current) {
+      if (e?.pointerId != null) {
+        scrollRef.current?.releasePointerCapture?.(e.pointerId)
+      }
+      scrollRef.current.style.scrollBehavior = ''
+    }
+    isPointerDown.current = false
+    isDragging.current = false
+    // dragMoved intentionally kept so the click that follows a drag is suppressed
+  }
+  const onPointerCancel = () => {
+    if (isDragging.current) {
+      scrollRef.current.style.scrollBehavior = ''
+    }
+    isPointerDown.current = false
+    isDragging.current = false
+  }
 
-  // Prevent click-through after drag
+  // Prevent click-through after a drag
   const onClickCapture = (e) => {
     if (dragMoved.current) e.stopPropagation()
   }
@@ -522,6 +560,7 @@ function GalleryNav({ pages }) {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerLeave={onPointerUp}
+        onPointerCancel={onPointerCancel}
         onClickCapture={onClickCapture}
       >
         {pages.map((pageItems, pi) => (

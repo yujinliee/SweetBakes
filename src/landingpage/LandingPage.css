@@ -1268,6 +1268,8 @@ main {
   overscroll-behavior-x: contain;
   scrollbar-width: none;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   height: 460px;
   cursor: grab;
 }
