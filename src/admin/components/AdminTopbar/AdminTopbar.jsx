@@ -5,6 +5,7 @@ const pageLabels = {
   '/admin/dashboard': 'Dashboard',
   '/admin/orders': 'Orders',
   '/admin/products': 'Products',
+  '/admin/customization': 'Customization',
   '/admin/inventory': 'Inventory',
   '/admin/custom-orders': 'Custom Orders',
   '/admin/customers': 'Customers',

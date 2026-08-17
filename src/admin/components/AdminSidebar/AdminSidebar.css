@@ -1,5 +1,7 @@
 .admin-sidebar {
-  min-height: 100vh;
+  position: sticky;
+  top: 0;
+  height: 100vh;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -7,7 +9,8 @@
   padding: 0;
   border-right: 0;
   background: #121212;
-  overflow: visible;
+  overflow-y: auto;
+  overflow-x: hidden;
   transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -200,13 +203,20 @@
     transform 0.3s ease;
 }
 
+.admin-sidebar-footer {
+  flex-shrink: 0;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0 18px 20px;
+  transition: padding 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 .admin-sidebar-logout {
   box-sizing: border-box;
-  width: auto;
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 14px;
-  margin: auto 18px 20px;
   min-height: 48px;
   padding: 0 12px;
   position: relative;
@@ -222,11 +232,7 @@
   cursor: pointer;
   transition:
     border-color 180ms ease,
-    background-color 180ms ease,
-    width 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-    margin 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-    padding 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-    gap 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    background-color 180ms ease;
 }
 
 .admin-sidebar-logout:hover {
@@ -268,8 +274,6 @@
   width: 100%;
   min-height: 48px;
   padding: 0 12px;
-  margin-right: 0;
-  margin-left: 0;
 }
 
 .admin-sidebar--collapsed .admin-sidebar-link .admin-sidebar-icon {
@@ -297,9 +301,8 @@
   z-index: 0;
 }
 
-.admin-sidebar--collapsed .admin-sidebar-logout {
-  margin-top: auto;
-  margin-bottom: 20px;
+.admin-sidebar--collapsed .admin-sidebar-footer {
+  padding: 0 18px 20px;
 }
 
 .admin-sidebar--collapsed .admin-sidebar-link::after,
@@ -333,8 +336,11 @@
 
 @media (max-width: 900px) {
   .admin-sidebar {
+    position: static;
+    height: auto;
     min-height: auto;
     width: 100%;
+    overflow: visible;
     padding: 0;
     border-right: 0;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);

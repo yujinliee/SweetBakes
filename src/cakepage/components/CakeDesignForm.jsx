@@ -1,16 +1,4 @@
-const themes = [
-  'Birthday',
-  'Wedding',
-  'Anniversary',
-  'Christening',
-  'Baby Shower',
-  'Graduation',
-  'Corporate',
-  'Minimalist',
-  'Floral',
-  'Custom Theme',
-  'Other',
-]
+import { getActiveCustomizationOptions } from '../../admin/services/customizationOptionsService.js'
 
 function CakeDesignForm({
   details,
@@ -102,11 +90,12 @@ function CakeDesignForm({
             }
           >
             <option value="">Select a theme</option>
-            {themes.map((theme) => (
-              <option value={theme} key={theme}>
-                {theme}
+            {getActiveCustomizationOptions('Cake', 'Designs / Details').map((opt) => (
+              <option value={opt.label} key={opt.id}>
+                {opt.label}
               </option>
             ))}
+            <option value="Other">Other</option>
           </select>
           {showError('theme')}
           {details.theme === 'Other' ? (

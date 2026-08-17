@@ -1,24 +1,18 @@
-const optionGroups = [
-  {
-    name: 'flavor',
-    label: 'Base Flavor',
-    options: [
-      { label: 'Chocolate', value: 'chocolate' },
-      { label: 'Red Velvet', value: 'redvelvet' },
-    ],
-  },
-  {
-    name: 'quantity',
-    label: 'Quantity',
-    options: [
-      { label: '6 pcs', value: '6' },
-      { label: '12 pcs', value: '12' },
-      { label: '18 pcs', value: '18' },
-    ],
-  },
-]
+import { getActiveCustomizationOptions } from '../../admin/services/customizationOptionsService.js'
 
 function CupcakeBaseForm({ selections, onSelectionsChange, onContinue }) {
+  const optionGroups = [
+    {
+      name: 'flavor',
+      label: 'Base Flavor',
+      options: getActiveCustomizationOptions('Cupcakes', 'Flavors'),
+    },
+    {
+      name: 'quantity',
+      label: 'Quantity',
+      options: getActiveCustomizationOptions('Cupcakes', 'Sizes'),
+    },
+  ]
   const handleChange = (groupName, value) => {
     onSelectionsChange((current) => ({
       ...current,
@@ -40,19 +34,23 @@ function CupcakeBaseForm({ selections, onSelectionsChange, onContinue }) {
           <fieldset className="cake-option-group" key={group.name}>
             <legend>{group.label}</legend>
             <div className="cake-option-list">
-              {group.options.map((option) => (
-                <label className="cake-radio" key={option.value}>
-                  <input
-                    type="radio"
-                    name={`cupcake-${group.name}`}
-                    value={option.value}
-                    checked={selections[group.name] === option.value}
-                    onChange={() => handleChange(group.name, option.value)}
-                  />
-                  <span className="cake-radio-control" aria-hidden="true" />
-                  <span>{option.label}</span>
-                </label>
-              ))}
+              {group.options.length === 0 ? (
+                <p className="cake-field-empty">No active options available for this category.</p>
+              ) : (
+                group.options.map((option) => (
+                  <label className="cake-radio" key={option.value}>
+                    <input
+                      type="radio"
+                      name={`cupcake-${group.name}`}
+                      value={option.value}
+                      checked={selections[group.name] === option.value}
+                      onChange={() => handleChange(group.name, option.value)}
+                    />
+                    <span className="cake-radio-control" aria-hidden="true" />
+                    <span>{option.label}</span>
+                  </label>
+                ))
+              )}
             </div>
           </fieldset>
         ))}

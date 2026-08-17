@@ -1,16 +1,4 @@
-const themes = [
-  'Birthday',
-  'Wedding',
-  'Anniversary',
-  'Christening',
-  'Baby Shower',
-  'Graduation',
-  'Corporate',
-  'Minimalist',
-  'Floral',
-  'Custom Theme',
-  'Other',
-]
+import { getActiveCustomizationOptions } from '../../admin/services/customizationOptionsService.js'
 
 function CupcakeDesignForm({
   details,
@@ -103,11 +91,12 @@ function CupcakeDesignForm({
             }
           >
             <option value="">Select a theme</option>
-            {themes.map((theme) => (
-              <option value={theme} key={theme}>
-                {theme}
+            {getActiveCustomizationOptions('Cupcakes', 'Designs / Details').map((opt) => (
+              <option value={opt.label} key={opt.id}>
+                {opt.label}
               </option>
             ))}
+            <option value="Other">Other</option>
           </select>
           {showError('cupcakeTheme')}
           {details.cupcakeTheme === 'Other' ? (
