@@ -5,8 +5,6 @@ const adminNavItems = [
   { label: 'Dashboard', href: '/admin/dashboard', icon: 'dashboard' },
   { label: 'Orders', href: '/admin/orders', icon: 'orders' },
   { label: 'Products', href: '/admin/products', icon: 'products' },
-  { label: 'Inventory', href: '/admin/inventory', icon: 'inventory' },
-  { label: 'Custom Orders', href: '/admin/custom-orders', icon: 'custom' },
   { label: 'Customers', href: '/admin/customers', icon: 'customers' },
   { label: 'Settings', href: '/admin/settings', icon: 'settings' },
 ]
@@ -108,15 +106,17 @@ function AdminSidebar({ currentPath, isCollapsed, onNavigate, onLogout, onToggle
         ))}
       </nav>
 
-      <button
-        className="admin-sidebar-logout"
-        type="button"
-        data-tooltip="Logout"
-        onClick={onLogout}
-      >
-        <SidebarIcon name="settings" />
-        <span className="admin-sidebar-label">Logout</span>
-      </button>
+      <div className="admin-sidebar-footer">
+        <button
+          className="admin-sidebar-logout"
+          type="button"
+          data-tooltip="Logout"
+          onClick={onLogout}
+        >
+          <SidebarIcon name="settings" />
+          <span className="admin-sidebar-label">Logout</span>
+        </button>
+      </div>
     </aside>
   )
 }

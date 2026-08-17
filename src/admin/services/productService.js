@@ -1,4 +1,98 @@
-export const getProducts = () => []
+export const PRODUCT_CATEGORIES = ['Cake', 'Cupcakes', 'Party Package']
+export const PRODUCT_STATUSES = ['Active', 'Inactive']
+
+export const getProducts = () => [
+  {
+    id: 'P001',
+    name: 'Custom Cake',
+    category: 'Cake',
+    basePrice: 2500,
+    customizable: true,
+    status: 'Active',
+    lastUpdated: '2026-08-15',
+  },
+  {
+    id: 'P002',
+    name: 'Custom Cupcakes',
+    category: 'Cupcakes',
+    basePrice: 850,
+    customizable: true,
+    status: 'Active',
+    lastUpdated: '2026-08-14',
+  },
+  {
+    id: 'P003',
+    name: 'Party Package',
+    category: 'Party Package',
+    basePrice: 3500,
+    customizable: true,
+    status: 'Active',
+    lastUpdated: '2026-08-13',
+  },
+  {
+    id: 'P004',
+    name: 'Signature Cake Collection',
+    category: 'Cake',
+    basePrice: 3200,
+    customizable: true,
+    status: 'Active',
+    lastUpdated: '2026-08-12',
+  },
+  {
+    id: 'P005',
+    name: 'Celebration Cupcakes',
+    category: 'Cupcakes',
+    basePrice: 980,
+    customizable: true,
+    status: 'Inactive',
+    lastUpdated: '2026-08-10',
+  },
+  {
+    id: 'P006',
+    name: 'Premium Party Bundle',
+    category: 'Party Package',
+    basePrice: 4700,
+    customizable: true,
+    status: 'Active',
+    lastUpdated: '2026-08-09',
+  },
+  {
+    id: 'P007',
+    name: 'Anniversary Cake',
+    category: 'Cake',
+    basePrice: 2900,
+    customizable: true,
+    status: 'Active',
+    lastUpdated: '2026-08-08',
+  },
+  {
+    id: 'P008',
+    name: 'Mini Dessert Box',
+    category: 'Cupcakes',
+    basePrice: 760,
+    customizable: true,
+    status: 'Active',
+    lastUpdated: '2026-08-07',
+  },
+  {
+    id: 'P009',
+    name: 'Kids Party Package',
+    category: 'Party Package',
+    basePrice: 4200,
+    customizable: true,
+    status: 'Inactive',
+    lastUpdated: '2026-08-06',
+  },
+  {
+    id: 'P010',
+    name: 'Pastry Celebration Cake',
+    category: 'Cake',
+    basePrice: 3600,
+    customizable: true,
+    status: 'Active',
+    lastUpdated: '2026-08-04',
+  },
+]
 
 export const getProductById = (productId) =>
   getProducts().find((product) => product.id === productId) || null

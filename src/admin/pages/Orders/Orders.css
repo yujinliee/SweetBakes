@@ -1,7 +1,15 @@
 .admin-orders-page {
   min-width: 0;
-  margin-top: -10px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  margin-top: -28px;
+  margin-left: -28px;
+  margin-right: -28px;
+  margin-bottom: -28px;
+  padding: 28px;
   gap: 12px;
+  background-color: #ffffff;
 }
 
 .admin-orders-page .admin-page-heading h2 {
@@ -483,5 +491,16 @@
   .admin-orders-pagination {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .admin-orders-page {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    margin-top: -24px;
+    margin-left: -20px;
+    margin-right: -20px;
+    margin-bottom: -20px;
+    padding: 20px;
   }
 }

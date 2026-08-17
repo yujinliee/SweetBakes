@@ -1,49 +1,6 @@
+import { getActiveCustomizationOptions } from '../../admin/services/customizationOptionsService.js'
 import PackagePreview from './PackagePreview.jsx'
 import PackageReferenceUpload from './PackageReferenceUpload.jsx'
-
-const themes = [
-  'Birthday',
-  'Wedding',
-  'Anniversary',
-  'Christening',
-  'Baby Shower',
-  'Graduation',
-  'Corporate',
-  'Minimalist',
-  'Floral',
-  'Custom Theme',
-  'Other',
-]
-
-const cakeOptionGroups = [
-  {
-    name: 'packageCakeFlavor',
-    label: 'Flavor *',
-    options: [
-      { label: 'Chocolate', value: 'chocolate' },
-      { label: 'Red Velvet', value: 'redvelvet' },
-    ],
-  },
-  {
-    name: 'packageCakeSize',
-    label: 'Size *',
-    options: [
-      { label: '6"', value: '6' },
-      { label: '8"', value: '8' },
-      { label: '10"', value: '10' },
-      { label: '12"', value: '12' },
-    ],
-  },
-  {
-    name: 'packageCakeLayers',
-    label: 'Layers *',
-    options: [
-      { label: '1 Layer', value: '1' },
-      { label: '2 Layers', value: '2' },
-      { label: '3 Layers', value: '3' },
-    ],
-  },
-]
 
 const errorMessages = {
   packageCakeFlavor: 'Please select a cake flavor.',
@@ -65,6 +22,16 @@ function PackageCustomizeForm({
   onBack,
   onContinue,
 }) {
+  const cakeOptionGroups = [
+    { name: 'packageCakeFlavor', label: 'Flavor *', options: getActiveCustomizationOptions('Party Package', 'Flavors') },
+    { name: 'packageCakeSize', label: 'Size *', options: getActiveCustomizationOptions('Party Package', 'Sizes') },
+    { name: 'packageCakeLayers', label: 'Layers *', options: getActiveCustomizationOptions('Party Package', 'Layers') },
+  ]
+  const packageThemes = [
+    ...getActiveCustomizationOptions('Party Package', 'Designs / Details').map((o) => o.label),
+    'Other',
+  ]
+
   const updateDetail = (field, value) => {
     onDetailsChange((current) => ({
       ...current,
@@ -224,10 +191,8 @@ function PackageCustomizeForm({
                   onChange={(event) => updateDetail('packageCakeTheme', event.target.value)}
                 >
                   <option value="">Select a theme</option>
-                  {themes.map((theme) => (
-                    <option value={theme} key={theme}>
-                      {theme}
-                    </option>
+                  {packageThemes.map((theme) => (
+                    <option value={theme} key={theme}>{theme}</option>
                   ))}
                 </select>
                 {showError('packageCakeTheme')}
@@ -303,10 +268,8 @@ function PackageCustomizeForm({
                   onChange={(event) => updateDetail('packageCupcakeTheme', event.target.value)}
                 >
                   <option value="">Select a theme</option>
-                  {themes.map((theme) => (
-                    <option value={theme} key={theme}>
-                      {theme}
-                    </option>
+                  {packageThemes.map((theme) => (
+                    <option value={theme} key={theme}>{theme}</option>
                   ))}
                 </select>
                 {showError('packageCupcakeTheme')}
