@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import logo from '../assets/landingpage/sweetbakes_logo.svg'
 import loginIcon from '../assets/landingpage/login.svg'
 import loginIconBlack from '../assets/landingpage/login_black.svg'
@@ -9,19 +9,87 @@ import cakesImage from '../assets/landingpage/cakes.svg'
 import cupcakesImage from '../assets/landingpage/cupcakes.svg'
 import partyImage from '../assets/landingpage/party_package.svg'
 import textureBackground from '../assets/landingpage/texture_background.svg'
-import masonryImage44 from '../assets/landingpage/masonry/image 44.png'
-import masonryImage45 from '../assets/landingpage/masonry/image 45.png'
-import masonryImage46 from '../assets/landingpage/masonry/image 46.png'
-import masonryImage47 from '../assets/landingpage/masonry/image 47.png'
-import masonryImage48 from '../assets/landingpage/masonry/image 48.png'
-import masonryImage49 from '../assets/landingpage/masonry/image 49.png'
-import masonryRectangle78 from '../assets/landingpage/masonry/Rectangle 78.png'
-import masonryRectangle83 from '../assets/landingpage/masonry/Rectangle 83.png'
 import mapsImage from '../assets/landingpage/maps.png'
 import footerMark from '../assets/landingpage/sweetbakes_footer.svg'
 import footerBackground from '../assets/landingpage/footer_bg.png'
 import Chatbot from '../components/Chatbot/Chatbot.jsx'
 import './LandingPage.css'
+
+const masonryModules = import.meta.glob('../assets/landingpage/masonry/*.png', { eager: true })
+const masonryImages = Object.fromEntries(
+  Object.entries(masonryModules).map(([path, mod]) => [
+    path.split('/').pop(),
+    mod.default,
+  ])
+)
+
+function toTitle(filename) {
+  return filename
+    .replace(/\.png$/i, '')
+    .replace(/[_-]/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+const FACEBOOK_URLS = {
+  'Hello Kitty Birthday Cake.png':        'https://www.facebook.com/share/p/1GYwZUipdd/',
+  'Chocolate Birthday Cake.png':          'https://www.facebook.com/share/p/1cdYQQhABe/',
+  'Wedding Cake.png':                     'https://www.facebook.com/share/p/1KQEaE8yGL/',
+  'Yellow Theme Birthday Cake.png':       'https://www.facebook.com/share/p/1Bg7VwhedK/',
+  'Birthday Cake.png':                    'https://www.facebook.com/share/1J2qUTpiF1/',
+  'Flower Birthday Cake.png':             'https://www.facebook.com/share/1HQJG9Lc1r/',
+  'Pilot Theme Cucpcake.png':             'https://www.facebook.com/share/1S3HJrHipm/',
+  'Pink Theme Bed Cake.png':              'https://www.facebook.com/share/p/19Mf5ZwEig/',
+  'RaceCar Birthday Cake.png':            'https://www.facebook.com/share/p/1E5XctNPbz/',
+  'Piano Birthday Cake.png':              'https://www.facebook.com/share/p/1EfFsGHQvy/',
+  'Love Theme Birthday Cake.png':         'https://www.facebook.com/share/p/1EZBcMYMMo/',
+  'Blue Gown Debut Cake.png':             'https://www.facebook.com/share/p/1EsiCL8ST8/',
+  'Among Us Birthday Cake.png':           'https://www.facebook.com/share/p/18s3fRiP7d/',
+  'White Chocolate Birthday Cake.png':    'https://www.facebook.com/share/p/195xBqvtQS/',
+  'Orange Theme Debut Cake.png':          'https://www.facebook.com/share/p/1CaQvhhx2N/',
+  'Police Theme Birthday Cake.png':       'https://www.facebook.com/share/p/1MJhsNBVu7/',
+  'Unicorn Theme Cupcake.png':            'https://www.facebook.com/share/p/188zvSRSEr/',
+  'Blackpink Birthday Cake.png':          'https://www.facebook.com/share/p/1D764oT2LE/',
+  'Ferrari Birthday Cake & Cupcake.png':  'https://www.facebook.com/share/p/1Cb3Tp9z5G/',
+  'Beer Mug Birthday Cake.png':           'https://www.facebook.com/share/p/1BSA8kfmcE/',
+  'Sun & Moon Theme Christening Cake.png':'https://www.facebook.com/share/p/198Lcg1W4R/',
+  'Monster Truck Birthday Cake.png':      'https://www.facebook.com/share/p/19TvFNADTZ/',
+  'Minecraft Theme Birthday Cake.png':    'https://www.facebook.com/share/p/1an38eFaNk/',
+  'Astronaut Birthday Cake.png':          'https://www.facebook.com/share/p/1GuL6wa2pY/',
+  'Watermelon Theme Birthday Cake.png':   'https://www.facebook.com/share/p/1GjfDNN9yR/',
+}
+
+const CURATED_ITEMS = []
+
+const CURATED_FILES = new Set(CURATED_ITEMS.map((i) => i.file))
+
+const EXTRA_ITEMS = Object.keys(masonryImages)
+  .filter((f) => !CURATED_FILES.has(f))
+  .sort()
+  .map((file) => ({ file, title: toTitle(file) }))
+
+// 5 items per page on a 6-col grid, 2 equal rows:
+//  [0] col-span-2 row-span-2  (tall left)
+//  [1] col-span-2 row-span-1  (top mid)
+//  [2] col-span-2 row-span-1  (top right)
+//  [3] col-span-2 row-span-1  (bot mid)
+//  [4] col-span-2 row-span-1  (bot right)
+const ITEMS_PER_PAGE = 5
+
+const ALL_GALLERY_ITEMS = [...CURATED_ITEMS, ...EXTRA_ITEMS].map((item) => ({
+  title: item.title,
+  image: masonryImages[item.file],
+  facebookUrl: FACEBOOK_URLS[item.file] ?? null,
+}))
+
+function buildPages(items) {
+  const pages = []
+  for (let i = 0; i < items.length; i += ITEMS_PER_PAGE) {
+    pages.push(items.slice(i, i + ITEMS_PER_PAGE))
+  }
+  return pages
+}
+
+const GALLERY_PAGES = buildPages(ALL_GALLERY_ITEMS)
 
 const cakeStepOneHref = '/customize'
 const heroCustomizeHref = '/customize'
@@ -364,34 +432,73 @@ export function SiteFooter() {
   )
 }
 
-function GalleryNav({ items }) {
-  const trackRef = useRef(null)
-  const [index, setIndex] = useState(0)
-  const [trackWidth, setTrackWidth] = useState(0)
-  const [gridWidth, setGridWidth] = useState(0)
+function GalleryNav({ pages }) {
+  const scrollRef = useRef(null)
+  const [page, setPage] = useState(0)
+  const maxPage = pages.length - 1
+  const isDragging = useRef(false)
+  const startX = useRef(0)
+  const startScrollLeft = useRef(0)
+  const dragMoved = useRef(false)
 
-  const measure = useCallback(() => {
-    if (trackRef.current) {
-      setTrackWidth(trackRef.current.scrollWidth)
-      setGridWidth(trackRef.current.parentElement.clientWidth)
+  // Sync page index from scroll position
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const onScroll = () => {
+      const idx = Math.round(el.scrollLeft / el.clientWidth)
+      setPage(Math.min(Math.max(idx, 0), maxPage))
     }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [maxPage])
+
+  // Wheel: native deltaX passes through; vertical wheel over gallery -> horizontal
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const onWheel = (e) => {
+      if (Math.abs(e.deltaX) > 0) {
+        // native horizontal trackpad â€” let browser handle, just prevent page scroll
+        e.preventDefault()
+        el.scrollLeft += e.deltaX
+        return
+      }
+      const canRight = el.scrollLeft < el.scrollWidth - el.clientWidth - 1
+      const canLeft  = el.scrollLeft > 1
+      if ((e.deltaY > 0 && canRight) || (e.deltaY < 0 && canLeft)) {
+        e.preventDefault()
+        el.scrollLeft += e.deltaY
+      }
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
-  useEffect(() => {
-    measure()
-    window.addEventListener('resize', measure)
-    return () => window.removeEventListener('resize', measure)
-  }, [measure])
+  const goTo = (idx) => {
+    scrollRef.current?.scrollTo({ left: idx * scrollRef.current.clientWidth, behavior: 'smooth' })
+  }
 
-  const stepSize = gridWidth * 0.72
-  const maxIndex = trackWidth > gridWidth ? Math.ceil((trackWidth - gridWidth) / stepSize) : 0
+  // Pointer drag (desktop mouse)
+  const onPointerDown = (e) => {
+    if (e.pointerType === 'touch') return
+    isDragging.current = true
+    dragMoved.current = false
+    startX.current = e.clientX
+    startScrollLeft.current = scrollRef.current.scrollLeft
+    scrollRef.current.setPointerCapture(e.pointerId)
+  }
+  const onPointerMove = (e) => {
+    if (!isDragging.current) return
+    const dx = e.clientX - startX.current
+    if (Math.abs(dx) > 4) dragMoved.current = true
+    scrollRef.current.scrollLeft = startScrollLeft.current - dx
+  }
+  const onPointerUp = () => { isDragging.current = false }
 
-  const goTo = (next) => {
-    const clamped = Math.max(0, Math.min(next, maxIndex))
-    setIndex(clamped)
-    if (trackRef.current) {
-      trackRef.current.style.transform = `translateX(-${clamped * stepSize}px)`
-    }
+  // Prevent click-through after drag
+  const onClickCapture = (e) => {
+    if (dragMoved.current) e.stopPropagation()
   }
 
   return (
@@ -399,39 +506,59 @@ function GalleryNav({ items }) {
       <button
         className="gallery-arrow gallery-arrow--left"
         aria-label="Previous"
-        disabled={index === 0}
-        onClick={() => goTo(index - 1)}
+        disabled={page === 0}
+        onClick={() => goTo(page - 1)}
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
 
-      <div className="gallery-grid" aria-label="Sweet Bakes creation gallery">
-        <div className="gallery-track" ref={trackRef}>
-          <div className="gallery-loop">
-            {items.map((item, index) => (
+      <div
+        className="gallery-grid"
+        ref={scrollRef}
+        aria-label="Sweet Bakes creation gallery"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerLeave={onPointerUp}
+        onClickCapture={onClickCapture}
+      >
+        {pages.map((pageItems, pi) => (
+          <div
+            key={pi}
+            className="gallery-page"
+            aria-hidden={pi !== page}
+          >
+            {pageItems.map((item, idx) => (
               <article
-                className={`gallery-item gallery-item--${item.shape} gallery-item--tile-${index + 1} gallery-item--visible`}
                 key={item.title}
-                style={{ '--gallery-delay': `${index * 70}ms` }}
+                className={`gallery-item gallery-item--pos-${idx} gallery-item--visible`}
               >
-                <img src={item.image} alt={item.title} />
+                <img src={item.image} alt={item.title} draggable="false" />
                 <div className="gallery-overlay">
                   <h3>{item.title}</h3>
-                  <strong>View Details &rarr;</strong>
+                  {item.facebookUrl ? (
+                    <a
+                      href={item.facebookUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >View Details &rarr;</a>
+                  ) : (
+                    <strong>View Details &rarr;</strong>
+                  )}
                 </div>
               </article>
             ))}
           </div>
-        </div>
+        ))}
       </div>
 
       <button
         className="gallery-arrow gallery-arrow--right"
         aria-label="Next"
-        disabled={index >= maxIndex}
-        onClick={() => goTo(index + 1)}
+        disabled={page >= maxPage}
+        onClick={() => goTo(page + 1)}
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
@@ -485,66 +612,7 @@ function LandingPage({ latestRequest, onTrackOrder, onNavigate, isCustomerAuthen
       href: homePackagesHref,
     },
   ]
-  const galleryItems = [
-    {
-      title: 'Floral Celebration Cake',
-      description: 'Soft florals and custom toppers for a romantic centerpiece.',
-      label: 'Birthday',
-      image: masonryImage46,
-      shape: 'portrait',
-    },
-    {
-      title: 'Signature Cupcake Box',
-      description: 'A curated set of decorated cupcakes for sweet gifting.',
-      label: 'Cupcakes',
-      image: masonryImage45,
-      shape: 'square',
-    },
-    {
-      title: 'Party Dessert Table',
-      description: 'A coordinated cake and cupcake spread for larger gatherings.',
-      label: 'Party',
-      image: masonryImage44,
-      shape: 'landscape',
-    },
-    {
-      title: 'Pastel Cake Details',
-      description: 'Delicate color, polished finishes, and handmade accents.',
-      label: 'Custom cake',
-      image: masonryRectangle83,
-      shape: 'square',
-    },
-    {
-      title: 'Celebration Cupcakes',
-      description: 'Playful frosting, themed toppers, and fresh-baked texture.',
-      label: 'Celebration',
-      image: masonryImage48,
-      shape: 'portrait',
-    },
-    {
-      title: 'Complete Sweet Package',
-      description: 'Designed as one cohesive dessert moment for your event.',
-      label: 'Package',
-      image: masonryImage49,
-      shape: 'landscape',
-    },
-    {
-      title: 'Delicate Dessert Styling',
-      description: 'A polished finish for intimate gatherings and special moments.',
-      label: 'Occasion',
-      image: masonryRectangle78,
-      shape: 'portrait',
-    },
-    {
-      title: 'Handcrafted Sweet Details',
-      description: 'Thoughtful colors and textures made for memorable celebrations.',
-      label: 'Details',
-      image: masonryImage47,
-      shape: 'square',
-    },
-  ]
-
-  useEffect(() => {
+useEffect(() => {
     const showcaseItems = document.querySelectorAll('.offer-showcase')
 
     if (!('IntersectionObserver' in window)) {
@@ -727,7 +795,7 @@ function LandingPage({ latestRequest, onTrackOrder, onNavigate, isCustomerAuthen
             <p>Every cake is handcrafted with love for every celebration.</p>
           </div>
 
-          <GalleryNav items={galleryItems} />
+          <GalleryNav pages={GALLERY_PAGES} />
         </section>
 
         <div className="creations-bottom-divider" aria-hidden="true">
@@ -802,3 +870,4 @@ function LandingPage({ latestRequest, onTrackOrder, onNavigate, isCustomerAuthen
 }
 
 export default LandingPage
+
