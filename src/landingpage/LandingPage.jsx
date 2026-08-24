@@ -539,7 +539,7 @@ export function SiteFooter() {
             <div className="footer-brand-column animate-up">
               <div className="footer-brand-lockup">
                 <img src={footerMark} alt="Sweet Bakes logo" />
-                <h2>Sweet Bakes</h2>
+                <h2>Sweet Bakes by:Rhona</h2>
               </div>
               <p className="footer-description">
                 Crafting delicious cakes and cupcakes for every celebration, made with
@@ -570,7 +570,7 @@ export function SiteFooter() {
                       fill="currentColor"
                     />
                   </svg>
-                  <span>Sweet Bakes Facebook page</span>
+                  <span>SweetBakes by:Rhona</span>
                 </a>
                 <a className="footer-contact-row" href="tel:+639278700399">
                   <svg
@@ -1300,21 +1300,15 @@ function MoreTreatsSection() {
           aria-labelledby={`treats-tab-${activeCategory}`}
           key={activeCategory}
         >
-          {productsLoading ? (
-            <div className="treats-list">
+          <div className="treats-list">
+            {productsLoading ? (
               <p className="treats-item-desc">Loading Sweet Treats...</p>
-            </div>
-          ) : productsError ? (
-            <div className="treats-list">
+            ) : productsError ? (
               <p className="treats-item-desc">{productsError}</p>
-            </div>
-          ) : activeCategory === 'cheesecake' ? (
-            <div className="treats-list treats-list--cheesecake">
+            ) : activeCategory === 'cheesecake' ? (
               <CheesecakeTreatCard product={cheesecakeProduct} />
-            </div>
-          ) : (
-            <div className="treats-list">
-              {products.map((product) => (
+            ) : (
+              products.map((product) => (
                 <article className="treats-item" key={product.name}>
                   <div className="treats-item-copy">
                     <h3>{product.name}</h3>
@@ -1355,9 +1349,9 @@ function MoreTreatsSection() {
                     <img src={product.image} alt={product.name} draggable="false" />
                   </div>
                 </article>
-              ))}
-            </div>
-          )}
+              ))
+            )}
+          </div>
         </div>
       </div>
     </section>

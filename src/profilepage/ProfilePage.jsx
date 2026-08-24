@@ -324,8 +324,20 @@ function ProfilePage({
       setIsSavingAddress(true)
       setAddressError('')
 
+      const { data: userData, error: userError } = await supabase.auth.getUser()
+
+      if (userError || !userData?.user) {
+        console.error('[PROFILE] address save aborted - no valid auth session:', {
+          message: userError?.message || 'Missing Supabase session user.',
+          status: userError?.status,
+          name: userError?.name,
+        })
+        setAddressError('Your session has expired. Please sign in and try again.')
+        return
+      }
+
       const payload = {
-        user_id: profile.id,
+        user_id: userData.user.id,
         province: addressDraft.province.trim(),
         city_municipality: addressDraft.cityMunicipality.trim(),
         barangay: addressDraft.barangay.trim(),
@@ -353,7 +365,14 @@ function ProfilePage({
       setAddressFormErrors({})
       setMessage('Address added successfully.')
     } catch (saveAddressError) {
-      console.error('[PROFILE] address save error:', saveAddressError)
+      console.error('[PROFILE] address save error:', {
+        message: saveAddressError?.message,
+        code: saveAddressError?.code,
+        details: saveAddressError?.details,
+        hint: saveAddressError?.hint,
+        status: saveAddressError?.status,
+        raw: saveAddressError,
+      })
       setAddressError('Unable to save address. Please try again.')
     } finally {
       setIsSavingAddress(false)
