@@ -158,3 +158,21 @@ export async function updateAdminChatConversationStatus(conversationId, status) 
   if (error) throw error
   return data
 }
+
+export async function deleteAdminChatConversation(conversationId) {
+  if (!conversationId) throw new Error('Conversation is required.')
+
+  const { error: messagesError } = await supabase
+    .from('chat_messages')
+    .delete()
+    .eq('conversation_id', conversationId)
+
+  if (messagesError) throw messagesError
+
+  const { error: conversationError } = await supabase
+    .from('chat_conversations')
+    .delete()
+    .eq('id', conversationId)
+
+  if (conversationError) throw conversationError
+}

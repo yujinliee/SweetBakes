@@ -1,321 +1,45 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../../../lib/supabase.js'
-import {
-  fetchAdminChatConversations,
-  fetchAdminChatMessages,
-  sendAdminChatMessage,
-} from '../../services/chatService.js'
+import { deleteAdminChatConversation, fetchAdminChatConversations, fetchAdminChatMessages, sendAdminChatMessage, updateAdminChatConversationStatus } from '../../services/chatService.js'
 import './Messages.css'
 
-const TIME_FORMATTER = new Intl.DateTimeFormat('en-US', {
-  hour: 'numeric',
-  minute: '2-digit',
-})
-
-const formatTime = (value) => {
-  if (!value) return ''
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? '' : TIME_FORMATTER.format(date)
-}
-
+const TIME_FORMATTER = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' })
+const formatTime = (value) => { if (!value) return ''; const date = new Date(value); return Number.isNaN(date.getTime()) ? '' : TIME_FORMATTER.format(date) }
 const normalizeText = (value) => String(value ?? '').toLowerCase()
 
-const logAdminChatDebug = (...values) => {
-  if (import.meta.env.DEV) {
-    console.log('[ADMIN CHAT]', ...values)
-  }
-}
-
+function MoreIcon() { return <span aria-hidden="true" className="admin-messages-more-dots">•••</span> }
 function ConversationItem({ conversation, isActive, onSelect }) {
-  const latestMessage = conversation.latestMessage
-  const preview = latestMessage?.message || 'No messages yet.'
-  const hasCustomerLatest = latestMessage?.senderType === 'customer'
-
-  return (
-    <button
-      type="button"
-      className={`admin-messages-conversation${isActive ? ' is-active' : ''}${hasCustomerLatest ? ' has-customer-latest' : ''}`}
-      onClick={() => onSelect(conversation.id)}
-    >
-      <span className="admin-messages-conversation-top">
-        <strong>{conversation.customerName}</strong>
-        <span>{formatTime(latestMessage?.createdAt || conversation.createdAt)}</span>
-      </span>
-      <span className="admin-messages-email">{conversation.customerEmail}</span>
-      <span className="admin-messages-preview">{preview}</span>
-      <span className={`admin-messages-status admin-messages-status--${conversation.status}`}>
-        {conversation.status}
-      </span>
-    </button>
-  )
+  const latest = conversation.latestMessage
+  const isUnread = latest?.senderType === 'customer'
+  return <button type="button" className={`admin-messages-conversation${isActive ? ' is-active' : ''}`} onClick={() => onSelect(conversation.id)}>
+    <span className="admin-messages-conversation-top"><strong className={isUnread ? 'is-unread' : ''}>{conversation.customerName}</strong><span>{formatTime(latest?.createdAt || conversation.createdAt)}</span></span>
+    <span className={`admin-messages-preview${isUnread ? ' is-unread' : ''}`}>{isUnread ? latest.message : `You: ${latest?.message || 'No messages yet.'}`}</span>
+    {isUnread && <span className="admin-messages-unread">1</span>}
+  </button>
 }
-
 function MessageBubble({ message }) {
   const isAdmin = message.senderType === 'admin'
-  const label = isAdmin
-    ? 'Admin'
-    : message.senderType === 'customer'
-      ? 'Customer'
-      : 'Assistant'
-
-  return (
-    <div className={`admin-messages-bubble-row${isAdmin ? ' is-admin' : ''}`}>
-      <div className="admin-messages-message-group">
-        <div className="admin-messages-bubble">
-          <p>{message.message}</p>
-        </div>
-        <span className="admin-messages-message-meta">{label} • {formatTime(message.createdAt)}</span>
-      </div>
-    </div>
-  )
+  const label = isAdmin ? 'Admin' : message.senderType === 'customer' ? 'Customer' : 'Assistant'
+  return <div className={`admin-messages-bubble-row${isAdmin ? ' is-admin' : ''}`}><div className="admin-messages-message-group"><div className="admin-messages-bubble"><p>{message.message}</p></div><span className="admin-messages-message-meta">{label} <span>•</span> {formatTime(message.createdAt)}</span></div></div>
 }
 
 function Messages() {
-  const [conversations, setConversations] = useState([])
-  const [selectedConversationId, setSelectedConversationId] = useState('')
-  const [messages, setMessages] = useState([])
-  const [searchValue, setSearchValue] = useState('')
-  const [reply, setReply] = useState('')
-  const [isLoadingConversations, setIsLoadingConversations] = useState(true)
-  const [isLoadingMessages, setIsLoadingMessages] = useState(false)
-  const [isSending, setIsSending] = useState(false)
-  const [error, setError] = useState('')
-  const [messageError, setMessageError] = useState('')
-  const messagesThreadRef = useRef(null)
-
-  const selectedConversation = conversations.find(
-    (conversation) => conversation.id === selectedConversationId,
-  )
-
-  const filteredConversations = useMemo(() => {
-    const needle = normalizeText(searchValue).trim()
-
-    if (!needle) return conversations
-
-    return conversations.filter((conversation) =>
-      [
-        conversation.customerName,
-        conversation.customerEmail,
-        conversation.latestMessage?.message,
-      ].some((value) => normalizeText(value).includes(needle)),
-    )
-  }, [conversations, searchValue])
-
-  const loadConversations = async () => {
-    setIsLoadingConversations(true)
-    setError('')
-
-    try {
-      const rows = await fetchAdminChatConversations()
-      logAdminChatDebug('conversations:', rows)
-      setConversations(rows)
-      setSelectedConversationId((current) =>
-        current && rows.some((conversation) => conversation.id === current)
-          ? current
-          : rows[0]?.id || '',
-      )
-    } catch (loadError) {
-      console.error('[ADMIN MESSAGES] load conversations:', loadError)
-      setError('Unable to load customer conversations.')
-    } finally {
-      setIsLoadingConversations(false)
-    }
-  }
-
-  const loadMessages = async (conversationId) => {
-    if (!conversationId) {
-      setMessages([])
-      return
-    }
-
-    setIsLoadingMessages(true)
-    setMessageError('')
-
-    try {
-      const rows = await fetchAdminChatMessages(conversationId)
-      logAdminChatDebug('selected conversation:', conversationId)
-      logAdminChatDebug('messages:', rows)
-      setMessages(rows)
-    } catch (loadError) {
-      console.error('[ADMIN MESSAGES] load messages:', loadError)
-      setMessageError('Unable to load this conversation.')
-    } finally {
-      setIsLoadingMessages(false)
-    }
-  }
-
-  useEffect(() => {
-    loadConversations()
-  }, [])
-
-  useEffect(() => {
-    loadMessages(selectedConversationId)
-  }, [selectedConversationId])
-
-  useEffect(() => {
-    const thread = messagesThreadRef.current
-
-    if (!thread) return
-
-    thread.scrollTo({
-      top: thread.scrollHeight,
-      behavior: 'smooth',
-    })
-  }, [messages, selectedConversationId])
-
-  useEffect(() => {
-    if (!selectedConversationId) return undefined
-
-    const channel = supabase
-      .channel(`admin-chat-messages-${selectedConversationId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'chat_messages',
-          filter: `conversation_id=eq.${selectedConversationId}`,
-        },
-        (payload) => {
-          const row = payload.new
-          setMessages((current) => {
-            if (current.some((message) => message.id === row.id)) return current
-            return [
-              ...current,
-              {
-                id: row.id,
-                conversationId: row.conversation_id,
-                senderType: row.sender_type,
-                message: row.message || '',
-                createdAt: row.created_at,
-              },
-            ]
-          })
-          loadConversations()
-        },
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [selectedConversationId])
-
-  const handleSend = async (event) => {
-    event.preventDefault()
-    const trimmedReply = reply.trim()
-
-    if (!selectedConversationId || !trimmedReply || isSending) return
-
-    setIsSending(true)
-    setMessageError('')
-
-    try {
-      const savedMessage = await sendAdminChatMessage(selectedConversationId, trimmedReply)
-      setMessages((current) =>
-        current.some((message) => message.id === savedMessage.id)
-          ? current
-          : [...current, savedMessage],
-      )
-      setReply('')
-      await loadConversations()
-    } catch (sendError) {
-      console.error('[ADMIN MESSAGES] send reply:', sendError)
-      setMessageError('Unable to send reply.')
-    } finally {
-      setIsSending(false)
-    }
-  }
-
-  return (
-    <section className="admin-page admin-messages-page">
-      <div className="admin-page-heading">
-        <h2>Messages</h2>
-      </div>
-
-      <div className="admin-messages-shell">
-        <aside className="admin-messages-list-pane" aria-label="Customer conversations">
-          <div className="admin-messages-list-header">
-            <div>
-              <h3>Conversations</h3>
-              <p>{conversations.length} total</p>
-            </div>
-            <input
-              type="search"
-              value={searchValue}
-              onChange={(event) => setSearchValue(event.target.value)}
-              placeholder="Search name or email..."
-              aria-label="Search conversations"
-            />
-          </div>
-
-          <div className="admin-messages-list">
-            {isLoadingConversations ? (
-              <p className="admin-messages-empty">Loading conversations...</p>
-            ) : error ? (
-              <p className="admin-messages-empty admin-messages-empty--error">{error}</p>
-            ) : filteredConversations.length === 0 ? (
-              <p className="admin-messages-empty">No customer conversations yet.</p>
-            ) : (
-              filteredConversations.map((conversation) => (
-                <ConversationItem
-                  key={conversation.id}
-                  conversation={conversation}
-                  isActive={conversation.id === selectedConversationId}
-                  onSelect={setSelectedConversationId}
-                />
-              ))
-            )}
-          </div>
-        </aside>
-
-        <section className="admin-messages-thread-pane" aria-label="Selected conversation">
-          {!selectedConversation ? (
-            <div className="admin-messages-thread-empty">
-              Select a conversation to view messages.
-            </div>
-          ) : (
-            <>
-              <header className="admin-messages-thread-header">
-                <div>
-                  <h3>{selectedConversation.customerName}</h3>
-                  <p>{selectedConversation.customerEmail}</p>
-                </div>
-              </header>
-
-              <div className="admin-messages-thread" ref={messagesThreadRef}>
-                {isLoadingMessages ? (
-                  <p className="admin-messages-empty">Loading messages...</p>
-                ) : messageError ? (
-                  <p className="admin-messages-empty admin-messages-empty--error">{messageError}</p>
-                ) : messages.length === 0 ? (
-                  <p className="admin-messages-empty">No messages yet.</p>
-                ) : (
-                  messages.map((message) => <MessageBubble key={message.id} message={message} />)
-                )}
-              </div>
-
-              <form className="admin-messages-reply" onSubmit={handleSend}>
-                <input
-                  type="text"
-                  value={reply}
-                  onChange={(event) => setReply(event.target.value)}
-                  placeholder="Type a reply..."
-                  aria-label="Type a reply"
-                />
-                <button
-                  type="submit"
-                  disabled={isSending || !reply.trim()}
-                >
-                  {isSending ? 'Sending...' : 'Send'}
-                </button>
-              </form>
-            </>
-          )}
-        </section>
-      </div>
-    </section>
-  )
+  const [conversations, setConversations] = useState([]); const [selectedConversationId, setSelectedConversationId] = useState(''); const [messages, setMessages] = useState([]); const [searchValue, setSearchValue] = useState(''); const [reply, setReply] = useState(''); const [filter, setFilter] = useState('inbox'); const [isMenuOpen, setIsMenuOpen] = useState(false); const [isDeleteOpen, setIsDeleteOpen] = useState(false); const [attachment, setAttachment] = useState(null); const [isLoadingConversations, setIsLoadingConversations] = useState(true); const [isLoadingMessages, setIsLoadingMessages] = useState(false); const [isSending, setIsSending] = useState(false); const [error, setError] = useState(''); const [messageError, setMessageError] = useState('')
+  const messagesThreadRef = useRef(null); const fileInputRef = useRef(null)
+  const selectedConversation = conversations.find((conversation) => conversation.id === selectedConversationId)
+  const filteredConversations = useMemo(() => { const needle = normalizeText(searchValue).trim(); return conversations.filter((conversation) => { const matchesFilter = filter === 'archived' ? conversation.status !== 'open' : conversation.status === 'open'; const matchesSearch = !needle || [conversation.customerName, conversation.customerEmail, conversation.latestMessage?.message].some((value) => normalizeText(value).includes(needle)); return matchesFilter && matchesSearch }) }, [conversations, filter, searchValue])
+  const loadConversations = async () => { setIsLoadingConversations(true); setError(''); try { const rows = await fetchAdminChatConversations(); setConversations(rows); setSelectedConversationId((current) => current && rows.some((item) => item.id === current) ? current : rows.find((item) => item.status === 'open')?.id || '') } catch (loadError) { console.error('[ADMIN MESSAGES] load conversations:', loadError); setError('Unable to load customer conversations.') } finally { setIsLoadingConversations(false) } }
+  const loadMessages = async (conversationId) => { if (!conversationId) { setMessages([]); return }; setIsLoadingMessages(true); setMessageError(''); try { setMessages(await fetchAdminChatMessages(conversationId)) } catch (loadError) { console.error('[ADMIN MESSAGES] load messages:', loadError); setMessageError('Unable to load this conversation.') } finally { setIsLoadingMessages(false) } }
+  useEffect(() => { loadConversations() }, []); useEffect(() => { loadMessages(selectedConversationId) }, [selectedConversationId]); useEffect(() => { messagesThreadRef.current?.scrollTo({ top: messagesThreadRef.current.scrollHeight, behavior: 'smooth' }) }, [messages, selectedConversationId])
+  useEffect(() => { if (!selectedConversationId) return undefined; const channel = supabase.channel(`admin-chat-messages-${selectedConversationId}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `conversation_id=eq.${selectedConversationId}` }, (payload) => { const row = payload.new; setMessages((current) => current.some((message) => message.id === row.id) ? current : [...current, { id: row.id, conversationId: row.conversation_id, senderType: row.sender_type, message: row.message || '', createdAt: row.created_at }]); loadConversations() }).subscribe(); return () => { supabase.removeChannel(channel) } }, [selectedConversationId])
+  const handleSend = async (event) => { event.preventDefault(); const trimmedReply = reply.trim(); if (!selectedConversationId || (!trimmedReply && !attachment) || isSending) return; if (attachment) { setMessageError('Attachments are selected for preview, but this chat schema only supports text messages. Remove the file to send a reply.'); return }; setIsSending(true); setMessageError(''); try { const savedMessage = await sendAdminChatMessage(selectedConversationId, trimmedReply); setMessages((current) => current.some((message) => message.id === savedMessage.id) ? current : [...current, savedMessage]); setReply(''); await loadConversations() } catch (sendError) { console.error('[ADMIN MESSAGES] send reply:', sendError); setMessageError('Unable to send reply.') } finally { setIsSending(false) } }
+  const handleArchive = async () => { if (!selectedConversation) return; try { await updateAdminChatConversationStatus(selectedConversation.id, selectedConversation.status === 'open' ? 'closed' : 'open'); setIsMenuOpen(false); await loadConversations() } catch (archiveError) { console.error(archiveError); setMessageError('Unable to update this conversation.') } }
+  const handleDelete = async () => { if (!selectedConversation) return; try { await deleteAdminChatConversation(selectedConversation.id); setIsDeleteOpen(false); setIsMenuOpen(false); setSelectedConversationId(''); setMessages([]); await loadConversations() } catch (deleteError) { console.error('[ADMIN MESSAGES] delete conversation:', deleteError); setMessageError('Unable to delete this conversation. Check the database delete policy.') } }
+  const handleAttachment = (event) => { const file = event.target.files?.[0]; if (!file) return; const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']; if (!allowed.includes(file.type) || file.size > 10 * 1024 * 1024) { setMessageError('Choose a JPG, PNG, WebP, or PDF file up to 10 MB.'); event.target.value = ''; return }; setAttachment({ file, preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null }); event.target.value = '' }
+  const handleReplyKeyDown = (event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }
+  return <section className="admin-page admin-messages-page"><div className="admin-page-heading"><h2>Messages</h2></div><div className="admin-messages-shell">
+    <aside className="admin-messages-list-pane" aria-label="Customer conversations"><div className="admin-messages-list-header"><div className="admin-messages-list-title"><div><h3>Conversations</h3><p>{filteredConversations.length} {filter}</p></div><div className="admin-messages-filter" role="tablist" aria-label="Conversation filter"><button type="button" className={filter === 'inbox' ? 'is-active' : ''} onClick={() => setFilter('inbox')}>Inbox</button><button type="button" className={filter === 'archived' ? 'is-active' : ''} onClick={() => setFilter('archived')}>Archived</button></div></div><div className="admin-messages-search"><span aria-hidden="true">⌕</span><input type="search" value={searchValue} onChange={(event) => setSearchValue(event.target.value)} placeholder="Search by name or email..." aria-label="Search conversations" /></div></div><div className="admin-messages-list">{isLoadingConversations ? <p className="admin-messages-empty">Loading conversations...</p> : error ? <p className="admin-messages-empty admin-messages-empty--error">{error}</p> : filteredConversations.length === 0 ? <p className="admin-messages-empty">No customer conversations yet.</p> : filteredConversations.map((conversation) => <ConversationItem key={conversation.id} conversation={conversation} isActive={conversation.id === selectedConversationId} onSelect={setSelectedConversationId} />)}</div></aside>
+    <section className="admin-messages-thread-pane" aria-label="Selected conversation">{!selectedConversation ? <div className="admin-messages-thread-empty"><span>Select a conversation to view messages.</span><small>Choose a customer from the list to start replying.</small></div> : <><header className="admin-messages-thread-header"><div><h3>{selectedConversation.customerName}</h3><p>{selectedConversation.customerEmail}</p></div><div className="admin-messages-menu-wrap"><button type="button" className="admin-messages-more" aria-label="Conversation options" aria-expanded={isMenuOpen} onClick={() => setIsMenuOpen((open) => !open)}><MoreIcon /></button>{isMenuOpen && <div className="admin-messages-menu"><button type="button" onClick={handleArchive}>{selectedConversation.status === 'open' ? 'Archive Conversation' : 'Restore Conversation'}</button><button type="button" className="is-danger" onClick={() => setIsDeleteOpen(true)}>Delete Conversation</button></div>}</div></header><div className="admin-messages-thread" ref={messagesThreadRef}>{isLoadingMessages ? <p className="admin-messages-empty">Loading messages...</p> : messageError ? <p className="admin-messages-empty admin-messages-empty--error">{messageError}</p> : messages.length === 0 ? <p className="admin-messages-empty">No messages yet.</p> : messages.map((message) => <MessageBubble key={message.id} message={message} />)}</div><form className="admin-messages-reply" onSubmit={handleSend}><input ref={fileInputRef} className="admin-messages-file-input" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" onChange={handleAttachment} /><div className="admin-messages-composer"><button type="button" className="admin-messages-attach" aria-label="Attach file" onClick={() => fileInputRef.current?.click()}>＋</button><textarea value={reply} onChange={(event) => setReply(event.target.value)} onKeyDown={handleReplyKeyDown} placeholder="Type a reply..." aria-label="Type a reply" rows="1" /><button type="button" className="admin-messages-emoji" aria-label="Insert emoji" onClick={() => setReply((value) => `${value} 🙂`)}>☺</button><button type="submit" className="admin-messages-send" disabled={isSending || (!reply.trim() && !attachment)}>{isSending ? '...' : 'Send'}</button></div>{attachment && <div className="admin-messages-attachment-preview">{attachment.preview ? <img src={attachment.preview} alt="Attachment preview" /> : <span className="admin-messages-file-icon">PDF</span>}<span>{attachment.file.name}</span><button type="button" aria-label="Remove attachment" onClick={() => setAttachment(null)}>×</button></div>}</form></>}</section>
+  </div>{isDeleteOpen && <div className="admin-messages-modal-backdrop" role="presentation"><section className="admin-messages-confirm" role="dialog" aria-modal="true" aria-labelledby="delete-conversation-title"><h3 id="delete-conversation-title">Delete conversation?</h3><p>This will permanently remove this conversation and its messages.</p><div><button type="button" onClick={() => setIsDeleteOpen(false)}>Cancel</button><button type="button" className="is-danger" onClick={handleDelete}>Delete</button></div></section></div>}</section>
 }
-
 export default Messages

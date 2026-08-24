@@ -26,6 +26,7 @@ const ORDER_COLUMNS = `
   subtotal,
   delivery_fee,
   total,
+  required_down_payment,
   order_status,
   payment_status,
   payment_method,
@@ -46,6 +47,8 @@ const ORDER_ITEM_COLUMNS = `
   subtotal,
   customization_data
 `
+
+const PRICE_ITEM_COLUMNS = 'id, order_id, description, amount, sort_order'
 
 const referenceBucket = 'custom-order-references'
 
@@ -135,6 +138,16 @@ export async function fetchAdminOrders() {
 
   const itemsWithSignedUrls = await attachReferenceImageSignedUrls(items || [])
 
+  const { data: priceItems, error: priceItemsError } = await supabase
+    .from('order_price_breakdown_items')
+    .select(PRICE_ITEM_COLUMNS)
+    .in('order_id', orderIds)
+    .order('sort_order', { ascending: true })
+
+  if (priceItemsError) {
+    throw priceItemsError
+  }
+
   const itemsByOrderId = itemsWithSignedUrls.reduce((groups, item) => {
     const orderId = item.order_id
 
@@ -146,9 +159,21 @@ export async function fetchAdminOrders() {
     return groups
   }, {})
 
+  const priceItemsByOrderId = (priceItems || []).reduce((groups, item) => {
+    if (!groups[item.order_id]) groups[item.order_id] = []
+    groups[item.order_id].push({
+      id: item.id,
+      description: item.description,
+      amount: Number(item.amount) || 0,
+      sortOrder: item.sort_order,
+    })
+    return groups
+  }, {})
+
   return (orders || []).map((order) => ({
     ...order,
     order_items: itemsByOrderId[order.id] || [],
+    price_items: priceItemsByOrderId[order.id] || [],
   }))
 }
 
@@ -170,12 +195,17 @@ export async function updateAdminOrderStatus(orderId, newStatus) {
   return data
 }
 
-export async function reviewCustomOrderRequest(orderId, action, finalPrice = null, rejectionReason = '') {
-  const { data, error } = await supabase.rpc('review_custom_order_request', {
+export async function reviewCustomOrderRequest(orderId, action, finalPrice = null, rejectionReason = '', priceItems = []) {
+  const { data, error } = await supabase.rpc('review_custom_order_request_with_pricing', {
     p_order_id: orderId,
     p_action: action,
     p_final_price: finalPrice,
     p_rejection_reason: rejectionReason,
+    p_price_items: priceItems.map((item, index) => ({
+      description: String(item.description || '').trim(),
+      amount: Number(item.amount) || 0,
+      sort_order: index,
+    })),
   })
 
   if (error) {

@@ -158,8 +158,21 @@ function isCustomCakeOrder(order) {
   )
 }
 
+function isCustomizedOrder(order) {
+  return (order.order_items || []).some((item) => {
+    const requestType = normalizeText(item.customization_data?.request_type)
+    const productType = normalizeText(item.product_type)
+    return requestType === 'custom_cake' ||
+      requestType === 'custom_cupcake' ||
+      requestType === 'custom_cupcakes' ||
+      requestType === 'custom_party_package' ||
+      requestType === 'custom_package' ||
+      (['cupcake', 'cupcakes', 'party_package'].includes(productType) && item.customization_data?.is_custom === true)
+  })
+}
+
 function hasPendingPrice(order) {
-  return isCustomCakeOrder(order) && normalizeText(order.order_status) === 'pending' && Number(order.total) === 0
+  return isCustomizedOrder(order) && normalizeText(order.order_status) === 'pending' && Number(order.total) === 0
 }
 
 function formatPrice(value, order = null) {
@@ -220,6 +233,11 @@ function mapAdminOrder(order) {
         ? null
         : Number(order.delivery_fee) || 0,
     isCustomCake: isCustomCakeOrder(order),
+    isCustomized: isCustomizedOrder(order),
+    priceItems: order.price_items || [],
+    requiredDownPayment: order.required_down_payment === null || order.required_down_payment === undefined
+      ? null
+      : Number(order.required_down_payment) || 0,
     isPricePending: hasPendingPrice(order),
     searchText: buildSearchText(order),
   }
@@ -381,7 +399,7 @@ function Orders() {
   const [activeOrderId, setActiveOrderId] = useState(null)
   const [statusUpdateError, setStatusUpdateError] = useState('')
   const [updatingOrderId, setUpdatingOrderId] = useState(null)
-  const [customFinalPrice, setCustomFinalPrice] = useState('')
+  const [customPriceItems, setCustomPriceItems] = useState([])
   const [customReviewError, setCustomReviewError] = useState('')
   const [orderDetailTab, setOrderDetailTab] = useState('Overview')
   const [previewImage, setPreviewImage] = useState(null)
@@ -564,12 +582,13 @@ function Orders() {
     setOrderDetailTab('Overview')
     setStatusUpdateError('')
     setCustomReviewError('')
-    setCustomFinalPrice(
-      selectedOrder?.isCustomCake && normalizeText(selectedOrder.order_status) === 'pending' && Number(selectedOrder.total) === 0
-        ? ''
-        : selectedOrder?.total !== null && selectedOrder?.total !== undefined
-          ? String(selectedOrder.total)
-          : '',
+    const savedPriceItems = selectedOrder?.price_items || []
+    setCustomPriceItems(
+      savedPriceItems.length > 0
+        ? savedPriceItems.map((item) => ({ ...item, amount: String(item.amount ?? '') }))
+        : isCustomCakeOrder(selectedOrder)
+          ? [{ id: 'base-custom-cake', description: 'Base Customized Cake', amount: '1500' }]
+          : [],
     )
   }
 
@@ -577,7 +596,7 @@ function Orders() {
     setActiveOrderId(null)
     setStatusUpdateError('')
     setCustomReviewError('')
-    setCustomFinalPrice('')
+    setCustomPriceItems([])
     setPreviewImage(null)
     setPreviewZoom(1)
   }
@@ -629,7 +648,7 @@ function Orders() {
       return
     }
 
-    if (normalizeText(activeOrder.order_status) === 'pending' && activeOrder.isCustomCake) {
+    if (normalizeText(activeOrder.order_status) === 'pending' && activeOrder.isCustomized) {
       await handleReviewCustomOrder('accept')
       return
     }
@@ -642,10 +661,16 @@ function Orders() {
 
     if (action === 'reject' && !window.confirm('Reject this custom order?')) return
 
-    const finalPrice = Number(customFinalPrice)
+    const validPriceItems = customPriceItems
+      .map((item) => ({
+        ...item,
+        description: String(item.description || '').trim(),
+        amount: Number(item.amount),
+      }))
+      .filter((item) => item.description || Number.isFinite(item.amount))
 
-    if (action === 'accept' && (!Number.isFinite(finalPrice) || finalPrice <= 0)) {
-      setCustomReviewError('Enter the final price before accepting this custom request.')
+    if (action === 'accept' && (validPriceItems.length === 0 || validPriceItems.some((item) => !item.description || !Number.isFinite(item.amount) || item.amount < 0) || validPriceItems.reduce((sum, item) => sum + item.amount, 0) <= 0)) {
+      setCustomReviewError('Add a description and valid amount for each price item.')
       return
     }
 
@@ -656,8 +681,9 @@ function Orders() {
       const updatedOrder = await reviewCustomOrderRequest(
         activeOrder.id,
         action,
-        action === 'accept' ? finalPrice : null,
+        action === 'accept' ? validPriceItems.reduce((sum, item) => sum + item.amount, 0) : null,
         '',
+        action === 'accept' ? validPriceItems : [],
       )
 
       setOrders((currentOrders) =>
@@ -667,6 +693,7 @@ function Orders() {
                 ...order,
                 ...updatedOrder,
                 order_items: updatedOrder.order_items || order.order_items,
+                price_items: updatedOrder.price_items || order.price_items,
               }
             : order,
         ),
@@ -699,6 +726,25 @@ function Orders() {
   )
 
   const paymentVerified = ['paid', 'verified', 'payment_verified'].includes(normalizeText(activeOrder?.payment_status))
+
+  const customPriceTotal = customPriceItems.reduce((sum, item) => {
+    const amount = Number(item.amount)
+    return sum + (Number.isFinite(amount) && amount >= 0 ? amount : 0)
+  }, 0)
+
+  const customDownPayment = customPriceTotal * 0.5
+
+  const updateCustomPriceItem = (index, field, value) => {
+    setCustomPriceItems((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: value } : item))
+  }
+
+  const addCustomPriceItem = () => {
+    setCustomPriceItems((current) => [...current, { id: `price-item-${Date.now()}`, description: '', amount: '' }])
+  }
+
+  const removeCustomPriceItem = (index) => {
+    setCustomPriceItems((current) => current.filter((_, itemIndex) => itemIndex !== index))
+  }
 
   return (
     <section className="admin-page admin-orders-page">
@@ -1031,12 +1077,18 @@ function Orders() {
                 </section>
 
                 <section className="admin-orders-details-card admin-orders-details-summary-card">
-                  <h4>Order Summary</h4>
-                  <dl>
-                    <div><dt>Subtotal</dt><dd>{formatPrice(activeOrder.subtotal, activeOrder)}</dd></div>
-                    <div><dt>Delivery Fee</dt><dd>{formatPrice(activeOrder.deliveryFee, activeOrder)}</dd></div>
-                    <div className="admin-orders-details-total"><dt>Total</dt><dd>{formatPrice(activeOrder.total, activeOrder)}</dd></div>
-                  </dl>
+                  {activeOrder.isCustomized ? <>
+                    <div className="admin-orders-pricing-heading"><div><h4>Price Breakdown</h4><p>Itemize the agreed quotation for this customized order.</p></div><span>PHP</span></div>
+                    <div className="admin-orders-price-items">
+                      {customPriceItems.map((item, index) => <div className="admin-orders-price-item" key={item.id || index}>
+                        <input aria-label={`Price item ${index + 1} description`} type="text" placeholder="Description" value={item.description} onChange={(event) => updateCustomPriceItem(index, 'description', event.target.value)} disabled={updatingOrderId === activeOrder.id} />
+                        <div className="admin-orders-price-amount"><span>₱</span><input aria-label={`Price item ${index + 1} amount`} type="number" min="0" step="1" placeholder="0" value={item.amount} onChange={(event) => updateCustomPriceItem(index, 'amount', event.target.value)} disabled={updatingOrderId === activeOrder.id} /></div>
+                        <button type="button" aria-label={`Remove price item ${index + 1}`} onClick={() => removeCustomPriceItem(index)} disabled={updatingOrderId === activeOrder.id}>×</button>
+                      </div>)}
+                    </div>
+                    <button type="button" className="admin-orders-add-price-item" onClick={addCustomPriceItem} disabled={updatingOrderId === activeOrder.id}>＋ Add Price Item</button>
+                    <dl className="admin-orders-price-totals"><div className="admin-orders-details-total"><dt>Final Price</dt><dd>₱{customPriceTotal.toLocaleString('en-PH', { maximumFractionDigits: 2 })}</dd></div><div><dt>Required Down Payment (50%)</dt><dd>₱{customDownPayment.toLocaleString('en-PH', { maximumFractionDigits: 2 })}</dd></div></dl>
+                  </> : <><h4>Order Summary</h4><dl><div><dt>Subtotal</dt><dd>{formatPrice(activeOrder.subtotal, activeOrder)}</dd></div><div><dt>Delivery Fee</dt><dd>{formatPrice(activeOrder.deliveryFee, activeOrder)}</dd></div><div className="admin-orders-details-total"><dt>Total</dt><dd>{formatPrice(activeOrder.total, activeOrder)}</dd></div></dl></>}
                 </section>
               </main>
 
@@ -1066,9 +1118,8 @@ function Orders() {
 
                 <section className={`admin-orders-details-card admin-orders-details-actions-card${['completed', 'cancelled', 'rejected'].includes(normalizeText(activeOrder.order_status)) ? ' is-complete' : ''}`}>
                   <h4>Order Actions</h4>
-                  {normalizeText(activeOrder.order_status) === 'pending' && activeOrder.isCustomCake ? <label htmlFor="admin-custom-final-price-side">Final Price<input id="admin-custom-final-price-side" className="admin-orders-details-input" type="number" min="1" step="1" placeholder="₱ Enter final price" value={customFinalPrice} onChange={(event) => setCustomFinalPrice(event.target.value)} disabled={updatingOrderId === activeOrder.id} /></label> : null}
-                  {normalizeText(activeOrder.order_status) === 'pending' && activeOrder.isCustomCake ? <div className="admin-orders-details-action-buttons"><button type="button" className="admin-orders-action-btn admin-orders-action-btn--secondary" onClick={() => handleReviewCustomOrder('reject')} disabled={updatingOrderId === activeOrder.id}>Reject Order</button><button type="button" className="admin-orders-action-btn" onClick={handleProgressOrder} disabled={updatingOrderId === activeOrder.id}>Confirm Order</button></div> : null}
-                  {normalizeText(activeOrder.order_status) === 'pending' && !activeOrder.isCustomCake ? <button type="button" className="admin-orders-action-btn admin-orders-action-btn--full" onClick={handleProgressOrder} disabled={updatingOrderId === activeOrder.id}>Confirm Order</button> : null}
+                  {normalizeText(activeOrder.order_status) === 'pending' && activeOrder.isCustomized ? <div className="admin-orders-details-action-buttons"><button type="button" className="admin-orders-action-btn admin-orders-action-btn--secondary" onClick={() => handleReviewCustomOrder('reject')} disabled={updatingOrderId === activeOrder.id}>Reject Order</button><button type="button" className="admin-orders-action-btn" onClick={handleProgressOrder} disabled={updatingOrderId === activeOrder.id}>Confirm Order</button></div> : null}
+                  {normalizeText(activeOrder.order_status) === 'pending' && !activeOrder.isCustomized ? <button type="button" className="admin-orders-action-btn admin-orders-action-btn--full" onClick={handleProgressOrder} disabled={updatingOrderId === activeOrder.id}>Confirm Order</button> : null}
                   {['confirmed', 'preparing', 'ready'].includes(normalizeText(activeOrder.order_status)) ? <button type="button" className="admin-orders-action-btn admin-orders-action-btn--full" onClick={handleProgressOrder} disabled={updatingOrderId === activeOrder.id}>{({ confirmed: 'Start Preparing', preparing: 'Mark as Ready', ready: 'Complete Order' })[normalizeText(activeOrder.order_status)]}</button> : null}
                   {normalizeText(activeOrder.order_status) === 'completed' ? <p className="admin-orders-details-completed">Order Completed</p> : null}
                   {statusUpdateError ? <p className="admin-orders-details-error">{statusUpdateError}</p> : null}
@@ -1079,9 +1130,8 @@ function Orders() {
 
             <section className={`admin-orders-details-actions-docked${['completed', 'cancelled', 'rejected'].includes(normalizeText(activeOrder.order_status)) ? ' is-complete' : ''}`}>
               <h4>Order Actions</h4>
-              {normalizeText(activeOrder.order_status) === 'pending' && activeOrder.isCustomCake ? <label htmlFor="admin-custom-final-price-docked">Final Price<div className="admin-orders-currency-input"><span aria-hidden="true">₱</span><input id="admin-custom-final-price-docked" type="text" inputMode="numeric" placeholder="Enter final price" value={customFinalPrice ? Number(customFinalPrice).toLocaleString('en-PH') : ''} onChange={(event) => setCustomFinalPrice(event.target.value.replace(/[^0-9]/g, ''))} disabled={updatingOrderId === activeOrder.id} /></div></label> : null}
-              {normalizeText(activeOrder.order_status) === 'pending' && activeOrder.isCustomCake ? <div className="admin-orders-details-action-buttons"><button type="button" className="admin-orders-action-btn admin-orders-action-btn--secondary" onClick={() => handleReviewCustomOrder('reject')} disabled={updatingOrderId === activeOrder.id}>Reject Order</button><button type="button" className="admin-orders-action-btn" onClick={handleProgressOrder} disabled={updatingOrderId === activeOrder.id}>Confirm Order</button></div> : null}
-              {normalizeText(activeOrder.order_status) === 'pending' && !activeOrder.isCustomCake ? <button type="button" className="admin-orders-action-btn admin-orders-action-btn--full" onClick={handleProgressOrder} disabled={updatingOrderId === activeOrder.id}>Confirm Order</button> : null}
+              {normalizeText(activeOrder.order_status) === 'pending' && activeOrder.isCustomized ? <div className="admin-orders-details-action-buttons"><button type="button" className="admin-orders-action-btn admin-orders-action-btn--secondary" onClick={() => handleReviewCustomOrder('reject')} disabled={updatingOrderId === activeOrder.id}>Reject Order</button><button type="button" className="admin-orders-action-btn" onClick={handleProgressOrder} disabled={updatingOrderId === activeOrder.id}>Confirm Order</button></div> : null}
+              {normalizeText(activeOrder.order_status) === 'pending' && !activeOrder.isCustomized ? <button type="button" className="admin-orders-action-btn admin-orders-action-btn--full" onClick={handleProgressOrder} disabled={updatingOrderId === activeOrder.id}>Confirm Order</button> : null}
               {normalizeText(activeOrder.order_status) === 'confirmed' && !paymentVerified ? <p className="admin-orders-details-awaiting-payment">Payment Pending · awaiting verification</p> : null}
               {['preparing', 'ready'].includes(normalizeText(activeOrder.order_status)) || (normalizeText(activeOrder.order_status) === 'confirmed' && paymentVerified) ? <button type="button" className="admin-orders-action-btn admin-orders-action-btn--full" onClick={handleProgressOrder} disabled={updatingOrderId === activeOrder.id}>{({ confirmed: 'Start Preparing', preparing: 'Mark as Ready', ready: 'Complete Order' })[normalizeText(activeOrder.order_status)]}</button> : null}
               {statusUpdateError ? <p className="admin-orders-details-error">{statusUpdateError}</p> : null}
@@ -1124,21 +1174,11 @@ function Orders() {
                     <div className="admin-orders-details-section admin-orders-details-status-control">
                       <h4>Order Status</h4>
                       <label htmlFor="admin-order-status-update">Update status</label>
-                      <select id="admin-order-status-update" value={normalizeText(activeOrder.order_status) || 'pending'} onChange={handleStatusChange} disabled={updatingOrderId === activeOrder.id || (activeOrder.isCustomCake && normalizeText(activeOrder.order_status) === 'pending')}>
+                      <select id="admin-order-status-update" value={normalizeText(activeOrder.order_status) || 'pending'} onChange={handleStatusChange} disabled={updatingOrderId === activeOrder.id || (activeOrder.isCustomized && normalizeText(activeOrder.order_status) === 'pending')}>
                         {ORDER_STATUS_OPTIONS.map((status) => <option key={status} value={status}>{formatStatus(status)}</option>)}
                       </select>
                       {statusUpdateError ? <p className="admin-orders-details-error">{statusUpdateError}</p> : null}
-                      {activeOrder.isCustomCake && normalizeText(activeOrder.order_status) === 'pending' ? (
-                        <>
-                          <label htmlFor="admin-custom-final-price">Final Price</label>
-                          <input id="admin-custom-final-price" className="admin-orders-details-input" type="number" min="1" step="1" inputMode="numeric" placeholder="Enter final price" value={customFinalPrice} onChange={(event) => setCustomFinalPrice(event.target.value)} disabled={updatingOrderId === activeOrder.id} />
-                          <div className="admin-orders-details-actions">
-                            <button type="button" className="admin-orders-action-btn" onClick={() => handleReviewCustomOrder('accept')} disabled={updatingOrderId === activeOrder.id}>Accept</button>
-                            <button type="button" className="admin-orders-action-btn" onClick={() => handleReviewCustomOrder('reject')} disabled={updatingOrderId === activeOrder.id}>Reject</button>
-                          </div>
-                          {customReviewError ? <p className="admin-orders-details-error">{customReviewError}</p> : null}
-                        </>
-                      ) : null}
+                      {activeOrder.isCustomized && normalizeText(activeOrder.order_status) === 'pending' ? <div className="admin-orders-details-actions"><button type="button" className="admin-orders-action-btn" onClick={() => handleReviewCustomOrder('accept')} disabled={updatingOrderId === activeOrder.id}>Accept</button><button type="button" className="admin-orders-action-btn" onClick={() => handleReviewCustomOrder('reject')} disabled={updatingOrderId === activeOrder.id}>Reject</button></div> : null}
                     </div>
                   </div>
                 ) : null}
@@ -1188,7 +1228,7 @@ function Orders() {
                 onChange={handleStatusChange}
                 disabled={
                   updatingOrderId === activeOrder.id ||
-                  (activeOrder.isCustomCake && normalizeText(activeOrder.order_status) === 'pending')
+                  (activeOrder.isCustomized && normalizeText(activeOrder.order_status) === 'pending')
                 }
               >
                 {ORDER_STATUS_OPTIONS.map((status) => (
@@ -1200,42 +1240,7 @@ function Orders() {
               {statusUpdateError ? <p className="admin-orders-details-error">{statusUpdateError}</p> : null}
             </div>
 
-            {activeOrder.isCustomCake && normalizeText(activeOrder.order_status) === 'pending' ? (
-              <div className="admin-orders-details-status-row">
-                <label htmlFor="admin-custom-final-price">Final Price</label>
-                <input
-                  id="admin-custom-final-price"
-                  className="admin-orders-details-input"
-                  type="number"
-                  min="1"
-                  step="1"
-                  inputMode="numeric"
-                  placeholder="Enter final price"
-                  value={customFinalPrice}
-                  onChange={(event) => setCustomFinalPrice(event.target.value)}
-                  disabled={updatingOrderId === activeOrder.id}
-                />
-                <div className="admin-orders-details-actions">
-                  <button
-                    type="button"
-                    className="admin-orders-action-btn"
-                    onClick={() => handleReviewCustomOrder('accept')}
-                    disabled={updatingOrderId === activeOrder.id}
-                  >
-                    Accept
-                  </button>
-                  <button
-                    type="button"
-                    className="admin-orders-action-btn"
-                    onClick={() => handleReviewCustomOrder('reject')}
-                    disabled={updatingOrderId === activeOrder.id}
-                  >
-                    Reject
-                  </button>
-                </div>
-                {customReviewError ? <p className="admin-orders-details-error">{customReviewError}</p> : null}
-              </div>
-            ) : null}
+              {activeOrder.isCustomized && normalizeText(activeOrder.order_status) === 'pending' ? <div className="admin-orders-details-actions"><button type="button" className="admin-orders-action-btn" onClick={() => handleReviewCustomOrder('accept')} disabled={updatingOrderId === activeOrder.id}>Accept</button><button type="button" className="admin-orders-action-btn" onClick={() => handleReviewCustomOrder('reject')} disabled={updatingOrderId === activeOrder.id}>Reject</button></div> : null}
 
             <div className="admin-orders-details-section">
               <h4>Customer Information</h4>

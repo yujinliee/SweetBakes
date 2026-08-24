@@ -1887,3 +1887,129 @@
     padding-left: 16px;
   }
 }
+
+.admin-orders-pricing-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-orders-pricing-heading h4 {
+  margin-bottom: 3px;
+}
+
+.admin-orders-pricing-heading p {
+  margin: 0;
+  color: #8b7f79;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.admin-orders-pricing-heading > span {
+  color: #8b7f79;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+}
+
+.admin-orders-price-items {
+  display: grid;
+  gap: 7px;
+  margin-top: 14px;
+}
+
+.admin-orders-price-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 116px 26px;
+  align-items: center;
+  gap: 7px;
+}
+
+.admin-orders-price-item input {
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid #e4dbd4;
+  border-radius: 7px;
+  padding: 8px 9px;
+  color: #3a2e2e;
+  font: inherit;
+  font-size: 12px;
+}
+
+.admin-orders-price-amount {
+  display: flex;
+  align-items: center;
+  border: 1px solid #e4dbd4;
+  border-radius: 7px;
+  background: #fff;
+  color: #8b7f79;
+  font-size: 12px;
+}
+
+.admin-orders-price-amount input {
+  width: 100%;
+  border: 0;
+  padding-left: 3px;
+  outline: 0;
+}
+
+.admin-orders-price-item > button {
+  width: 26px;
+  height: 30px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #9b9089;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.admin-orders-price-item > button:hover {
+  background: #f5efeb;
+  color: #b42318;
+}
+
+.admin-orders-add-price-item {
+  margin-top: 10px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #6f5a4f;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-orders-price-totals {
+  display: grid;
+  gap: 8px;
+  margin-top: 15px;
+  padding-top: 13px;
+  border-top: 1px solid #eee7e2;
+}
+
+.admin-orders-price-totals > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-orders-price-totals dt,
+.admin-orders-price-totals dd {
+  margin: 0;
+  font-size: 12px;
+}
+
+.admin-orders-price-totals dd {
+  color: #3a2e2e;
+  font-weight: 700;
+}
+
+@media (max-width: 760px) {
+  .admin-orders-price-item {
+    grid-template-columns: minmax(0, 1fr) 100px 26px;
+  }
+}
