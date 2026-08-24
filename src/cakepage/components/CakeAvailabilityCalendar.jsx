@@ -1,4 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import {
+  formatDateValue,
+  getTodayDate,
+} from '../../admin/services/availabilityService.js'
+import { useAvailability } from '../../hooks/useAvailability.js'
 
 const monthNames = [
   'January',
@@ -16,20 +21,23 @@ const monthNames = [
 ]
 
 const weekdayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const leadTimeDays = 5
-const today = new Date(2026, 7, 7)
-const unavailableDates = new Set(['2026-08-10', '2026-08-17', '2026-08-24'])
-
-const formatDateValue = (date) => {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-
-  return `${year}-${month}-${day}`
-}
 
 function CakeAvailabilityCalendar({ selectedDate, validationError = '', onDateChange }) {
-  const [visibleMonth, setVisibleMonth] = useState(new Date(2026, 7, 1))
+  const availability = useAvailability()
+  const [visibleMonth, setVisibleMonth] = useState(() => {
+    const today = getTodayDate()
+    return new Date(today.getFullYear(), today.getMonth(), 1)
+  })
+
+  useEffect(() => {
+    if (
+      selectedDate &&
+      !availability.loading &&
+      (!availability.settings || !availability.isDateAvailable(selectedDate))
+    ) {
+      onDateChange('')
+    }
+  }, [availability, onDateChange, selectedDate])
 
   const calendarDays = useMemo(() => {
     const year = visibleMonth.getFullYear()
@@ -46,20 +54,20 @@ function CakeAvailabilityCalendar({ selectedDate, validationError = '', onDateCh
       ...Array.from({ length: daysInMonth }, (_, index) => {
         const date = new Date(year, month, index + 1)
         const value = formatDateValue(date)
-        const isPast = date < today
-        const isUnavailable = unavailableDates.has(value)
+        const dateStatus = availability.getDateStatus(value)
+        const todayValue = formatDateValue(getTodayDate())
 
         return {
           key: value,
           day: index + 1,
           value,
-          isToday: value === formatDateValue(today),
+          isToday: value === todayValue,
           isSelected: value === selectedDate,
-          isDisabled: isPast || isUnavailable,
+          isDisabled: availability.loading || availability.error || !dateStatus || dateStatus.isDisabled,
         }
       }),
     ]
-  }, [selectedDate, visibleMonth])
+  }, [availability, selectedDate, visibleMonth])
 
   const moveMonth = (direction) => {
     setVisibleMonth(
@@ -110,9 +118,13 @@ function CakeAvailabilityCalendar({ selectedDate, validationError = '', onDateCh
         </div>
       </div>
       {validationError ? <p className="cake-field-error">* {validationError}</p> : null}
+      {availability.error ? (
+        <p className="cake-field-error">* Available dates are temporarily unavailable. Please try again shortly.</p>
+      ) : null}
       <p className="cake-lead-time">
-        Current lead time for custom orders: {leadTimeDays} days. Please order early to secure
-        your preferred pickup or delivery date.
+        {availability.loading
+          ? 'Loading available dates...'
+          : `Current lead time for custom orders: ${availability.minimumLeadTime} days. Please order early to secure your preferred pickup or delivery date.`}
       </p>
     </section>
   )

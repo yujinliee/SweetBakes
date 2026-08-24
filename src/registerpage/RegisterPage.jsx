@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { googleOAuthErrorMessage, startGoogleOAuth } from '../auth/googleOAuth.js'
 import { SiteTopbar } from '../landingpage/LandingPage.jsx'
+import { supabase } from '../lib/supabase.js'
 import LegalModal from './components/LegalModal.jsx'
 import './RegisterPage.css'
 
@@ -159,17 +161,222 @@ function PasswordEyeIcon() {
   )
 }
 
-function RegisterPage({ latestRequest, onTrackOrder, onNavigate, isCustomerAuthenticated = false }) {
-  const [showPassword, setShowPassword] = useState(false)
-  const [legalModal, setLegalModal] = useState(null)
+const namePattern = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/
 
-  const handleRegisterSubmit = (event) => {
-    event.preventDefault()
-    console.log('Customer registration will be connected later.')
+const defaultFormValues = {
+  firstName: '',
+  lastName: '',
+  email: '',
+  password: '',
+  terms: false,
+}
+
+const duplicateEmailMessage = 'An account with this email already exists. Please sign in instead.'
+const genericSignupMessage = 'Unable to create your account. Please try again.'
+
+function validateName(value, label) {
+  const trimmedValue = value.trim()
+
+  if (!trimmedValue) {
+    return `${label} is required.`
   }
 
-  const handleGoogleRegister = () => {
-    console.log('Google registration will be connected later.')
+  if (trimmedValue.length < 2 || !namePattern.test(trimmedValue)) {
+    return `${label} must use at least 2 letters and only letters, spaces, hyphens, or apostrophes.`
+  }
+
+  return ''
+}
+
+function validateForm(values) {
+  const nextErrors = {}
+  const firstName = values.firstName.trim()
+  const lastName = values.lastName.trim()
+  const email = values.email.trim().toLowerCase()
+
+  const firstNameError = validateName(firstName, 'First name')
+  if (firstNameError) nextErrors.firstName = firstNameError
+
+  const lastNameError = validateName(lastName, 'Last name')
+  if (lastNameError) nextErrors.lastName = lastNameError
+
+  if (!email || !emailPattern.test(email)) {
+    nextErrors.email = 'Enter a valid email address.'
+  }
+
+  if (!passwordPattern.test(values.password)) {
+    nextErrors.password =
+      'Password must be at least 8 characters and include an uppercase letter, lowercase letter, and number.'
+  }
+
+  if (!values.terms) {
+    nextErrors.terms = 'You must agree to the Terms of Service and Privacy Policy.'
+  }
+
+  return {
+    errors: nextErrors,
+    normalizedValues: {
+      firstName,
+      lastName,
+      email,
+      password: values.password,
+    },
+  }
+}
+
+function getSignupErrorMessage(error) {
+  const message = String(error?.message || '').toLowerCase()
+
+  if (
+    message.includes('already registered') ||
+    message.includes('already exists') ||
+    message.includes('user already')
+  ) {
+    return duplicateEmailMessage
+  }
+
+  return genericSignupMessage
+}
+
+async function verifyCustomerProfile(userId) {
+  if (!userId) return null
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, email, first_name, last_name, role')
+      .eq('id', userId)
+      .maybeSingle()
+
+    if (error) {
+      console.error('[REGISTER] profile verification error:', error)
+      return null
+    }
+
+    if (data) {
+      return data
+    }
+
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, 250)
+    })
+  }
+
+  return null
+}
+
+function RegisterPage({
+  latestRequest,
+  onTrackOrder,
+  onNavigate,
+  onCustomerLogin,
+  onCustomerLogout,
+  isCustomerAuthenticated = false,
+}) {
+  const [showPassword, setShowPassword] = useState(false)
+  const [legalModal, setLegalModal] = useState(null)
+  const [formValues, setFormValues] = useState(defaultFormValues)
+  const [errors, setErrors] = useState({})
+  const [statusMessage, setStatusMessage] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false)
+
+  const updateField = (field) => (event) => {
+    const value = field === 'terms' ? event.target.checked : event.target.value
+
+    setFormValues((current) => ({
+      ...current,
+      [field]: value,
+    }))
+    setStatusMessage('')
+    setErrors((current) => {
+      if (!current[field]) return current
+
+      const next = { ...current }
+      delete next[field]
+      return next
+    })
+  }
+
+  const handleRegisterSubmit = async (event) => {
+    event.preventDefault()
+
+    const { errors: validationErrors, normalizedValues } = validateForm(formValues)
+
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors)
+      setStatusMessage('')
+      return
+    }
+
+    try {
+      setIsSubmitting(true)
+      setErrors({})
+      setStatusMessage('')
+
+      const { data, error } = await supabase.auth.signUp({
+        email: normalizedValues.email,
+        password: normalizedValues.password,
+        options: {
+          data: {
+            first_name: normalizedValues.firstName,
+            last_name: normalizedValues.lastName,
+          },
+        },
+      })
+
+      if (error) {
+        setErrors({ form: getSignupErrorMessage(error) })
+        return
+      }
+
+      if (data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+        setErrors({ form: duplicateEmailMessage })
+        return
+      }
+
+      const profile = data?.session ? await verifyCustomerProfile(data.user?.id) : null
+
+      if (data?.session && (!profile || profile.role !== 'customer')) {
+        await supabase.auth.signOut()
+        setErrors({ form: genericSignupMessage })
+        return
+      }
+
+      setFormValues((current) => ({
+        ...current,
+        password: '',
+        terms: false,
+      }))
+
+      if (data?.session) {
+        setStatusMessage('Account created successfully.')
+        onCustomerLogin?.()
+        return
+      }
+
+      setStatusMessage('Account created! Please check your email to confirm your account before signing in.')
+    } catch (error) {
+      console.error('[REGISTER] signup error:', error)
+      setErrors({ form: genericSignupMessage })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleGoogleRegister = async () => {
+    try {
+      setStatusMessage('')
+      setErrors({})
+      setIsGoogleSubmitting(true)
+      await startGoogleOAuth()
+    } catch (oauthError) {
+      console.error('[REGISTER] Google OAuth error:', oauthError)
+      setErrors({ form: googleOAuthErrorMessage })
+      setIsGoogleSubmitting(false)
+    }
   }
 
   const handleSignIn = (event) => {
@@ -190,6 +397,7 @@ function RegisterPage({ latestRequest, onTrackOrder, onNavigate, isCustomerAuthe
         latestRequest={latestRequest}
         onTrackOrder={onTrackOrder}
         onNavigate={onNavigate}
+        onCustomerLogout={onCustomerLogout}
         isCustomerAuthenticated={isCustomerAuthenticated}
       />
 
@@ -214,46 +422,81 @@ function RegisterPage({ latestRequest, onTrackOrder, onNavigate, isCustomerAuthe
               <label className="login-field-group">
                 <span>First Name</span>
                 <input
+                  id="firstName"
                   className="login-field"
                   type="text"
                   name="firstName"
                   placeholder="Enter first name"
                   autoComplete="given-name"
+                  value={formValues.firstName}
+                  onChange={updateField('firstName')}
+                  aria-invalid={errors.firstName ? 'true' : undefined}
+                  aria-describedby={errors.firstName ? 'firstName-error' : undefined}
                 />
+                {errors.firstName ? (
+                  <span id="firstName-error" className="register-field-error">
+                    {errors.firstName}
+                  </span>
+                ) : null}
               </label>
 
               <label className="login-field-group">
                 <span>Last Name</span>
                 <input
+                  id="lastName"
                   className="login-field"
                   type="text"
                   name="lastName"
                   placeholder="Enter last name"
                   autoComplete="family-name"
+                  value={formValues.lastName}
+                  onChange={updateField('lastName')}
+                  aria-invalid={errors.lastName ? 'true' : undefined}
+                  aria-describedby={errors.lastName ? 'lastName-error' : undefined}
                 />
+                {errors.lastName ? (
+                  <span id="lastName-error" className="register-field-error">
+                    {errors.lastName}
+                  </span>
+                ) : null}
               </label>
             </div>
 
             <label className="login-field-group">
               <span>Email Address</span>
               <input
+                id="email"
                 className="login-field"
                 type="email"
                 name="email"
                 placeholder="Enter your email address"
                 autoComplete="email"
+                value={formValues.email}
+                onChange={updateField('email')}
+                aria-invalid={errors.email ? 'true' : undefined}
+                aria-describedby={errors.email ? 'email-error' : undefined}
               />
+              {errors.email ? (
+                <span id="email-error" className="register-field-error">
+                  {errors.email}
+                </span>
+              ) : null}
             </label>
 
             <label className="login-field-group">
               <span>Password</span>
               <span className="login-password-control">
                 <input
+                  id="password"
                   className="login-field login-field--password"
                   type={showPassword ? 'text' : 'password'}
                   name="password"
                   placeholder="Create a password"
                   autoComplete="new-password"
+                  value={formValues.password}
+                  onChange={updateField('password')}
+                  aria-invalid={errors.password ? 'true' : undefined}
+                  aria-describedby={errors.password ? 'password-error' : undefined}
                 />
                 <button
                   className="password-toggle"
@@ -264,11 +507,24 @@ function RegisterPage({ latestRequest, onTrackOrder, onNavigate, isCustomerAuthe
                   <PasswordEyeIcon />
                 </button>
               </span>
+              {errors.password ? (
+                <span id="password-error" className="register-field-error">
+                  {errors.password}
+                </span>
+              ) : null}
             </label>
           </div>
 
           <label className="remember-option register-terms-option">
-            <input type="checkbox" name="terms" />
+            <input
+              id="terms"
+              type="checkbox"
+              name="terms"
+              checked={formValues.terms}
+              onChange={updateField('terms')}
+              aria-invalid={errors.terms ? 'true' : undefined}
+              aria-describedby={errors.terms ? 'terms-error' : undefined}
+            />
             <span>
               I agree to the{' '}
               <button type="button" onClick={() => setLegalModal('terms')}>
@@ -280,9 +536,26 @@ function RegisterPage({ latestRequest, onTrackOrder, onNavigate, isCustomerAuthe
               </button>
             </span>
           </label>
+          {errors.terms ? (
+            <p id="terms-error" className="login-error register-message" role="alert">
+              {errors.terms}
+            </p>
+          ) : null}
 
-          <button className="login-submit register-submit" type="submit">
-            Create Account
+          {errors.form ? (
+            <p className="login-error register-message" role="alert">
+              {errors.form}
+            </p>
+          ) : null}
+
+          {statusMessage ? (
+            <p className="login-error register-message register-message--success" role="status">
+              {statusMessage}
+            </p>
+          ) : null}
+
+          <button className="login-submit register-submit" type="submit" disabled={isSubmitting}>
+            {isSubmitting ? 'Creating Account...' : 'Create Account'}
           </button>
 
           <div className="login-divider register-divider">
@@ -293,9 +566,10 @@ function RegisterPage({ latestRequest, onTrackOrder, onNavigate, isCustomerAuthe
             type="button"
             className="google-login-button"
             onClick={handleGoogleRegister}
+            disabled={isGoogleSubmitting}
           >
             <GoogleIcon />
-            <span>Continue with Google</span>
+            <span>{isGoogleSubmitting ? 'Opening Google...' : 'Continue with Google'}</span>
           </button>
 
           <p className="login-create-account register-sign-in">

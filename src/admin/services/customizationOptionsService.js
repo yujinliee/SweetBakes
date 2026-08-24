@@ -1,5 +1,20 @@
 const STORAGE_KEY = 'sweetbakes:customization-options-v1'
 
+const CUSTOM_ORDER_BASE_FLAVORS = [
+  { id: 'base-flavor-chocolate', label: 'Chocolate', value: 'chocolate', active: true },
+  { id: 'base-flavor-redvelvet', label: 'Red Velvet', value: 'redvelvet', active: true },
+]
+
+const CUSTOM_ORDER_PRODUCT_CATEGORIES = new Set(['Cake', 'Cupcakes', 'Party Package'])
+
+const isCustomOrderBaseFlavorGroup = (productCategory, groupName) =>
+  CUSTOM_ORDER_PRODUCT_CATEGORIES.has(productCategory) && groupName === 'Flavors'
+
+const getCustomOrderBaseFlavors = () =>
+  CUSTOM_ORDER_BASE_FLAVORS.map((option) => ({
+    ...option,
+  }))
+
 export const PRODUCT_OPTION_GROUPS = {
   Cake: ['Flavors', 'Sizes', 'Layers', 'Frosting', 'Fillings', 'Designs / Details', 'Add-ons'],
   Cupcakes: ['Flavors', 'Sizes', 'Designs / Details', 'Add-ons'],
@@ -10,9 +25,7 @@ const defaultCatalog = {
   Cake: {
     Flavors: [
       { id: 'cake-flavor-chocolate', label: 'Chocolate', value: 'chocolate', active: true },
-      { id: 'cake-flavor-vanilla', label: 'Vanilla', value: 'vanilla', active: true },
       { id: 'cake-flavor-redvelvet', label: 'Red Velvet', value: 'redvelvet', active: true },
-      { id: 'cake-flavor-ube', label: 'Ube', value: 'ube', active: true },
     ],
     Sizes: [
       { id: 'cake-size-6', label: '6"', value: '6', active: true },
@@ -52,9 +65,7 @@ const defaultCatalog = {
   Cupcakes: {
     Flavors: [
       { id: 'cupcake-flavor-chocolate', label: 'Chocolate', value: 'chocolate', active: true },
-      { id: 'cupcake-flavor-vanilla', label: 'Vanilla', value: 'vanilla', active: true },
       { id: 'cupcake-flavor-redvelvet', label: 'Red Velvet', value: 'redvelvet', active: true },
-      { id: 'cupcake-flavor-ube', label: 'Ube', value: 'ube', active: true },
     ],
     Sizes: [
       { id: 'cupcake-size-6', label: '6 pcs', value: '6', active: true },
@@ -76,9 +87,7 @@ const defaultCatalog = {
   'Party Package': {
     Flavors: [
       { id: 'party-flavor-chocolate', label: 'Chocolate', value: 'chocolate', active: true },
-      { id: 'party-flavor-vanilla', label: 'Vanilla', value: 'vanilla', active: true },
       { id: 'party-flavor-redvelvet', label: 'Red Velvet', value: 'redvelvet', active: true },
-      { id: 'party-flavor-ube', label: 'Ube', value: 'ube', active: true },
     ],
     Sizes: [
       { id: 'party-size-6', label: '6"', value: '6', active: true },
@@ -128,6 +137,11 @@ const mergeCatalog = (baseCatalog, storedCatalog) => {
     const storedGroups = storedCatalog[productKey] || {}
 
     Object.keys(baseGroups).forEach((groupName) => {
+      if (isCustomOrderBaseFlavorGroup(productKey, groupName)) {
+        mergedCatalog[productKey][groupName] = getCustomOrderBaseFlavors()
+        return
+      }
+
       const mergedOptions = normalizeGroupOptions(storedGroups[groupName] || baseGroups[groupName])
       mergedCatalog[productKey][groupName] = mergedOptions
     })
@@ -178,6 +192,10 @@ export function saveCustomizationCatalog(catalog) {
 }
 
 export function getCustomizationGroupOptions(productCategory, groupName, includeInactive = true) {
+  if (isCustomOrderBaseFlavorGroup(productCategory, groupName)) {
+    return getCustomOrderBaseFlavors()
+  }
+
   const catalog = getCustomizationCatalog()
   const groups = catalog[productCategory] || {}
   const options = normalizeGroupOptions(groups[groupName] || [])

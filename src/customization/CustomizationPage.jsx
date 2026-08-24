@@ -86,6 +86,7 @@ function CustomizationPage({
   onRequestSubmitted,
   onTrackOrder,
   onNavigate,
+  onCustomerLogout,
   isCustomerAuthenticated = false,
 }) {
   const [activeProduct, setActiveProduct] = useState(() => getInitialProduct(initialProduct))
@@ -116,6 +117,7 @@ function CustomizationPage({
         latestRequest={latestRequest}
         onTrackOrder={onTrackOrder}
         onNavigate={onNavigate}
+        onCustomerLogout={onCustomerLogout}
         isCustomerAuthenticated={isCustomerAuthenticated}
       />
 

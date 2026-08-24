@@ -138,11 +138,6 @@ function PackageReviewForm({
       : []),
     { label: 'Preferred Date', value: customerInfo.preferredDate || emptyCustomerText },
     { label: 'Preferred Time', value: formattedPreferredTime || emptyCustomerText },
-    {
-      label: 'Facebook / Messenger Name',
-      value: customerInfo.messengerName || fallbackText,
-      isEmpty: !customerInfo.messengerName,
-    },
   ]
 
   return (

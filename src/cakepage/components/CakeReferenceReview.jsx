@@ -1,30 +1,34 @@
-import { useEffect, useMemo } from 'react'
+import { useState } from 'react'
 
-function CakeReferenceReview({ referenceImages }) {
-  const previews = useMemo(
-    () =>
-      referenceImages.slice(0, 3).map((file) => ({
-        file,
-        url: URL.createObjectURL(file),
-      })),
-    [referenceImages],
-  )
-
-  useEffect(
-    () => () => {
-      previews.forEach((preview) => URL.revokeObjectURL(preview.url))
-    },
-    [previews],
-  )
+function CakeReferenceImage({ reference }) {
+  const source = reference.previewUrl || ''
+  const [status, setStatus] = useState(source ? 'loading' : 'error')
 
   return (
+    <div className={`cake-reference-thumbnail cake-reference-thumbnail--${status}`}>
+      {source ? (
+        <img
+          src={source}
+          alt={reference.name}
+          onLoad={() => setStatus('loaded')}
+          onError={() => setStatus('error')}
+        />
+      ) : null}
+      {status === 'error' ? <span className="cake-reference-image-error">Image unavailable</span> : null}
+    </div>
+  )
+}
+
+function CakeReferenceReview({ referenceImages }) {
+  return (
     <section className="cake-reference-review" aria-label="Reference image review">
-      {previews.length ? (
+      {referenceImages.length ? (
         <div className="cake-reference-thumbnails" aria-label="Uploaded reference images">
-          {previews.map((preview) => (
-            <div className="cake-reference-thumbnail" key={`${preview.file.name}-${preview.url}`}>
-              <img src={preview.url} alt={preview.file.name} />
-            </div>
+          {referenceImages.slice(0, 3).map((reference, index) => (
+            <CakeReferenceImage
+              key={`${reference.path || `${reference.name}-${index}`}-${reference.previewUrl || ''}`}
+              reference={reference}
+            />
           ))}
         </div>
       ) : (

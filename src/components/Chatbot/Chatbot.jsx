@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import logo from '../../assets/landingpage/sweetbakes_logo.svg'
+import { isCustomerCustomizationRoute, setAuthReturnTo } from '../../auth/authReturnTo.js'
+import { supabase } from '../../lib/supabase.js'
 import './Chatbot.css'
 
 const pendingChatMessageKey = 'sweetbakes_pending_chat_message'
@@ -8,6 +10,7 @@ const chatbotMessagesKey = 'sweetbakes_chatbot_messages'
 const chatbotWaitingForAdminKey = 'sweetbakes_chatbot_waiting_for_admin'
 const chatbotAdminHandoffKey = 'sweetbakes_chatbot_admin_handoff'
 const customerAuthStorageKey = 'sweetbakes_customer_authenticated'
+const CHAT_MESSAGE_SELECT = 'id, conversation_id, sender_type, message, created_at'
 
 const quickActions = [
   {
@@ -69,6 +72,77 @@ const createWelcomeMessage = () => ({
   text: 'Hi! Welcome to Sweet Bakes. How can I help you today?',
   timestamp: getMessageTime(),
 })
+
+const formatMessageTime = (value) =>
+  new Date(value || Date.now()).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+
+const mapDbMessage = (row) => ({
+  id: row.id,
+  sender:
+    row.sender_type === 'customer'
+      ? 'customer'
+      : row.sender_type === 'admin'
+        ? 'admin'
+        : 'bot',
+  text: row.message || '',
+  timestamp: formatMessageTime(row.created_at),
+  createdAt: row.created_at,
+})
+
+const insertChatMessage = async (conversationId, senderType, message, extra = {}) => {
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .insert({
+      conversation_id: conversationId,
+      sender_type: senderType,
+      message,
+    })
+    .select(CHAT_MESSAGE_SELECT)
+    .single()
+
+  if (error) throw error
+  return { ...mapDbMessage(data), ...extra }
+}
+
+const getUnreadAdminReplyCount = async (conversationId) => {
+  if (!conversationId) return 0
+
+  const { count, error } = await supabase
+    .from('chat_messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('conversation_id', conversationId)
+    .eq('sender_type', 'admin')
+    .is('customer_read_at', null)
+
+  if (error) throw error
+  return count || 0
+}
+
+const markAdminRepliesRead = async (conversationId) => {
+  if (!conversationId) return
+
+  const { error } = await supabase.rpc('mark_customer_chat_admin_messages_read', {
+    p_conversation_id: conversationId,
+  })
+
+  if (error) throw error
+}
+
+const getUserProfileRole = async (userId) => {
+  if (!userId) return null
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .maybeSingle()
+
+  if (error) throw error
+  return data?.role || null
+}
 
 const createAdminAcknowledgementMessage = () => ({
   id: `bot-admin-wait-${Date.now()}`,
@@ -191,6 +265,12 @@ function Chatbot({ onNavigate, onTrackOrder, isCustomerAuthenticated = false }) 
   const [messages, setMessages] = useState(getStoredMessages)
   const [quickActionsState, setQuickActionsState] = useState('visible')
   const [input, setInput] = useState('')
+  const [authUser, setAuthUser] = useState(null)
+  const [authRole, setAuthRole] = useState(null)
+  const [conversationId, setConversationId] = useState(null)
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [chatLoading, setChatLoading] = useState(false)
+  const [chatError, setChatError] = useState('')
   const [waitingForAdmin, setWaitingForAdmin] = useState(
     () => window.sessionStorage.getItem(chatbotWaitingForAdminKey) === 'true',
   )
@@ -199,6 +279,11 @@ function Chatbot({ onNavigate, onTrackOrder, isCustomerAuthenticated = false }) 
   const messagesEndRef = useRef(null)
   const replyTimeoutsRef = useRef([])
   const touchStartYRef = useRef(null)
+  const conversationIdRef = useRef(null)
+  const authUserRef = useRef(null)
+  const isOpenRef = useRef(false)
+  const loadingConversationForUserRef = useRef(null)
+  const loadedConversationUserIdRef = useRef(null)
 
   const labelledQuickActions = useMemo(
     () => quickActions.map(({ id, label }) => ({ id, label })),
@@ -206,7 +291,22 @@ function Chatbot({ onNavigate, onTrackOrder, isCustomerAuthenticated = false }) 
   )
   const getActionById = (actionId) => quickActions.find((action) => action.id === actionId)
   const shouldShowQuickActions = quickActionsState !== 'hidden'
-  const customerIsAuthenticated = isCustomerAuthenticated || getCustomerAuthenticated()
+  const customerIsAuthenticated = authUser
+    ? authRole === 'customer'
+    : isCustomerAuthenticated || getCustomerAuthenticated()
+  const isAuthenticatedChat = Boolean(authUser?.id && authRole === 'customer')
+
+  useEffect(() => {
+    conversationIdRef.current = conversationId
+  }, [conversationId])
+
+  useEffect(() => {
+    authUserRef.current = authUser
+  }, [authUser])
+
+  useEffect(() => {
+    isOpenRef.current = isOpen
+  }, [isOpen])
 
   const quickActionButtons = labelledQuickActions.map((action) => {
     const fullAction = getActionById(action.id)
@@ -239,6 +339,20 @@ function Chatbot({ onNavigate, onTrackOrder, isCustomerAuthenticated = false }) 
       return
     }
 
+    if (isCustomerCustomizationRoute(action.href) && !customerIsAuthenticated) {
+      setAuthReturnTo(action.href)
+      const loginTarget = `/login?redirect=${encodeURIComponent(action.href)}`
+
+      if (onNavigate) {
+        onNavigate(loginTarget)
+        return
+      }
+
+      window.history.pushState({}, '', loginTarget)
+      window.dispatchEvent(new PopStateEvent('popstate'))
+      return
+    }
+
     if (onNavigate) {
       onNavigate(action.href)
       return
@@ -248,6 +362,140 @@ function Chatbot({ onNavigate, onTrackOrder, isCustomerAuthenticated = false }) 
     window.dispatchEvent(new PopStateEvent('popstate'))
   }
 
+  const refreshUnreadCount = useCallback(async (targetConversationId = conversationIdRef.current) => {
+    if (!targetConversationId) {
+      setUnreadCount(0)
+      return
+    }
+
+    try {
+      setUnreadCount(await getUnreadAdminReplyCount(targetConversationId))
+    } catch (error) {
+      console.error('[CHATBOT] unread admin replies:', error)
+    }
+  }, [])
+
+  const markCurrentConversationRead = useCallback(async (targetConversationId = conversationIdRef.current) => {
+    if (!targetConversationId) return
+
+    try {
+      await markAdminRepliesRead(targetConversationId)
+      setUnreadCount(0)
+    } catch (error) {
+      console.error('[CHATBOT] mark admin replies read:', error)
+    }
+  }, [])
+
+  const loadAuthenticatedConversation = useCallback(async (user) => {
+    if (!user?.id) {
+      return
+    }
+
+    if (loadingConversationForUserRef.current === user.id) {
+      return
+    }
+
+    if (loadedConversationUserIdRef.current === user.id && conversationIdRef.current) {
+      return
+    }
+
+    loadingConversationForUserRef.current = user.id
+    setChatLoading(true)
+    setChatError('')
+    setMessages([])
+    setConversationId(null)
+
+    try {
+      const role = await getUserProfileRole(user.id)
+      setAuthRole(role)
+
+      if (role !== 'customer') {
+        loadedConversationUserIdRef.current = null
+        setUnreadCount(0)
+        setMessages(getStoredMessages())
+        setQuickActionsState('visible')
+        setWaitingForAdmin(false)
+        return
+      }
+
+      const { data: existingConversations, error: conversationLoadError } = await supabase
+        .from('chat_conversations')
+        .select('id, customer_id, status, created_at')
+        .eq('customer_id', user.id)
+        .eq('status', 'open')
+        .order('created_at', { ascending: false })
+        .limit(1)
+
+      if (conversationLoadError) throw conversationLoadError
+
+      let conversation = existingConversations?.[0] || null
+      let createdNewConversation = false
+
+      if (!conversation) {
+        const { data: newConversation, error: conversationCreateError } = await supabase
+          .from('chat_conversations')
+          .insert({
+            customer_id: user.id,
+            status: 'open',
+          })
+          .select('id, customer_id, status, created_at')
+          .single()
+
+        if (conversationCreateError) throw conversationCreateError
+        conversation = newConversation
+        createdNewConversation = true
+      }
+
+      let nextMessages = []
+
+      if (createdNewConversation) {
+        const welcome = createWelcomeMessage()
+        const savedWelcome = await insertChatMessage(
+          conversation.id,
+          'assistant',
+          welcome.text,
+        )
+        nextMessages = [savedWelcome]
+      } else {
+        const { data: messageRows, error: messagesLoadError } = await supabase
+          .from('chat_messages')
+          .select(CHAT_MESSAGE_SELECT)
+          .eq('conversation_id', conversation.id)
+          .order('created_at', { ascending: true })
+
+        if (messagesLoadError) throw messagesLoadError
+        nextMessages = (messageRows || []).map(mapDbMessage)
+
+        if (nextMessages.length === 0) {
+          const welcome = createWelcomeMessage()
+          const savedWelcome = await insertChatMessage(
+            conversation.id,
+            'assistant',
+            welcome.text,
+          )
+          nextMessages = [savedWelcome]
+        }
+      }
+
+      setConversationId(conversation.id)
+      loadedConversationUserIdRef.current = user.id
+      setMessages(nextMessages)
+      setQuickActionsState(nextMessages.length > 1 ? 'hidden' : 'visible')
+      setWaitingForAdmin(nextMessages.some((message) => message.id?.toString().startsWith('bot-admin-wait-')))
+      if (isOpenRef.current) {
+        await markCurrentConversationRead(conversation.id)
+      } else {
+        await refreshUnreadCount(conversation.id)
+      }
+    } catch (error) {
+      console.error('[CHATBOT] load authenticated conversation:', error)
+      setChatError('Unable to load your saved conversation. Please try again.')
+    } finally {
+      loadingConversationForUserRef.current = null
+      setChatLoading(false)
+    }
+  }, [markCurrentConversationRead, refreshUnreadCount])
+
   const updateMessages = useCallback((getNextMessages) => {
     setMessages((currentMessages) => {
       const nextMessages =
@@ -255,10 +503,115 @@ function Chatbot({ onNavigate, onTrackOrder, isCustomerAuthenticated = false }) 
           ? getNextMessages(currentMessages)
           : getNextMessages
 
-      persistMessages(nextMessages)
+      if (!authUserRef.current?.id) {
+        persistMessages(nextMessages)
+      }
+
       return nextMessages
     })
   }, [])
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadSession() {
+      const { data, error } = await supabase.auth.getSession()
+
+      if (!isMounted) return
+
+      if (error) {
+        console.error('[CHATBOT] session error:', error)
+        setAuthUser(null)
+        setAuthRole(null)
+        return
+      }
+
+      setAuthRole(null)
+      setAuthUser(data?.session?.user || null)
+    }
+
+    loadSession()
+
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      const nextUser = session?.user || null
+
+      if (!nextUser) {
+        setAuthUser(null)
+        setAuthRole(null)
+        loadedConversationUserIdRef.current = null
+        setConversationId(null)
+        setUnreadCount(0)
+        setChatLoading(false)
+        setChatError('')
+        window.sessionStorage.removeItem(chatbotWaitingForAdminKey)
+        window.sessionStorage.removeItem(chatbotAdminHandoffKey)
+        setMessages(getStoredMessages())
+        setWaitingForAdmin(false)
+        setQuickActionsState('visible')
+        return
+      }
+
+      setAuthRole(null)
+      setAuthUser(nextUser)
+    })
+
+    return () => {
+      isMounted = false
+      listener?.subscription?.unsubscribe()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!authUser?.id) {
+      return
+    }
+
+    loadAuthenticatedConversation(authUser)
+  }, [authUser, loadAuthenticatedConversation])
+
+  useEffect(() => {
+    if (!conversationId || !isAuthenticatedChat) {
+      return undefined
+    }
+
+    const channel = supabase
+      .channel(`customer-chat-messages-${conversationId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'chat_messages',
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload) => {
+          const nextMessage = mapDbMessage(payload.new)
+          setMessages((currentMessages) => {
+            if (currentMessages.some((message) => message.id === nextMessage.id)) {
+              return currentMessages
+            }
+
+            return [...currentMessages, nextMessage]
+          })
+
+          if (nextMessage.sender !== 'admin') {
+            return
+          }
+
+          if (isOpenRef.current) {
+            markCurrentConversationRead(conversationId)
+            return
+          }
+
+          refreshUnreadCount(conversationId)
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [conversationId, isAuthenticatedChat, markCurrentConversationRead, refreshUnreadCount])
 
   const addReplyWithQuickActions = (botMessage) => {
     updateMessages((currentMessages) => [...currentMessages, botMessage])
@@ -273,7 +626,46 @@ function Chatbot({ onNavigate, onTrackOrder, isCustomerAuthenticated = false }) 
     replyTimeoutsRef.current.push(quickActionsTimeout)
   }
 
-  const addConversationMessages = (customerText, action) => {
+  const addConversationMessages = async (customerText, action) => {
+    if (isAuthenticatedChat && conversationIdRef.current) {
+      try {
+        const savedCustomerMessage = await insertChatMessage(
+          conversationIdRef.current,
+          'customer',
+          customerText,
+        )
+
+        updateMessages((currentMessages) => [...currentMessages, savedCustomerMessage])
+
+        const replyTimeout = window.setTimeout(async () => {
+          try {
+            const savedBotMessage = await insertChatMessage(
+              conversationIdRef.current,
+              'assistant',
+              action.response,
+              { actionId: action.href || action.action ? action.id : null },
+            )
+
+            addReplyWithQuickActions(savedBotMessage)
+          } catch (error) {
+            console.error('[CHATBOT] save assistant reply:', error)
+            setChatError('Unable to save the assistant reply. Please try again.')
+          } finally {
+            replyTimeoutsRef.current = replyTimeoutsRef.current.filter(
+              (timeoutId) => timeoutId !== replyTimeout,
+            )
+          }
+        }, 350)
+
+        replyTimeoutsRef.current.push(replyTimeout)
+      } catch (error) {
+        console.error('[CHATBOT] save customer message:', error)
+        setChatError('Unable to send your message. Please try again.')
+      }
+
+      return
+    }
+
     const customerMessageId = nextMessageId.current
     const botMessageId = nextMessageId.current + 1
 
@@ -324,7 +716,39 @@ function Chatbot({ onNavigate, onTrackOrder, isCustomerAuthenticated = false }) 
     persistMessages(nextMessages)
   }
 
-  const startAdminHandoff = (customerText) => {
+  const startAdminHandoff = async (customerText) => {
+    if (isAuthenticatedChat && conversationIdRef.current) {
+      try {
+        const savedCustomerMessage = await insertChatMessage(
+          conversationIdRef.current,
+          'customer',
+          customerText,
+        )
+        const nextMessages = [...messages, savedCustomerMessage]
+
+        if (waitingForAdmin) {
+          setMessages(nextMessages)
+          return
+        }
+
+        setWaitingForAdmin(true)
+        const acknowledgement = createAdminAcknowledgementMessage()
+        const savedAcknowledgement = await insertChatMessage(
+          conversationIdRef.current,
+          'assistant',
+          acknowledgement.text,
+        )
+
+        setMessages([...nextMessages, savedAcknowledgement])
+        setQuickActionsState('hidden')
+      } catch (error) {
+        console.error('[CHATBOT] save admin handoff:', error)
+        setChatError('Unable to send your message. Please try again.')
+      }
+
+      return
+    }
+
     const customerMessageId = nextMessageId.current
     nextMessageId.current += 1
 
@@ -454,6 +878,20 @@ function Chatbot({ onNavigate, onTrackOrder, isCustomerAuthenticated = false }) 
       return
     }
 
+    if (isCustomerCustomizationRoute(cta.href) && !customerIsAuthenticated) {
+      setAuthReturnTo(cta.href)
+      const loginTarget = `/login?redirect=${encodeURIComponent(cta.href)}`
+
+      if (onNavigate) {
+        onNavigate(loginTarget)
+        return
+      }
+
+      window.history.pushState({}, '', loginTarget)
+      window.dispatchEvent(new PopStateEvent('popstate'))
+      return
+    }
+
     if (onNavigate) {
       onNavigate(cta.href)
       return
@@ -474,9 +912,40 @@ function Chatbot({ onNavigate, onTrackOrder, isCustomerAuthenticated = false }) 
   }
 
   useEffect(() => {
+    if (!isOpen || !conversationId || !isAuthenticatedChat) {
+      return
+    }
+
+    markCurrentConversationRead(conversationId)
+  }, [conversationId, isAuthenticatedChat, isOpen, markCurrentConversationRead])
+
+  useEffect(() => {
     const shouldReturnToChat =
       window.sessionStorage.getItem(returnToChatAfterLoginKey) === 'true'
     const pendingMessage = window.sessionStorage.getItem(pendingChatMessageKey)
+
+    if (shouldReturnToChat && pendingMessage && isAuthenticatedChat) {
+      if (!conversationId) {
+        return undefined
+      }
+
+      const restoreTimeout = window.setTimeout(() => {
+        setIsOpen(true)
+        setIsMaximized(false)
+        setQuickActionsState('hidden')
+        window.sessionStorage.removeItem(pendingChatMessageKey)
+        window.sessionStorage.removeItem(returnToChatAfterLoginKey)
+        startAdminHandoff(pendingMessage)
+      }, 0)
+
+      return () => {
+        window.clearTimeout(restoreTimeout)
+      }
+    }
+
+    if (shouldReturnToChat && pendingMessage && customerIsAuthenticated && !isAuthenticatedChat) {
+      return undefined
+    }
 
     if (!shouldReturnToChat || !pendingMessage || !customerIsAuthenticated) {
       return undefined
@@ -528,11 +997,13 @@ function Chatbot({ onNavigate, onTrackOrder, isCustomerAuthenticated = false }) 
     return () => {
       window.clearTimeout(restoreTimeout)
     }
-  }, [customerIsAuthenticated, updateMessages])
+  }, [conversationId, customerIsAuthenticated, isAuthenticatedChat, updateMessages])
 
   useEffect(() => {
-    persistMessages(messages)
-  }, [messages])
+    if (!isAuthenticatedChat) {
+      persistMessages(messages)
+    }
+  }, [isAuthenticatedChat, messages])
 
   const canScrollChatHistory = (scrollContainer, deltaY) => {
     if (!scrollContainer) {
@@ -623,6 +1094,14 @@ function Chatbot({ onNavigate, onTrackOrder, isCustomerAuthenticated = false }) 
     }
   }, [isOpen, messages, quickActionsState])
 
+  const unreadBadgeLabel = unreadCount > 9 ? '9+' : String(unreadCount)
+  const launcherAriaLabel =
+    !isOpen && unreadCount > 0
+      ? `Open Sweet Bakes chat, ${unreadCount} unread ${unreadCount === 1 ? 'message' : 'messages'}`
+      : isOpen
+        ? 'Close Sweet Bakes chat'
+        : 'Open Sweet Bakes chat'
+
   return (
     <aside
       ref={chatbotRef}
@@ -696,6 +1175,12 @@ function Chatbot({ onNavigate, onTrackOrder, isCustomerAuthenticated = false }) 
 
         <div className="chatbot-messages" aria-live="polite">
           <div className="chatbot-date-separator">Today</div>
+          {chatLoading ? (
+            <div className="chatbot-date-separator">Loading conversation...</div>
+          ) : null}
+          {chatError ? (
+            <div className="chatbot-date-separator">{chatError}</div>
+          ) : null}
           {messages.map((message) => {
             const messageAction = message.actionId ? getActionById(message.actionId) : null
             const messageCta = message.cta
@@ -777,10 +1262,15 @@ function Chatbot({ onNavigate, onTrackOrder, isCustomerAuthenticated = false }) 
       <button
         className="chatbot-toggle"
         type="button"
-        aria-label={isOpen ? 'Close Sweet Bakes chat' : 'Open Sweet Bakes chat'}
+        aria-label={launcherAriaLabel}
         aria-expanded={isOpen}
         onClick={handleOpen}
       >
+        {!isOpen && unreadCount > 0 ? (
+          <span className="chatbot-unread-badge" aria-hidden="true">
+            {unreadBadgeLabel}
+          </span>
+        ) : null}
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path
             d="M5 6.5C5 5.12 6.12 4 7.5 4H16.5C17.88 4 19 5.12 19 6.5V13.5C19 14.88 17.88 16 16.5 16H11L6.5 20V16H7.5C6.12 16 5 14.88 5 13.5V6.5Z"

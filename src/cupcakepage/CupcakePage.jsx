@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { SiteFooter, SiteTopbar } from '../landingpage/LandingPage.jsx'
 import CupcakeAvailabilityCalendar from './components/CupcakeAvailabilityCalendar.jsx'
 import CupcakeBaseForm from './components/CupcakeBaseForm.jsx'
@@ -11,6 +11,20 @@ import CupcakeReviewForm from './components/CupcakeReviewForm.jsx'
 import CupcakeSuccessModal from './components/CupcakeSuccessModal.jsx'
 import CupcakeTabs from './components/CupcakeTabs.jsx'
 import StepProgress from './components/StepProgress.jsx'
+import { useAvailability } from '../hooks/useAvailability.js'
+import { assertCanAcceptOrderForDate } from '../admin/services/availabilityService.js'
+import {
+  clearCustomDraft,
+  getCustomDraftScope,
+  loadCustomDraft,
+  saveCustomDraft,
+  subscribeToCustomDraftAuth,
+} from '../services/customDraftService.js'
+import {
+  refreshCupcakeReferenceUrls,
+  removeCupcakeReference,
+  uploadCupcakeReferenceImages,
+} from './services/cupcakeReferenceService.js'
 import './CupcakePage.css'
 
 const cupcakeRequestsStorageKey = 'sweetbakes:cake-requests'
@@ -33,6 +47,13 @@ const defaultCustomerInfo = {
   contactNumber: '',
   email: '',
   fulfillment: '',
+  customerFirstName: '',
+  customerLastName: '',
+  province: 'Cavite',
+  city: '',
+  barangay: '',
+  address: '',
+  apartment: '',
   deliverDifferentRecipient: false,
   recipientFirstName: '',
   recipientLastName: '',
@@ -88,6 +109,83 @@ function CupcakePage({
   const [step3Touched, setStep3Touched] = useState({})
   const [submissionError, setSubmissionError] = useState('')
   const [submittedRequest, setSubmittedRequest] = useState(null)
+  const [isDraftLoaded, setIsDraftLoaded] = useState(false)
+  const draftScopeRef = useRef(null)
+  const draftLoadVersionRef = useRef(0)
+  const availability = useAvailability()
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function restoreDraft(scope, reset = false) {
+      const loadVersion = ++draftLoadVersionRef.current
+
+      if (reset) {
+        setIsDraftLoaded(false)
+        setCurrentStep(1)
+        setSelections(defaultSelections)
+        setDesignDetails(defaultDesignDetails)
+        setCustomerInfo(defaultCustomerInfo)
+      }
+
+      const draft = await loadCustomDraft('cupcake', scope)
+      let referenceImages = draft?.designDetails?.cupcakeReferenceImages || []
+
+      if (referenceImages.length) {
+        try {
+          referenceImages = await refreshCupcakeReferenceUrls(referenceImages)
+        } catch (error) {
+          console.error('[CUPCAKE REFERENCES] restore failed:', error)
+        }
+      }
+
+      if (!isMounted || loadVersion !== draftLoadVersionRef.current) return
+
+      draftScopeRef.current = scope
+      if (draft) {
+        setCurrentStep(draft.currentStep || 1)
+        setSelections((current) => ({ ...current, ...(draft.selections || {}) }))
+        setDesignDetails((current) => ({
+          ...current,
+          ...(draft.designDetails || {}),
+          cupcakeReferenceImages: referenceImages,
+        }))
+        setCustomerInfo((current) => ({ ...current, ...(draft.customerInfo || {}) }))
+      }
+      setIsDraftLoaded(true)
+    }
+
+    getCustomDraftScope().then((scope) => restoreDraft(scope)).catch((error) => {
+      console.error('[CUPCAKE DRAFT] restore failed:', error)
+      if (isMounted) setIsDraftLoaded(true)
+    })
+
+    const unsubscribe = subscribeToCustomDraftAuth((scope) => {
+      if (scope === draftScopeRef.current) return
+      restoreDraft(scope, true).catch((error) => {
+        console.error('[CUPCAKE DRAFT] account restore failed:', error)
+        if (isMounted) setIsDraftLoaded(true)
+      })
+    })
+
+    return () => {
+      isMounted = false
+      unsubscribe()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isDraftLoaded || !draftScopeRef.current) return undefined
+
+    saveCustomDraft('cupcake', draftScopeRef.current, {
+      currentStep,
+      selections,
+      designDetails,
+      customerInfo,
+    })
+
+    return undefined
+  }, [isDraftLoaded, currentStep, selections, designDetails, customerInfo])
 
   const goToStep = (nextStep) => {
     setCurrentStep(nextStep)
@@ -98,6 +196,68 @@ function CupcakePage({
         behavior: 'auto',
       })
     })
+  }
+
+  const saveReferenceDraft = (referenceImages) => saveCustomDraft(
+    'cupcake',
+    draftScopeRef.current,
+    {
+      currentStep,
+      selections,
+      designDetails: { ...designDetails, cupcakeReferenceImages: referenceImages },
+      customerInfo,
+    },
+  )
+
+  const handleReferenceImagesChange = async (nextImages) => {
+    const existingReferences = designDetails.cupcakeReferenceImages.filter((reference) => reference?.path)
+    const files = nextImages.filter((reference) => reference instanceof File)
+
+    if (files.length) {
+      const optimisticReferences = [
+        ...existingReferences,
+        ...files.map((file) => ({
+          file,
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          previewUrl: URL.createObjectURL(file),
+          status: 'uploading',
+        })),
+      ]
+      setDesignDetails((current) => ({ ...current, cupcakeReferenceImages: optimisticReferences }))
+
+      try {
+        const uploadedReferences = await uploadCupcakeReferenceImages(files, existingReferences)
+        setDesignDetails((current) => ({
+          ...current,
+          cupcakeReferenceImages: uploadedReferences,
+        }))
+        await saveReferenceDraft(uploadedReferences)
+      } catch (error) {
+        console.error('[CUPCAKE REFERENCES] upload failed:', error)
+        setDesignDetails((current) => ({ ...current, cupcakeReferenceImages: existingReferences }))
+      }
+      return
+    }
+
+    const nextPaths = new Set(nextImages.map((reference) => reference?.path).filter(Boolean))
+    const removedReferences = existingReferences.filter((reference) => !nextPaths.has(reference.path))
+    let remainingReferences = existingReferences
+
+    try {
+      for (const reference of removedReferences) {
+        remainingReferences = remainingReferences.filter((item) => item.path !== reference.path)
+        await removeCupcakeReference(reference, remainingReferences)
+      }
+      setDesignDetails((current) => ({
+        ...current,
+        cupcakeReferenceImages: remainingReferences,
+      }))
+      await saveReferenceDraft(remainingReferences)
+    } catch (error) {
+      console.error('[CUPCAKE REFERENCES] remove failed:', error)
+    }
   }
 
   const isSubmissionComplete = () => {
@@ -117,13 +277,18 @@ function CupcakePage({
         emailPattern.test(customerInfo.email.trim()) &&
         customerInfo.fulfillment &&
         customerInfo.preferredDate &&
+        !availability.loading &&
+        !availability.error &&
+        availability.settings &&
+        availability.isDateAvailable(customerInfo.preferredDate) &&
         preferredTime &&
+        availability.isTimeAvailable(preferredTime) &&
         (customerInfo.fulfillment !== 'delivery' || customerInfo.deliveryAddress.trim()) &&
         customerInfo.agreement,
     )
   }
 
-  const handleSubmitRequest = () => {
+  const handleSubmitRequest = async () => {
     if (!isSubmissionComplete()) {
       setSubmissionError(
         'Required details are incomplete. Please go back and complete the missing information before submitting.',
@@ -143,17 +308,22 @@ function CupcakePage({
           theme: designDetails.cupcakeTheme,
           otherTheme: designDetails.cupcakeOtherTheme,
           specialInstructions: designDetails.cupcakeSpecialInstructions,
-          referenceImages: designDetails.cupcakeReferenceImages.map((file) => ({
-            name: file.name,
-            type: file.type,
-            size: file.size,
-            lastModified: file.lastModified,
+          referenceImages: designDetails.cupcakeReferenceImages
+            .filter((reference) => reference?.path)
+            .map(({ name, type, size, path, position }) => ({
+              name,
+              type,
+              size,
+              path,
+              position,
           })),
         },
         customerInfo,
       }
 
+      assertCanAcceptOrderForDate(customerInfo.preferredDate, availability.settings)
       saveSubmittedRequest(request)
+      await clearCustomDraft('cupcake', draftScopeRef.current)
       onRequestSubmitted?.(request.requestNumber)
       setSubmittedRequest(request)
       setSubmissionError('')
@@ -196,12 +366,7 @@ function CupcakePage({
           {currentStep === 2 ? (
             <CupcakeReferenceUpload
               referenceImages={designDetails.cupcakeReferenceImages}
-              onReferenceImagesChange={(files) =>
-                setDesignDetails((current) => ({
-                  ...current,
-                  cupcakeReferenceImages: files,
-                }))
-              }
+              onReferenceImagesChange={handleReferenceImagesChange}
             />
           ) : null}
           {currentStep === 4 ? (

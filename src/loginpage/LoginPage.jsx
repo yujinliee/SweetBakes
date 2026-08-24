@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import './LoginPage.css'
+import { ADMIN_DASHBOARD_ROUTE } from '../admin/adminRouteConstants.js'
+import { signInAdmin } from '../admin/auth/adminAuth.js'
+import { clearAuthReturnTo } from '../auth/authReturnTo.js'
+import { getCustomerRedirect, googleOAuthErrorMessage, startGoogleOAuth } from '../auth/googleOAuth.js'
 import { SiteTopbar } from '../landingpage/LandingPage.jsx'
-import { TEMP_ADMIN } from '../auth/tempAuth.js'
-import { setAdminAuthenticated } from '../admin/auth/adminAuth.js'
+import { supabase } from '../lib/supabase.js'
 
 function GoogleIcon() {
   return (
@@ -27,36 +30,84 @@ function GoogleIcon() {
   )
 }
 
-function LoginPage({ latestRequest, onTrackOrder, onNavigate, onCustomerLogin, isCustomerAuthenticated = false }) {
+function LoginPage({
+  latestRequest,
+  onTrackOrder,
+  onNavigate,
+  onCustomerLogin,
+  onCustomerLogout,
+  isCustomerAuthenticated = false,
+}) {
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false)
 
-  const handleGoogleLogin = () => {
-    console.log('Google authentication will be connected later.')
+  const handleGoogleLogin = async () => {
+    try {
+      setError('')
+      setIsGoogleSubmitting(true)
+      await startGoogleOAuth()
+    } catch (oauthError) {
+      console.error('[LOGIN] Google OAuth error:', oauthError)
+      setError(googleOAuthErrorMessage)
+      setIsGoogleSubmitting(false)
+    }
   }
 
-  const handleLoginSubmit = (event) => {
+  const handleLoginSubmit = async (event) => {
     event.preventDefault()
 
-    const trimmedEmail = email.trim()
-
-    if (trimmedEmail === TEMP_ADMIN.email && password === TEMP_ADMIN.password) {
-      setAdminAuthenticated()
-      setError('')
-      onNavigate?.('/admin/dashboard')
-      return
-    }
-
-    if (trimmedEmail === TEMP_ADMIN.email) {
-      setError('Invalid email or password.')
-      return
-    }
+    const trimmedEmail = email.trim().toLowerCase()
+    const redirectTarget = new URLSearchParams(window.location.search).get('redirect')
+    const safeCustomerTarget = getCustomerRedirect(redirectTarget)
 
     if (trimmedEmail && password) {
+      setIsSubmitting(true)
+      const adminResult = await signInAdmin(trimmedEmail, password)
+
+      if (adminResult.success) {
+        clearAuthReturnTo()
+
+        if (import.meta.env.DEV) {
+          console.log('[NAVIGATION] from /login admin auth ->', ADMIN_DASHBOARD_ROUTE)
+        }
+
+        setError('')
+        setIsSubmitting(false)
+        onNavigate?.(ADMIN_DASHBOARD_ROUTE, { replace: true })
+        return
+      }
+
+      const { data, error: customerAuthError } = await supabase.auth.signInWithPassword({
+        email: trimmedEmail,
+        password,
+      })
+
+      if (customerAuthError || !data?.user) {
+        setError('Invalid email or password.')
+        setIsSubmitting(false)
+        return
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', data.user.id)
+        .maybeSingle()
+
+      if (profileError || profile?.role !== 'customer') {
+        await supabase.auth.signOut()
+        setError('Invalid email or password.')
+        setIsSubmitting(false)
+        return
+      }
+
       setError('')
-      onCustomerLogin?.()
+      setIsSubmitting(false)
+      onCustomerLogin?.(safeCustomerTarget)
       return
     }
 
@@ -79,6 +130,7 @@ function LoginPage({ latestRequest, onTrackOrder, onNavigate, onCustomerLogin, i
         latestRequest={latestRequest}
         onTrackOrder={onTrackOrder}
         onNavigate={onNavigate}
+        onCustomerLogout={onCustomerLogout}
         isCustomerAuthenticated={isCustomerAuthenticated}
       />
 
@@ -102,6 +154,7 @@ function LoginPage({ latestRequest, onTrackOrder, onNavigate, onCustomerLogin, i
             <label className="login-field-group">
               <span>Email Address</span>
               <input
+                id="login-email"
                 className="login-field"
                 type="email"
                 name="email"
@@ -119,6 +172,7 @@ function LoginPage({ latestRequest, onTrackOrder, onNavigate, onCustomerLogin, i
               <span>Password</span>
               <span className="login-password-control">
                 <input
+                  id="login-password"
                   className="login-field login-field--password"
                   type={showPassword ? 'text' : 'password'}
                   name="password"
@@ -175,8 +229,8 @@ function LoginPage({ latestRequest, onTrackOrder, onNavigate, onCustomerLogin, i
             </p>
           ) : null}
 
-          <button className="login-submit" type="submit">
-            Sign In
+          <button className="login-submit" type="submit" disabled={isSubmitting}>
+            {isSubmitting ? 'Signing In...' : 'Sign In'}
           </button>
 
           <div className="login-divider">
@@ -187,9 +241,10 @@ function LoginPage({ latestRequest, onTrackOrder, onNavigate, onCustomerLogin, i
             type="button"
             className="google-login-button"
             onClick={handleGoogleLogin}
+            disabled={isGoogleSubmitting}
           >
             <GoogleIcon />
-            <span>Continue with Google</span>
+            <span>{isGoogleSubmitting ? 'Opening Google...' : 'Continue with Google'}</span>
           </button>
 
           <p className="login-create-account">

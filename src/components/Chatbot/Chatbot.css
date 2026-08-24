@@ -7,7 +7,7 @@
   height: 52px;
   max-width: calc(100vw - 32px);
   max-height: calc(100vh - 48px);
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid rgba(112, 78, 142, 0.24);
   border-radius: 50%;
   background: #8c6caf;
@@ -26,6 +26,7 @@
 .chatbot--open {
   width: 490px;
   height: 560px;
+  overflow: hidden;
   border-color: rgba(89, 65, 78, 0.1);
   border-radius: 22px;
   background: #fffdf9;
@@ -57,6 +58,26 @@
     opacity 90ms ease,
     transform 180ms ease,
     visibility 0ms linear 0ms;
+}
+
+.chatbot-unread-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  box-sizing: border-box;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: #e53935;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0 5px;
 }
 
 .chatbot--closed .chatbot-toggle {

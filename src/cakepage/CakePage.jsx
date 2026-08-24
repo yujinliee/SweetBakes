@@ -17,6 +17,25 @@ import CakeReviewForm from './components/CakeReviewForm.jsx'
 import CakeSuccessModal from './components/CakeSuccessModal.jsx'
 import CakeTabs from './components/CakeTabs.jsx'
 import StepProgress from './components/StepProgress.jsx'
+import { useAvailability } from '../hooks/useAvailability.js'
+import { assertCanAcceptOrderForDate } from '../admin/services/availabilityService.js'
+import {
+  createRequestUploadId,
+  completeCustomCakeDraft,
+  createCustomCakeOrderRequest,
+  fetchCustomCakeDraft,
+  mapCustomCakeSubmitError,
+  removeCustomCakeDraftReference,
+  saveCustomCakeDraft,
+  uploadCustomCakeDraftReferences,
+} from './services/customCakeOrderService.js'
+import {
+  clearCustomDraft,
+  getCustomDraftScope,
+  loadCustomDraft,
+  saveCustomDraft,
+  subscribeToCustomDraftAuth,
+} from '../services/customDraftService.js'
 import './CakePage.css'
 
 const cakePreviewMap = {
@@ -32,8 +51,6 @@ const cakePreviewMap = {
   },
 }
 
-const cakeDraftStorageKey = 'sweetbakes:cake-customization-draft'
-const cakeRequestsStorageKey = 'sweetbakes:cake-requests'
 const contactNumberPattern = /^\d{11}$/
 
 const defaultSelections = {
@@ -56,6 +73,11 @@ const defaultCustomerInfo = {
   contactNumber: '',
   email: '',
   fulfillment: '',
+  province: 'Cavite',
+  city: '',
+  barangay: '',
+  address: '',
+  apartment: '',
   deliverDifferentRecipient: false,
   recipientFirstName: '',
   recipientLastName: '',
@@ -69,118 +91,12 @@ const defaultCustomerInfo = {
   agreement: false,
 }
 
-const dataUrlToFile = (image) => {
-  const [header, base64Data] = image.dataUrl.split(',')
-  const mimeType = header.match(/data:(.*);base64/)?.[1] || image.type || 'image/png'
-  const binary = window.atob(base64Data)
-  const bytes = new Uint8Array(binary.length)
-
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index)
-  }
-
-  return new File([bytes], image.name, {
-    type: mimeType,
-    lastModified: image.lastModified,
-  })
-}
-
-const fileToDataUrl = (file) =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader()
-
-    reader.onload = () =>
-      resolve({
-        name: file.name,
-        type: file.type,
-        size: file.size,
-        lastModified: file.lastModified,
-        dataUrl: reader.result,
-      })
-    reader.onerror = () => reject(reader.error)
-    reader.readAsDataURL(file)
-  })
-
-const readCakeDraft = () => {
-  if (typeof window === 'undefined') {
-    return {}
-  }
-
-  try {
-    const savedDraft = window.localStorage.getItem(cakeDraftStorageKey)
-
-    if (!savedDraft) {
-      return {}
-    }
-
-    const parsedDraft = JSON.parse(savedDraft)
-    const referenceImages = Array.isArray(parsedDraft.designDetails?.referenceImages)
-      ? parsedDraft.designDetails.referenceImages
-          .filter((image) => image?.dataUrl && image?.name)
-          .map(dataUrlToFile)
-      : []
-
-    return {
-      currentStep:
-        Number.isInteger(parsedDraft.currentStep) &&
-        parsedDraft.currentStep >= 1 &&
-        parsedDraft.currentStep <= 4
-          ? parsedDraft.currentStep
-          : 1,
-      selections: {
-        ...defaultSelections,
-        ...parsedDraft.selections,
-      },
-      designDetails: {
-        ...defaultDesignDetails,
-        ...parsedDraft.designDetails,
-        referenceImages,
-      },
-      customerInfo: {
-        ...defaultCustomerInfo,
-        ...parsedDraft.customerInfo,
-      },
-      step2Touched: parsedDraft.step2Touched || {},
-      step3Touched: parsedDraft.step3Touched || {},
-    }
-  } catch {
-    return {}
-  }
-}
-
 const shouldStartAtStepOne = () => {
   if (typeof window === 'undefined') {
     return false
   }
 
   return new URLSearchParams(window.location.search).get('start') === '1'
-}
-
-const getSavedRequests = () => {
-  try {
-    return JSON.parse(window.localStorage.getItem(cakeRequestsStorageKey)) || []
-  } catch {
-    return []
-  }
-}
-
-const generateRequestNumber = (submittedAt) => {
-  const submittedDate = new Date(submittedAt)
-  const year = submittedDate.getFullYear()
-  const month = String(submittedDate.getMonth() + 1).padStart(2, '0')
-  const day = String(submittedDate.getDate()).padStart(2, '0')
-  const sequence = String(getSavedRequests().length + 1).padStart(4, '0')
-
-  return `SB-${year}${month}${day}-${sequence}`
-}
-
-const saveSubmittedRequest = (request) => {
-  const existingRequests = getSavedRequests()
-
-  window.localStorage.setItem(
-    cakeRequestsStorageKey,
-    JSON.stringify([...existingRequests, request]),
-  )
 }
 
 function CakePage({
@@ -191,22 +107,119 @@ function CakePage({
   onProductChange,
 }) {
   const [shouldCleanStartUrl] = useState(shouldStartAtStepOne)
-  const [savedDraft] = useState(() => {
-    const draft = readCakeDraft()
-
-    return shouldStartAtStepOne() ? { ...draft, currentStep: 1 } : draft
-  })
-  const [currentStep, setCurrentStep] = useState(savedDraft.currentStep || 1)
-  const visitedStepsRef = useRef(new Set([savedDraft.currentStep || 1]))
-  const stepScrollPositionsRef = useRef({ [savedDraft.currentStep || 1]: 0 })
-  const [selections, setSelections] = useState(savedDraft.selections || defaultSelections)
-  const [designDetails, setDesignDetails] = useState(
-    savedDraft.designDetails || defaultDesignDetails,
-  )
-  const [customerInfo, setCustomerInfo] = useState(savedDraft.customerInfo || defaultCustomerInfo)
-  const [step2Touched, setStep2Touched] = useState(savedDraft.step2Touched || {})
-  const [step3Touched, setStep3Touched] = useState(savedDraft.step3Touched || {})
+  const [currentStep, setCurrentStep] = useState(1)
+  const visitedStepsRef = useRef(new Set([1]))
+  const stepScrollPositionsRef = useRef({ 1: 0 })
+  const requestUploadIdRef = useRef(createRequestUploadId())
+  const draftIdRef = useRef(null)
+  const draftSaveQueueRef = useRef(Promise.resolve())
+  const draftScopeRef = useRef(null)
+  const draftLoadVersionRef = useRef(0)
+  const localReferenceUrlsRef = useRef(new Set())
+  const [isDraftLoaded, setIsDraftLoaded] = useState(false)
+  const [selections, setSelections] = useState(defaultSelections)
+  const [designDetails, setDesignDetails] = useState(defaultDesignDetails)
+  const [customerInfo, setCustomerInfo] = useState(defaultCustomerInfo)
+  const [step2Touched, setStep2Touched] = useState({})
+  const [step3Touched, setStep3Touched] = useState({})
   const [submittedRequest, setSubmittedRequest] = useState(null)
+  const [isSubmittingRequest, setIsSubmittingRequest] = useState(false)
+  const [isUploadingReferences, setIsUploadingReferences] = useState(false)
+  const [submissionError, setSubmissionError] = useState('')
+  const availability = useAvailability()
+
+  useEffect(() => () => {
+    localReferenceUrlsRef.current.forEach((url) => URL.revokeObjectURL(url))
+    localReferenceUrlsRef.current.clear()
+  }, [])
+
+  useEffect(() => {
+    let isActive = true
+
+    async function restoreCakeDraft(scope, reset = false) {
+      const loadVersion = ++draftLoadVersionRef.current
+
+      if (reset) {
+        if (import.meta.env.DEV) console.log('[CAKE DRAFT] reset', 'auth scope changed')
+        setIsDraftLoaded(false)
+        setCurrentStep(1)
+        setSelections(defaultSelections)
+        setDesignDetails(defaultDesignDetails)
+        setCustomerInfo(defaultCustomerInfo)
+        draftIdRef.current = null
+      }
+
+      const [localResult, remoteResult] = await Promise.allSettled([
+        loadCustomDraft('cake', scope),
+        fetchCustomCakeDraft(),
+      ])
+
+      if (!isActive || loadVersion !== draftLoadVersionRef.current) return
+
+      const localDraft = localResult.status === 'fulfilled' ? localResult.value : null
+      const remoteDraft = remoteResult.status === 'fulfilled' ? remoteResult.value : null
+      const draft = localDraft || remoteDraft
+
+      if (localResult.status === 'rejected') {
+        console.error('[CAKE DRAFT] local restore failed:', localResult.reason)
+      }
+      if (remoteResult.status === 'rejected') {
+        console.error('[CAKE DRAFT] storage restore failed:', remoteResult.reason)
+      }
+
+      draftScopeRef.current = scope
+
+      if (draft) {
+        draftIdRef.current = remoteDraft?.id || null
+        if (!shouldStartAtStepOne()) {
+          setCurrentStep(draft.currentStep || draft.current_step || 1)
+        }
+        setSelections((current) => ({ ...current, ...(draft.selections || {}) }))
+        setDesignDetails((current) => ({
+          ...current,
+          ...(draft.designDetails || draft.design_details || {}),
+          referenceImages: remoteDraft?.reference_images || [],
+        }))
+        setCustomerInfo((current) => ({
+          ...current,
+          ...(draft.customerInfo || draft.customer_info || {}),
+        }))
+      }
+
+      if (import.meta.env.DEV) {
+        console.log('[CAKE DRAFT] auth resolved', scope)
+        console.log('[CAKE DRAFT] key', `sweetbakes_custom_draft:cake:${scope}`)
+        console.log('[CAKE DRAFT] raw saved', {
+          local: Boolean(localDraft),
+          storage: Boolean(remoteDraft),
+        })
+        console.log('[CAKE DRAFT] restored', Boolean(draft))
+        console.log('[CAKE DRAFT] current step restored', draft?.currentStep || draft?.current_step || 1)
+      }
+
+      setIsDraftLoaded(true)
+    }
+
+    getCustomDraftScope()
+      .then((scope) => restoreCakeDraft(scope))
+      .catch((error) => {
+        console.error('[CAKE DRAFT] auth/restore failed:', error)
+        if (isActive) setIsDraftLoaded(true)
+      })
+
+    const unsubscribe = subscribeToCustomDraftAuth((scope) => {
+      if (scope === draftScopeRef.current) return
+      restoreCakeDraft(scope, true).catch((error) => {
+        console.error('[CAKE DRAFT] account restore failed:', error)
+        if (isActive) setIsDraftLoaded(true)
+      })
+    })
+
+    return () => {
+      isActive = false
+      unsubscribe()
+    }
+  }, [])
 
   useEffect(() => {
     if (!shouldCleanStartUrl) {
@@ -293,14 +306,32 @@ function CakePage({
         ? { email: true }
         : {}),
       ...(!customerInfo.fulfillment ? { fulfillment: true } : {}),
-      ...(!customerInfo.preferredDate ? { preferredDate: true } : {}),
+      ...(
+        availability.loading ||
+        availability.error ||
+        !availability.settings ||
+        !customerInfo.preferredDate ||
+        !availability.isDateAvailable(customerInfo.preferredDate)
+          ? { preferredDate: true }
+          : {}
+      ),
       ...(customerInfo.fulfillment === 'pickup' && !customerInfo.preferredPickupTime
+        ? { preferredPickupTime: true }
+        : {}),
+      ...(customerInfo.fulfillment === 'pickup' &&
+      customerInfo.preferredPickupTime &&
+      !availability.isTimeAvailable(customerInfo.preferredPickupTime)
         ? { preferredPickupTime: true }
         : {}),
       ...(customerInfo.fulfillment === 'delivery' && !customerInfo.deliveryAddress.trim()
         ? { deliveryAddress: true }
         : {}),
       ...(customerInfo.fulfillment === 'delivery' && !customerInfo.preferredDeliveryTime
+        ? { preferredDeliveryTime: true }
+        : {}),
+      ...(customerInfo.fulfillment === 'delivery' &&
+      customerInfo.preferredDeliveryTime &&
+      !availability.isTimeAvailable(customerInfo.preferredDeliveryTime)
         ? { preferredDeliveryTime: true }
         : {}),
       ...(customerInfo.fulfillment === 'delivery' &&
@@ -356,7 +387,17 @@ function CakePage({
     return firstStep3Field ? { step: 3, field: firstStep3Field } : null
   }
 
-  const handleSubmitRequest = () => {
+  const handleSubmitRequest = async () => {
+    if (isSubmittingRequest) {
+      return
+    }
+
+    if (isUploadingReferences) {
+      setSubmissionError('Please wait for your reference images to finish uploading.')
+      return
+    }
+
+    setSubmissionError('')
     const step2Errors = getStep2Errors()
     const step3Errors = getStep3Errors()
     const invalidField = findInvalidSubmissionField(step2Errors, step3Errors)
@@ -378,87 +419,200 @@ function CakePage({
     }
 
     try {
-      const submittedAt = new Date().toISOString()
+      assertCanAcceptOrderForDate(customerInfo.preferredDate, availability.settings)
+      setIsSubmittingRequest(true)
+
+      const { order, referenceImages } = await createCustomCakeOrderRequest({
+        selections,
+        designDetails,
+        customerInfo,
+        referenceImages: designDetails.referenceImages,
+      })
+      const submittedAt = order?.created_at || new Date().toISOString()
       const request = {
-        requestNumber: generateRequestNumber(submittedAt),
+        requestNumber: order?.order_number,
         submittedAt,
-        status: 'Pending Review',
+        status: 'Pending',
         selections,
         designDetails: {
           ...designDetails,
-          referenceImages: designDetails.referenceImages.map((file) => ({
-            name: file.name,
-            type: file.type,
-            size: file.size,
-            lastModified: file.lastModified,
-          })),
+          referenceImages,
         },
         customerInfo,
       }
 
-      saveSubmittedRequest(request)
       onRequestSubmitted?.(request.requestNumber)
       setSubmittedRequest(request)
-    } catch {
-      // Keep the user on the review step if local saving fails; no success modal is shown.
+      try {
+        await completeCustomCakeDraft(draftIdRef.current)
+      } catch (draftError) {
+        console.error('[CUSTOM CAKE DRAFT] complete failed:', draftError)
+      }
+      await clearCustomDraft('cake', draftScopeRef.current)
+      requestUploadIdRef.current = createRequestUploadId()
+    } catch (error) {
+      console.error('[CUSTOM CAKE REQUEST]', error)
+      setSubmissionError(mapCustomCakeSubmitError(error?.message))
+    } finally {
+      setIsSubmittingRequest(false)
     }
   }
 
   useEffect(() => {
-    let isActive = true
+    if (!isDraftLoaded || !draftScopeRef.current) return undefined
 
-    const saveDraft = async () => {
-      try {
-        const referenceImages = await Promise.all(
-          designDetails.referenceImages.map((file) => fileToDataUrl(file)),
+    saveCustomDraft('cake', draftScopeRef.current, {
+      currentStep,
+      selections,
+      designDetails: {
+        ...designDetails,
+        referenceImages: [],
+      },
+      customerInfo,
+    })
+
+    if (import.meta.env.DEV) {
+      console.log('[CAKE DRAFT] autosave', {
+        currentStep,
+        scope: draftScopeRef.current,
+      })
+    }
+
+    draftSaveQueueRef.current = draftSaveQueueRef.current
+      .then(async () => {
+        const saved = await saveCustomCakeDraft({
+          draftId: draftIdRef.current,
+          currentStep,
+          selections,
+          designDetails,
+          customerInfo,
+          referenceImages: designDetails.referenceImages,
+        })
+        draftIdRef.current = saved.id
+      })
+      .catch((error) => {
+        console.error('[CUSTOM CAKE DRAFT] save failed:', error)
+      })
+
+    return undefined
+  }, [isDraftLoaded, currentStep, selections, designDetails, customerInfo])
+
+  const handleReferenceImagesChange = async (nextImages) => {
+    const files = nextImages.filter((item) => item instanceof File)
+    const currentReferences = designDetails.referenceImages || []
+    const remoteReferences = currentReferences.filter((item) => item?.path)
+    let optimisticReferences = []
+
+    try {
+      setIsUploadingReferences(true)
+      if (files.length) {
+        optimisticReferences = files.map((file) => {
+          const previewUrl = URL.createObjectURL(file)
+          localReferenceUrlsRef.current.add(previewUrl)
+          return {
+            file,
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            previewUrl,
+            status: 'uploading',
+          }
+        })
+        setDesignDetails((current) => ({
+          ...current,
+          referenceImages: [...current.referenceImages, ...optimisticReferences],
+        }))
+
+        const result = await uploadCustomCakeDraftReferences(
+          files,
+          draftIdRef.current,
+          remoteReferences,
+          { currentStep, selections, designDetails, customerInfo },
         )
-
-        if (!isActive) {
-          return
-        }
-
-        window.localStorage.setItem(
-          cakeDraftStorageKey,
-          JSON.stringify({
-            currentStep,
-            selections,
-            designDetails: {
-              ...designDetails,
-              referenceImages,
-            },
-            customerInfo,
-            step2Touched,
-            step3Touched,
-          }),
-        )
-      } catch {
-        try {
-          window.localStorage.setItem(
-            cakeDraftStorageKey,
-            JSON.stringify({
-              currentStep,
-              selections,
-              designDetails: {
-                ...designDetails,
-                referenceImages: [],
-              },
-              customerInfo,
-              step2Touched,
-              step3Touched,
-            }),
+        draftIdRef.current = result.draftId
+        const remainingLocalPreviews = [...optimisticReferences]
+        const uploadedReferences = result.referenceImages.map((reference) => {
+          const localIndex = remainingLocalPreviews.findIndex(
+            (localReference) =>
+              localReference.name === reference.name && localReference.size === reference.size,
           )
-        } catch {
-          // Ignore storage quota or privacy-mode failures; the form still works in memory.
-        }
+          const localReference = localIndex >= 0 ? remainingLocalPreviews.splice(localIndex, 1)[0] : null
+          return {
+            ...reference,
+            file: null,
+            previewUrl: localReference?.previewUrl || reference.previewUrl,
+            persistentPreviewUrl: reference.previewUrl,
+            status: 'uploaded',
+          }
+        })
+        setDesignDetails((current) => ({
+          ...current,
+          referenceImages: [
+            ...current.referenceImages.filter(
+              (reference) => !optimisticReferences.some((item) => item.file === reference.file),
+            ),
+            ...uploadedReferences,
+          ],
+        }))
+        return
       }
-    }
 
-    saveDraft()
-
-    return () => {
-      isActive = false
+      const removed = remoteReferences.filter(
+        (reference) => !nextImages.some((item) => item?.path === reference.path),
+      )
+      const removedTransient = currentReferences.filter(
+        (reference) =>
+          !reference.path &&
+          !(reference instanceof File) &&
+          !nextImages.includes(reference),
+      )
+      removedTransient.forEach((reference) => {
+        if (reference.previewUrl && localReferenceUrlsRef.current.has(reference.previewUrl)) {
+          URL.revokeObjectURL(reference.previewUrl)
+          localReferenceUrlsRef.current.delete(reference.previewUrl)
+        }
+      })
+      let remaining = remoteReferences
+      for (const reference of removed) {
+        if (reference.previewUrl && localReferenceUrlsRef.current.has(reference.previewUrl)) {
+          URL.revokeObjectURL(reference.previewUrl)
+          localReferenceUrlsRef.current.delete(reference.previewUrl)
+        }
+        remaining = await removeCustomCakeDraftReference(
+          reference.path,
+          draftIdRef.current,
+          remaining,
+          { currentStep, selections, designDetails, customerInfo },
+        )
+      }
+      const remainingTransient = nextImages.filter(
+        (item) => !(item instanceof File) && !item?.path,
+      )
+      setDesignDetails((current) => ({
+        ...current,
+        referenceImages: [...remaining, ...remainingTransient],
+      }))
+    } catch (error) {
+      console.error('[CUSTOM CAKE DRAFT] reference update failed:', error)
+      const errorReferences = optimisticReferences.map((reference) => ({
+        ...reference,
+        file: null,
+        status: 'error',
+      }))
+      setDesignDetails((current) => ({
+        ...current,
+        referenceImages: [
+          ...current.referenceImages.filter(
+            (reference) => !optimisticReferences.some((item) => item.previewUrl === reference.previewUrl),
+          ),
+          ...errorReferences,
+        ],
+      }))
+      setSubmissionError(mapCustomCakeSubmitError(error?.message))
+    } finally {
+      setIsUploadingReferences(false)
     }
-  }, [currentStep, selections, designDetails, customerInfo, step2Touched, step3Touched])
+  }
 
   const customizationContent = (
     <>
@@ -480,12 +634,7 @@ function CakePage({
           {currentStep === 2 ? (
             <CakeReferenceUpload
               referenceImages={designDetails.referenceImages}
-              onReferenceImagesChange={(files) =>
-                setDesignDetails((current) => ({
-                  ...current,
-                  referenceImages: files,
-                }))
-              }
+              onReferenceImagesChange={handleReferenceImagesChange}
             />
           ) : null}
           {currentStep === 3 ? (
@@ -527,6 +676,7 @@ function CakePage({
           <CakeCustomerForm
             customerInfo={customerInfo}
             onCustomerInfoChange={setCustomerInfo}
+            isDraftLoaded={isDraftLoaded}
             validationTouched={step3Touched}
             onValidationTouchedChange={setStep3Touched}
             onBack={() => goToStep(2)}
@@ -539,6 +689,8 @@ function CakePage({
             customerInfo={customerInfo}
             onBack={() => goToStep(3)}
             onSubmit={handleSubmitRequest}
+            isSubmitting={isSubmittingRequest}
+            submissionError={submissionError}
           />
         )}
       </div>

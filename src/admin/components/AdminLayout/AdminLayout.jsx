@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import AdminSidebar from '../AdminSidebar/AdminSidebar.jsx'
 import AdminTopbar from '../AdminTopbar/AdminTopbar.jsx'
-import { clearAdminAuthenticated } from '../../auth/adminAuth.js'
+import { signOutAdmin } from '../../auth/adminAuth.js'
 import './AdminLayout.css'
 
 const adminSidebarCollapsedStorageKey = 'adminSidebarCollapsed'
 
-function AdminLayout({ children, onNavigate }) {
+function AdminLayout({ children, currentPath, onNavigate }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     if (typeof window === 'undefined') {
       return false
@@ -21,9 +21,9 @@ function AdminLayout({ children, onNavigate }) {
     }
   }, [isSidebarCollapsed])
 
-  const handleLogout = () => {
-    clearAdminAuthenticated()
-    onNavigate?.('/')
+  const handleLogout = async () => {
+    await signOutAdmin()
+    onNavigate?.('/login', { replace: true })
   }
 
   const handleToggleCollapse = () => {
@@ -34,13 +34,13 @@ function AdminLayout({ children, onNavigate }) {
     <div className={`admin-shell${isSidebarCollapsed ? ' admin-shell--sidebar-collapsed' : ''}`}>
       <AdminSidebar
         isCollapsed={isSidebarCollapsed}
-        currentPath={window.location.pathname}
+        currentPath={currentPath}
         onLogout={handleLogout}
         onNavigate={onNavigate}
         onToggleCollapse={handleToggleCollapse}
       />
       <div className="admin-workspace">
-        <AdminTopbar currentPath={window.location.pathname} />
+        <AdminTopbar currentPath={currentPath} />
         <main className="admin-main">{children}</main>
       </div>
     </div>

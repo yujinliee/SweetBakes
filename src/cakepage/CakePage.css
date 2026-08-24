@@ -10,7 +10,7 @@
   flex: 1 0 auto;
   width: min(1240px, calc(100% - 56px));
   margin: 0 auto;
-  padding: 138px 0 120px;
+  padding: 138px 0 80px;
   color: #3a2e2e;
   background: inherit;
 }
@@ -20,10 +20,9 @@
   max-width: none;
 }
 
-.cake-page-shell .footer {
+.cake-page-shell .footer,
+.cake-page-shell .footer-decoration {
   flex-shrink: 0;
-  margin-top: 100px;
-  overflow: visible;
 }
 
 .cake-page-header {
@@ -34,9 +33,9 @@
 .cake-page-header h1 {
   margin: 0;
   font-family: var(--heading);
-  font-size: clamp(2.2rem, 3.5vw, 2rem);
+  font-size: 32px;
   font-weight: 400;
-  line-height: 1;
+  line-height: 1.15;
   color: #3a2e2e;
 }
 
@@ -62,7 +61,7 @@
   background: transparent;
   color: #927d77;
   font-family: 'Poppins', sans-serif;
-  font-size: clamp(1.1rem, 1.5vw, 1.35rem);
+  font-size: 17px;
   font-weight: 600;
   cursor: pointer;
   transition: color 280ms ease;
@@ -109,7 +108,7 @@
   gap: 10px;
   color: #b8aaa6;
   font-family: 'Poppins', sans-serif;
-  font-size: 0.86rem;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -138,7 +137,7 @@
   border-radius: 999px;
   background: #fffdf8;
   color: currentColor;
-  font-size: 0.78rem;
+  font-size: 12px;
 }
 
 .step-progress-label {
@@ -241,8 +240,8 @@
   margin: 0 0 16px;
   color: #3a2e2e;
   font-family: 'Poppins', sans-serif;
-  font-size: 0.95rem;
-  font-weight: 700;
+  font-size: 20px;
+  font-weight: 600;
 }
 
 .cake-calendar {
@@ -266,7 +265,7 @@
   margin: 0;
   color: #3a2e2e;
   font-family: 'Poppins', sans-serif;
-  font-size: 0.98rem;
+  font-size: 18px;
   font-weight: 600;
   text-align: center;
 }
@@ -297,8 +296,8 @@
 .cake-calendar-weekdays span {
   color: #9a8983;
   font-family: 'Poppins', sans-serif;
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
   text-align: center;
 }
 
@@ -312,7 +311,7 @@
   background: transparent;
   color: #3a2e2e;
   font-family: 'Poppins', sans-serif;
-  font-size: 0.86rem;
+  font-size: 14px;
   cursor: pointer;
   transition:
     background-color 240ms ease,
@@ -347,8 +346,8 @@
   margin: 16px 0 0;
   color: #75645e;
   font-family: 'Poppins', sans-serif;
-  font-size: 0.86rem;
-  line-height: 1.7;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .cake-preview p {
@@ -356,8 +355,8 @@
   margin: 0;
   color: #9a8983;
   font-family: 'Poppins', sans-serif;
-  font-size: 0.95rem;
-  line-height: 1.7;
+  font-size: 14px;
+  line-height: 1.5;
   text-align: center;
 }
 
@@ -381,9 +380,9 @@
 .cake-form-heading h2 {
   margin: 0;
   font-family: var(--heading);
-  font-size: clamp(2rem, 3vw, 3rem);
+  font-size: 30px;
   font-weight: 400;
-  line-height: 1.08;
+  line-height: 1.18;
   color: #3a2e2e;
 }
 
@@ -392,8 +391,8 @@
   margin: 14px 0 0;
   color: #75645e;
   font-family: 'Poppins', sans-serif;
-  font-size: 0.98rem;
-  line-height: 1.7;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .cake-base-form form {
@@ -412,15 +411,15 @@
   margin-bottom: 16px;
   color: #3a2e2e;
   font-family: 'Poppins', sans-serif;
-  font-size: 0.95rem;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .cake-optional-label {
   margin-left: 6px;
   color: #75645e;
   font-family: 'Poppins', sans-serif;
-  font-size: 0.78rem;
+  font-size: 11px;
   font-style: italic !important;
   font-weight: 400;
   opacity: 0.65;
@@ -438,8 +437,8 @@
   margin: -6px 0 18px;
   color: #75645e;
   font-family: 'Poppins', sans-serif;
-  font-size: 0.9rem;
-  line-height: 1.7;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .cake-order-method-toggle {
@@ -515,14 +514,14 @@
 
 .cake-order-method-title {
   font-family: 'Poppins', sans-serif;
-  font-size: 0.95rem;
+  font-size: 13px;
   font-weight: 600;
 }
 
 .cake-order-method-description {
   color: #75645e;
   font-family: 'Poppins', sans-serif;
-  font-size: 0.78rem;
+  font-size: 11px;
   line-height: 1.3;
 }
 
@@ -533,8 +532,9 @@
 .cake-customer-section > legend {
   margin-bottom: 20px;
   color: #3a2e2e;
-  font-size: clamp(1.35rem, 2vw, 1.5rem);
+  font-size: 20px;
   font-weight: 600;
+  line-height: 1.25;
 }
 
 .cake-radio {
@@ -544,7 +544,7 @@
   gap: 10px;
   color: #574944;
   font-family: 'Poppins', sans-serif;
-  font-size: 0.95rem;
+  font-size: 13px;
   cursor: pointer;
 }
 
@@ -605,7 +605,7 @@
   background: #fff;
   color: #3a2e2e;
   font-family: 'Poppins', sans-serif;
-  font-size: 0.95rem;
+  font-size: 13px;
 }
 
 .cake-select,
@@ -624,7 +624,7 @@
   margin-bottom: 18px;
   color: #574944;
   font-family: 'Poppins', sans-serif;
-  font-size: 0.95rem;
+  font-size: 13px;
 }
 
 .cake-field-row {
@@ -635,15 +635,15 @@
 
 .cake-field > span {
   color: #3a2e2e;
-  font-size: 1rem;
+  font-size: 13px;
   font-weight: 500;
 }
 
 .cake-field > small {
   color: #9a8983;
-  font-size: 0.78rem;
+  font-size: 11px;
   font-weight: 500;
-  line-height: 1.5;
+  line-height: 1.4;
 }
 
 .cake-field .cake-text-input,
@@ -655,7 +655,7 @@
   margin: 6px 0 0;
   color: #a35f58;
   font-family: 'Poppins', sans-serif;
-  font-size: 0.78rem;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -679,8 +679,8 @@
   margin-top: 24px;
   color: #75645e;
   font-family: 'Poppins', sans-serif;
-  font-size: 0.88rem;
-  line-height: 1.6;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .cake-customer-form .cake-option-group:has(+ .cake-agreement) {
@@ -707,7 +707,7 @@
   margin: 0 0 18px;
   color: #3a2e2e;
   font-family: 'Poppins', sans-serif;
-  font-size: 1.35rem;
+  font-size: 20px;
   font-weight: 600;
   line-height: 1.25;
 }
@@ -745,6 +745,12 @@
 .cake-text-input::placeholder,
 .cake-textarea::placeholder {
   color: #aa9e99;
+  font-size: 13px;
+}
+
+.cake-page-shell .cart-autocomplete button {
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .cake-upload-area {
@@ -760,7 +766,7 @@
   background: #fffaf7;
   color: #75645e;
   font-family: 'Poppins', sans-serif;
-  font-size: 0.95rem;
+  font-size: 13px;
   font-weight: 600;
   text-align: center;
   cursor: pointer;
@@ -783,14 +789,14 @@
   margin: 0;
   color: #3a2e2e;
   font-family: 'Poppins', sans-serif;
-  font-size: 0.95rem;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .cake-reference-upload-heading span {
   color: #9a8983;
   font-family: 'Poppins', sans-serif;
-  font-size: 0.78rem;
+  font-size: 11px;
   font-weight: 500;
 }
 
@@ -806,7 +812,7 @@
 
 .cake-upload-area small {
   color: #9a8983;
-  font-size: 0.78rem;
+  font-size: 11px;
   font-weight: 500;
 }
 
@@ -837,7 +843,7 @@
   background: #fff8f2;
   color: #8a5a2b;
   font-family: 'Poppins', sans-serif;
-  font-size: 0.82rem;
+  font-size: 12px;
   font-weight: 500;
   line-height: 1.5;
   animation: cakeUploadWarningFade 260ms ease both;
@@ -864,6 +870,64 @@
   background: #fffaf7;
 }
 
+.cake-reference-thumbnail-wrapper {
+  position: relative;
+  width: 112px;
+  height: 112px;
+}
+
+.cake-reference-thumbnail--loading::before {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(90deg, #eee9e7 0%, #f8f5f3 45%, #eee9e7 75%);
+  background-size: 220% 100%;
+  content: '';
+  animation: cakeReferenceSkeletonShimmer 1.45s ease-in-out infinite;
+}
+
+.cake-reference-thumbnail--loading img,
+.cake-reference-thumbnail--error img {
+  opacity: 0;
+}
+
+.cake-reference-thumbnail--loaded img {
+  opacity: 1;
+  transition: opacity 160ms ease;
+}
+
+.cake-reference-thumbnail img {
+  position: relative;
+  z-index: 1;
+  transition: opacity 160ms ease;
+}
+
+.cake-reference-thumbnail-wrapper button {
+  z-index: 2;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+.cake-reference-thumbnail--error {
+  display: grid;
+  place-items: center;
+  padding: 10px;
+}
+
+.cake-reference-image-error {
+  color: #9a8983;
+  font-family: 'Poppins', sans-serif;
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: center;
+}
+
+@keyframes cakeReferenceSkeletonShimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
 .cake-reference-thumbnail img {
   display: block;
   width: 100%;
@@ -871,10 +935,10 @@
   object-fit: cover;
 }
 
-.cake-reference-thumbnail button {
+.cake-reference-thumbnail-wrapper button {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 8px;
+  right: 8px;
   display: inline-grid;
   width: 22px;
   height: 22px;
@@ -884,7 +948,7 @@
   background: rgba(255, 253, 248, 0.9);
   color: #3a2e2e;
   font-family: 'Poppins', sans-serif;
-  font-size: 1rem;
+  font-size: 13px;
   line-height: 1;
   cursor: pointer;
 }
@@ -893,8 +957,8 @@
   margin: 0;
   color: #9a8983;
   font-family: 'Poppins', sans-serif;
-  font-size: 0.95rem;
-  line-height: 1.7;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .cake-review-content {
@@ -910,7 +974,7 @@
   margin: 0 0 14px;
   color: #3a2e2e;
   font-family: 'Poppins', sans-serif;
-  font-size: clamp(1.12rem, 1.4vw, 1.25rem);
+  font-size: 20px;
   font-weight: 600;
 }
 
@@ -926,19 +990,20 @@
   gap: 18px;
   color: #574944;
   font-family: 'Poppins', sans-serif;
-  font-size: 0.95rem;
-  line-height: 1.6;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .cake-review-row dt {
   color: #75645e;
-  font-size: 0.88rem;
+  font-size: 13px;
   font-weight: 500;
 }
 
 .cake-review-row dd {
   margin: 0;
   color: #3a2e2e;
+  font-size: 14px;
   font-weight: 500;
 }
 
@@ -965,7 +1030,7 @@
   align-items: center;
   gap: 8px;
   margin-bottom: 10px;
-  font-size: 1.12rem;
+  font-size: 18px;
 }
 
 .cake-review-notice-icon {
@@ -977,9 +1042,9 @@
   margin: 0;
   color: #574944;
   font-family: 'Poppins', sans-serif;
-  font-size: 0.9rem;
+  font-size: 12px;
   font-weight: 500;
-  line-height: 1.7;
+  line-height: 1.5;
 }
 
 .cake-review-notice p + p {
@@ -1019,7 +1084,7 @@
   background: #fff;
   color: #3a2e2e;
   font-family: 'Poppins', sans-serif;
-  font-size: 0.95rem;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition:
@@ -1190,7 +1255,7 @@
 .cake-success-intro h2 {
   margin: 16px 0 8px;
   font-family: var(--heading);
-  font-size: clamp(1.65rem, 4vw, 2rem);
+  font-size: 28px;
   font-weight: 400;
   line-height: 0.98;
   white-space: normal;
@@ -1208,8 +1273,8 @@
   margin: 0;
   margin-inline: auto;
   color: #75645e;
-  font-size: 0.9rem;
-  line-height: 1.7;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .cake-success-details {
@@ -1231,14 +1296,14 @@
 
 .cake-success-details dt {
   color: #75645e;
-  font-size: 0.78rem;
+  font-size: 12px;
   font-weight: 500;
 }
 
 .cake-success-details dd {
   margin: 0;
   color: #3a2e2e;
-  font-size: 0.9rem;
+  font-size: 13px;
   font-weight: 600;
   text-align: right;
 }
@@ -1264,7 +1329,7 @@
   background: #fff;
   color: #3a2e2e;
   font-family: 'Poppins', sans-serif;
-  font-size: 0.9rem;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition:
@@ -1319,11 +1384,7 @@
 @media (max-width: 760px) {
   .cake-main {
     width: min(100% - 32px, 680px);
-    padding: 118px 0 86px;
-  }
-
-  .cake-page-shell .footer {
-    margin-top: 72px;
+    padding: 118px 0 56px;
   }
 
   .cake-tabs {
@@ -1338,7 +1399,7 @@
   }
 
   .step-progress-label {
-    font-size: 0.75rem;
+    font-size: 12px;
   }
 
   .cake-customization-grid {

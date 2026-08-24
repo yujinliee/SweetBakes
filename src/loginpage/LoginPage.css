@@ -261,6 +261,11 @@
   background: #8b50ca;
 }
 
+.login-submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
 .login-submit:active {
   transform: scale(0.99);
 }

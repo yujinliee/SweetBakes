@@ -355,6 +355,10 @@
   padding: 22px 16px;
 }
 
+.admin-customers-empty--error {
+  color: #b91c1c;
+}
+
 /* ── Pagination ───────────────────────────────────────── */
 
 .admin-customers-pagination {
@@ -482,6 +486,14 @@
   gap: 4px;
 }
 
+.admin-customers-modal-section-title {
+  color: #6b7280;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .admin-customers-modal-name {
   margin: 0;
   color: #111827;
@@ -525,6 +537,55 @@
   color: #111827;
   font-size: 13px;
   font-weight: 600;
+}
+
+.admin-customers-modal-orders {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.admin-customers-modal-order {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f1f2f4;
+}
+
+.admin-customers-modal-order:last-child {
+  border-bottom: 0;
+}
+
+.admin-customers-modal-order-id {
+  display: block;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.admin-customers-modal-order-meta,
+.admin-customers-modal-order-side span:last-child {
+  display: block;
+  margin-top: 3px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.admin-customers-modal-order-side {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.admin-customers-modal-order-side span:first-child {
+  display: block;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 /* ── Responsive ───────────────────────────────────────── */

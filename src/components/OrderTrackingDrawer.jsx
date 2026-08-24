@@ -1,16 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { fetchCustomCakeOrderByNumber } from '../cakepage/services/customCakeOrderService.js'
+import { supabase } from '../lib/supabase.js'
+import { ORDER_PROGRESS_STAGES, getOrderProgressLabel } from '../services/orderStatusDisplay.js'
 
-const requestsStorageKey = 'sweetbakes:cake-requests'
-
-const statusSteps = [
-  'Pending Review',
-  'Quotation Sent',
-  'Awaiting Payment',
-  'Payment Verified',
-  'Preparing Cake',
-  'Ready for Pickup / Delivery',
-  'Completed',
-]
+const statusSteps = ORDER_PROGRESS_STAGES
 
 const flavorLabels = {
   chocolate: 'Chocolate',
@@ -48,38 +41,155 @@ const formatDate = (value) => {
   }).format(new Date(value))
 }
 
-function getSavedRequests() {
-  try {
-    return JSON.parse(window.localStorage.getItem(requestsStorageKey)) || []
-  } catch {
-    return []
+const mapSupabaseOrderToTrackedRequest = (order) => {
+  if (!order) {
+    return null
+  }
+
+  const customCakeItem =
+    (order.order_items || []).find(
+      (item) => item.customization_data?.request_type === 'custom_cake',
+    ) || order.order_items?.[0]
+  const customization = customCakeItem?.customization_data || {}
+  const selections = {
+    flavor: customization.flavor || '',
+    size: customization.size || '',
+    layers: customization.layers ? String(customization.layers) : '',
+  }
+
+  return {
+    requestNumber: order.order_number,
+    submittedAt: order.created_at,
+    status: getOrderProgressLabel(order),
+    total: order.total,
+    selections,
+    designDetails: {
+      theme: customization.original_theme || customization.theme || '',
+      otherTheme: customization.original_theme === 'Other' ? customization.theme || '' : '',
+      message: customization.cake_message || '',
+      instructions: customization.special_instructions || '',
+      referenceImages: customization.reference_images || [],
+    },
+    customerInfo: {
+      customerFirstName: order.first_name || '',
+      customerLastName: order.last_name || '',
+      contactNumber: order.contact_number || '',
+      email: order.email || '',
+      fulfillment: order.order_method || '',
+      province: order.province || '',
+      city: order.city_municipality || '',
+      barangay: order.barangay || '',
+      address: order.address || '',
+      apartment: order.apartment_unit || '',
+      deliverDifferentRecipient: Boolean(order.different_recipient),
+      recipientFirstName: order.recipient_name || '',
+      recipientLastName: '',
+      recipientContact: order.recipient_contact || '',
+      deliveryAddress: order.address || '',
+      landmark: order.landmark || '',
+      preferredPickupTime: order.order_method === 'pickup' ? order.preferred_time || '' : '',
+      preferredDeliveryTime: order.order_method === 'delivery' ? order.preferred_time || '' : '',
+      preferredDate: order.preferred_date || '',
+    },
   }
 }
 
-function OrderTrackingDrawer({ initialRequestNumber = '', onClose }) {
-  const savedRequests = useMemo(() => getSavedRequests(), [])
+function OrderTrackingDrawer({ initialRequestNumber = '', onClose, onRequestSignIn }) {
   const closeTimerRef = useRef(null)
   const closeRequestedRef = useRef(false)
-  const findSavedRequest = (value) => {
-    const normalizedValue = value.trim().toUpperCase()
-
-    return savedRequests.find(
-      (savedRequest) => savedRequest.requestNumber.toUpperCase() === normalizedValue,
-    )
-  }
   const [requestNumber, setRequestNumber] = useState(initialRequestNumber)
-  const [hasSearched, setHasSearched] = useState(Boolean(initialRequestNumber))
-  const [matchedRequest, setMatchedRequest] = useState(
-    initialRequestNumber ? findSavedRequest(initialRequestNumber) || null : null,
-  )
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [authResolved, setAuthResolved] = useState(false)
+  const [hasSearched, setHasSearched] = useState(false)
+  const [matchedRequest, setMatchedRequest] = useState(null)
+  const [isSearching, setIsSearching] = useState(false)
+  const [searchError, setSearchError] = useState('')
   const [isClosing, setIsClosing] = useState(false)
   const [activeTrackTab, setActiveTrackTab] = useState('status')
 
-  const findRequest = (value) => {
-    setMatchedRequest(findSavedRequest(value) || null)
-    setHasSearched(true)
+  useEffect(() => {
+    let isActive = true
+    async function resolveCustomerSession() {
+      const { data, error } = await supabase.auth.getUser()
+      let isCustomer = false
+
+      if (!error && data?.user) {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', data.user.id)
+          .maybeSingle()
+        isCustomer = !profileError && profile?.role === 'customer'
+      }
+
+      if (isActive) {
+        setIsAuthenticated(isCustomer)
+        setAuthResolved(true)
+      }
+    }
+
+    resolveCustomerSession()
+    return () => {
+      isActive = false
+    }
+  }, [])
+
+  const findRequest = useCallback(async (value) => {
+    const normalizedValue = String(value || '').trim()
+
+    if (!normalizedValue) {
+      setMatchedRequest(null)
+      setHasSearched(true)
+      return
+    }
+
+    if (authResolved && !isAuthenticated) {
+      return
+    }
+
+    setIsSearching(true)
+    setSearchError('')
     setActiveTrackTab('status')
-  }
+
+    try {
+      const supabaseOrder = await fetchCustomCakeOrderByNumber(normalizedValue)
+      setMatchedRequest(mapSupabaseOrderToTrackedRequest(supabaseOrder))
+    } catch (error) {
+      console.error('[TRACK ORDER]', error)
+      setMatchedRequest(null)
+      setSearchError('Unable to load the latest order status. Please try again.')
+    } finally {
+      setHasSearched(true)
+      setIsSearching(false)
+    }
+  }, [authResolved, isAuthenticated])
+
+  useEffect(() => {
+    if (!initialRequestNumber || !isAuthenticated) return undefined
+
+    const timeoutId = window.setTimeout(() => {
+      findRequest(initialRequestNumber)
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [findRequest, initialRequestNumber, isAuthenticated])
+
+  const currentStatus = matchedRequest?.status || 'Pending Review'
+  const timelineSteps =
+    currentStatus === 'Request Not Accepted'
+      ? ['Pending', 'Request Not Accepted']
+      : statusSteps
+  const currentStatusIndex = Math.max(timelineSteps.indexOf(currentStatus), 0)
+  const hasFinalPrice = !(currentStatus === 'Pending Review' && Number(matchedRequest?.total) === 0)
+  const finalPrice = Number(matchedRequest?.total)
+  const finalPriceLabel =
+    hasFinalPrice && Number.isFinite(finalPrice)
+      ? new Intl.NumberFormat('en-PH', {
+          style: 'currency',
+          currency: 'PHP',
+          maximumFractionDigits: 0,
+        }).format(finalPrice)
+      : 'Price Pending'
 
   const requestClose = useCallback(() => {
     if (closeRequestedRef.current) {
@@ -124,9 +234,6 @@ function OrderTrackingDrawer({ initialRequestNumber = '', onClose }) {
     matchedRequest?.packageCustomization?.packageCupcakeTheme === 'Other'
       ? matchedRequest.packageCustomization.packageCupcakeOtherTheme
       : matchedRequest?.packageCustomization?.packageCupcakeTheme
-  const currentStatus = matchedRequest?.status || 'Pending Review'
-  const currentStatusIndex = Math.max(statusSteps.indexOf(currentStatus), 0)
-
   return (
     <div
       className={`order-track-overlay${isClosing ? ' order-track-overlay--closing' : ''}`}
@@ -149,36 +256,53 @@ function OrderTrackingDrawer({ initialRequestNumber = '', onClose }) {
           </button>
         </header>
 
-        <form
-          className="order-track-search"
-          onSubmit={(event) => {
-            event.preventDefault()
-            findRequest(requestNumber)
-          }}
-        >
-          <span className="order-track-search-label">Request Number</span>
-          <div className="order-track-search-control">
-            <input
-              type="text"
-              aria-label="Request Number"
-              placeholder="Enter your request number"
-              value={requestNumber}
-              onChange={(event) => setRequestNumber(event.target.value.toUpperCase())}
-            />
-            <button type="submit">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path
-                  d="m21 21-4.35-4.35m2.35-5.15a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              Track
+        {authResolved && isAuthenticated ? (
+          <form
+            className="order-track-search"
+            onSubmit={(event) => {
+              event.preventDefault()
+              findRequest(requestNumber)
+            }}
+          >
+            <span className="order-track-search-label">Request Number</span>
+            <div className="order-track-search-control">
+              <input
+                type="text"
+                aria-label="Request Number"
+                placeholder="Enter your request number"
+                value={requestNumber}
+                onChange={(event) => setRequestNumber(event.target.value.toUpperCase())}
+              />
+              <button type="submit">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="m21 21-4.35-4.35m2.35-5.15a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                {isSearching ? 'Tracking...' : 'Track'}
+              </button>
+            </div>
+          </form>
+        ) : null}
+        {authResolved && !isAuthenticated ? (
+          <div className="order-track-auth-notice">
+            <p>Sign in to track your custom cake request.</p>
+            <button
+              type="button"
+              className="order-track-sign-in"
+              onClick={() => onRequestSignIn?.(requestNumber)}
+            >
+              Sign In to Track
             </button>
           </div>
-        </form>
+        ) : null}
+        {searchError ? (
+          <p className="cake-field-error">* {searchError}</p>
+        ) : null}
 
         {matchedRequest ? (
           <div className="order-track-result">
@@ -207,7 +331,7 @@ function OrderTrackingDrawer({ initialRequestNumber = '', onClose }) {
               <section className="order-track-timeline">
                 <h3>Order Status</h3>
                 <ol>
-                  {statusSteps.map((status, index) => (
+                  {timelineSteps.map((status, index) => (
                     <li
                       className={`order-track-step${
                         index < currentStatusIndex ? ' order-track-step--complete' : ''
@@ -231,7 +355,11 @@ function OrderTrackingDrawer({ initialRequestNumber = '', onClose }) {
                         <span>{status}</span>
                         {index === currentStatusIndex ? (
                           <span className="order-track-step-helper">
-                            We're reviewing your customization request.
+                            {currentStatus === 'Accepted / Awaiting Downpayment'
+                              ? `Your request has been approved. Final Price: ${finalPriceLabel}.`
+                              : currentStatus === 'Request Not Accepted'
+                                ? 'Your custom cake request was not accepted.'
+                                : "We're reviewing your customization request."}
                           </span>
                         ) : null}
                       </span>
@@ -354,6 +482,10 @@ function OrderTrackingDrawer({ initialRequestNumber = '', onClose }) {
                         <dd>{matchedRequest.customerInfo.fulfillment === 'pickup' ? 'Pickup' : 'Delivery'}</dd>
                       </div>
                     ) : null}
+                    <div>
+                      <dt>Final Price</dt>
+                      <dd>{finalPriceLabel}</dd>
+                    </div>
                   </dl>
                 </section>
               </>
@@ -361,7 +493,7 @@ function OrderTrackingDrawer({ initialRequestNumber = '', onClose }) {
           </div>
         ) : null}
 
-        {hasSearched && !matchedRequest ? (
+        {hasSearched && !matchedRequest && !searchError ? (
           <div className="order-track-empty">
             <div aria-hidden="true">?</div>
             <h3>No order found</h3>

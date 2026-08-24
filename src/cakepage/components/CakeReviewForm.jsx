@@ -69,6 +69,8 @@ function CakeReviewForm({
   customerInfo,
   onBack,
   onSubmit,
+  isSubmitting = false,
+  submissionError = '',
 }) {
   const theme =
     designDetails.theme === 'Other'
@@ -123,11 +125,6 @@ function CakeReviewForm({
       : []),
     { label: 'Preferred Date', value: customerInfo.preferredDate || emptyCustomerText },
     { label: 'Preferred Time', value: formattedPreferredTime || emptyCustomerText },
-    {
-      label: 'Facebook / Messenger Name',
-      value: customerInfo.messengerName || fallbackText,
-      isEmpty: !customerInfo.messengerName,
-    },
   ]
 
   return (
@@ -199,15 +196,22 @@ function CakeReviewForm({
           className="cake-continue-button cake-back-button"
           type="button"
           onClick={onBack}
+          disabled={isSubmitting}
         >
           <span aria-hidden="true">&larr;</span>
           <span>Back</span>
         </button>
-        <button className="cake-continue-button cake-submit-button" type="button" onClick={onSubmit}>
-          <span>Submit Request</span>
+        <button
+          className="cake-continue-button cake-submit-button"
+          type="button"
+          onClick={onSubmit}
+          disabled={isSubmitting}
+        >
+          <span>{isSubmitting ? 'Submitting...' : 'Submit Request'}</span>
           <span aria-hidden="true">&rarr;</span>
         </button>
       </div>
+      {submissionError ? <p className="cake-field-error">* {submissionError}</p> : null}
     </section>
   )
 }

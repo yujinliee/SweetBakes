@@ -1,18 +1,40 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+
+function CupcakeReferenceImage({ preview }) {
+  const [status, setStatus] = useState(preview.url ? 'loading' : 'error')
+
+  return (
+    <div className={`cake-reference-thumbnail cake-reference-thumbnail--${status}`}>
+      {preview.url ? (
+        <img
+          src={preview.url}
+          alt={preview.name}
+          onLoad={() => setStatus('loaded')}
+          onError={() => setStatus('error')}
+        />
+      ) : null}
+      {status === 'error' ? <span className="cake-reference-image-error">Image unavailable</span> : null}
+    </div>
+  )
+}
 
 function CupcakeReferenceReview({ referenceImages }) {
-  const previews = useMemo(
-    () =>
-      referenceImages.slice(0, 3).map((file) => ({
-        file,
-        url: URL.createObjectURL(file),
-      })),
-    [referenceImages],
-  )
+  const previews = useMemo(() => referenceImages.slice(0, 3).map((reference) => {
+    const file = reference?.file || reference
+    const objectUrl = file instanceof File ? URL.createObjectURL(file) : ''
+    return {
+      reference,
+      name: reference?.name || file?.name || 'reference image',
+      url: reference?.previewUrl || objectUrl,
+      objectUrl,
+    }
+  }), [referenceImages])
 
   useEffect(
     () => () => {
-      previews.forEach((preview) => URL.revokeObjectURL(preview.url))
+      previews.forEach((preview) => {
+        if (preview.objectUrl) URL.revokeObjectURL(preview.objectUrl)
+      })
     },
     [previews],
   )
@@ -22,9 +44,10 @@ function CupcakeReferenceReview({ referenceImages }) {
       {previews.length ? (
         <div className="cake-reference-thumbnails" aria-label="Uploaded reference images">
           {previews.map((preview) => (
-            <div className="cake-reference-thumbnail" key={`${preview.file.name}-${preview.url}`}>
-              <img src={preview.url} alt={preview.file.name} />
-            </div>
+            <CupcakeReferenceImage
+              key={`${preview.reference.path || preview.name}-${preview.url}`}
+              preview={preview}
+            />
           ))}
         </div>
       ) : (

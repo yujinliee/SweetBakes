@@ -1,4 +1,103 @@
-export const getInventoryItems = () => []
+const inventoryItems = [
+  {
+    id: 'inv-01',
+    product: 'Custom Cake',
+    category: 'Cakes',
+    variant: '—',
+    availability: 'Available',
+    lastUpdated: 'Aug 18, 2026',
+  },
+  {
+    id: 'inv-02',
+    product: 'Custom Cupcakes',
+    category: 'Cupcakes',
+    variant: '—',
+    availability: 'Available',
+    lastUpdated: 'Aug 18, 2026',
+  },
+  {
+    id: 'inv-03',
+    product: 'Party Package A',
+    category: 'Party Packages',
+    variant: '—',
+    availability: 'Available',
+    lastUpdated: 'Aug 18, 2026',
+  },
+  {
+    id: 'inv-04',
+    product: 'Party Package B',
+    category: 'Party Packages',
+    variant: '—',
+    availability: 'Unavailable',
+    lastUpdated: 'Aug 16, 2026',
+  },
+  {
+    id: 'inv-05',
+    product: 'Chocolate Cake',
+    category: 'Sweet Treats',
+    variant: 'Regular',
+    stock: 0,
+    lastUpdated: 'Aug 18, 2026',
+  },
+  {
+    id: 'inv-06',
+    product: 'Red Velvet Cake',
+    category: 'Sweet Treats',
+    variant: 'Regular',
+    stock: 2,
+    lastUpdated: 'Aug 18, 2026',
+  },
+  {
+    id: 'inv-07',
+    product: 'Ube',
+    category: 'Sweet Treats',
+    variant: 'Regular',
+    stock: 8,
+    lastUpdated: 'Aug 18, 2026',
+  },
+  {
+    id: 'inv-08',
+    product: 'Graham de Leche',
+    category: 'Sweet Treats',
+    variant: 'Regular',
+    stock: 5,
+    lastUpdated: 'Aug 18, 2026',
+  },
+  {
+    id: 'inv-09',
+    product: 'Leche Flan',
+    category: 'Sweet Treats',
+    variant: 'Regular',
+    stock: 12,
+    lastUpdated: 'Aug 18, 2026',
+  },
+  {
+    id: 'inv-10',
+    product: 'Cheesecake',
+    category: 'Sweet Treats',
+    variant: 'Half Dozen',
+    availability: 'Available',
+    lastUpdated: 'Aug 18, 2026',
+  },
+  {
+    id: 'inv-11',
+    product: 'Cheesecake',
+    category: 'Sweet Treats',
+    variant: 'Dozen',
+    availability: 'Available',
+    lastUpdated: 'Aug 18, 2026',
+  },
+  {
+    id: 'inv-12',
+    product: 'Cheesecake',
+    category: 'Sweet Treats',
+    variant: 'Large / Whole',
+    availability: 'Available',
+    lastUpdated: 'Aug 18, 2026',
+  },
+]
+
+export const getInventoryItems = () => inventoryItems.map((item) => ({ ...item }))
 
 export const getInventoryItemById = (itemId) =>
   getInventoryItems().find((item) => item.id === itemId) || null

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import image1Cake12Chocolate from '../assets/packagepage/1cake_12cupcakes_chocolate.png'
 import image1Cake12RedVelvet from '../assets/packagepage/1cake_12cupcakes_redvelvet.png'
 import image1Cake18Chocolate from '../assets/packagepage/1cake_18cupcakes_chocolate.png'
@@ -28,6 +28,15 @@ import PackageReviewForm from './components/PackageReviewForm.jsx'
 import PackageSelectionForm from './components/PackageSelectionForm.jsx'
 import PackageSuccessModal from './components/PackageSuccessModal.jsx'
 import StepProgress from './components/StepProgress.jsx'
+import { useAvailability } from '../hooks/useAvailability.js'
+import { assertCanAcceptOrderForDate } from '../admin/services/availabilityService.js'
+import {
+  clearCustomDraft,
+  getCustomDraftScope,
+  loadCustomDraft,
+  saveCustomDraft,
+  subscribeToCustomDraftAuth,
+} from '../services/customDraftService.js'
 import './PackagePage.css'
 
 const packageRequestsStorageKey = 'sweetbakes:cake-requests'
@@ -79,10 +88,17 @@ const defaultPackageCustomization = {
 }
 
 const defaultPackageCustomerInfo = {
+  customerFirstName: '',
+  customerLastName: '',
   fullName: '',
   contactNumber: '',
   email: '',
   fulfillment: '',
+  province: 'Cavite',
+  city: '',
+  barangay: '',
+  address: '',
+  apartment: '',
   deliverDifferentRecipient: false,
   recipientFirstName: '',
   recipientLastName: '',
@@ -139,6 +155,70 @@ function PackagePage({
   const [step3Touched, setStep3Touched] = useState({})
   const [submissionError, setSubmissionError] = useState('')
   const [submittedRequest, setSubmittedRequest] = useState(null)
+  const [isDraftLoaded, setIsDraftLoaded] = useState(false)
+  const draftScopeRef = useRef(null)
+  const draftLoadVersionRef = useRef(0)
+  const availability = useAvailability()
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function restoreDraft(scope, reset = false) {
+      const loadVersion = ++draftLoadVersionRef.current
+
+      if (reset) {
+        setIsDraftLoaded(false)
+        setCurrentStep(1)
+        setPackageSelection(defaultPackageSelection)
+        setPackageCustomization(defaultPackageCustomization)
+        setPackageCustomerInfo(defaultPackageCustomerInfo)
+      }
+
+      const draft = await loadCustomDraft('party-package', scope)
+
+      if (!isMounted || loadVersion !== draftLoadVersionRef.current) return
+
+      draftScopeRef.current = scope
+      if (draft) {
+        setCurrentStep(draft.currentStep || 1)
+        setPackageSelection((current) => ({ ...current, ...(draft.packageSelection || {}) }))
+        setPackageCustomization((current) => ({ ...current, ...(draft.packageCustomization || {}) }))
+        setPackageCustomerInfo((current) => ({ ...current, ...(draft.customerInfo || {}) }))
+      }
+      setIsDraftLoaded(true)
+    }
+
+    getCustomDraftScope().then((scope) => restoreDraft(scope)).catch((error) => {
+      console.error('[PACKAGE DRAFT] restore failed:', error)
+      if (isMounted) setIsDraftLoaded(true)
+    })
+
+    const unsubscribe = subscribeToCustomDraftAuth((scope) => {
+      if (scope === draftScopeRef.current) return
+      restoreDraft(scope, true).catch((error) => {
+        console.error('[PACKAGE DRAFT] account restore failed:', error)
+        if (isMounted) setIsDraftLoaded(true)
+      })
+    })
+
+    return () => {
+      isMounted = false
+      unsubscribe()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isDraftLoaded || !draftScopeRef.current) return undefined
+
+    saveCustomDraft('party-package', draftScopeRef.current, {
+      currentStep,
+      packageSelection,
+      packageCustomization,
+      customerInfo: packageCustomerInfo,
+    })
+
+    return undefined
+  }, [isDraftLoaded, currentStep, packageSelection, packageCustomization, packageCustomerInfo])
 
   const previewImage = useMemo(() => {
     const selectedBase = packageCustomization.packageCakeFlavor
@@ -226,8 +306,21 @@ function PackagePage({
         ? { email: true }
         : {}),
       ...(!packageCustomerInfo.fulfillment ? { fulfillment: true } : {}),
-      ...(!packageCustomerInfo.preferredDate ? { preferredDate: true } : {}),
+      ...(
+        availability.loading ||
+        availability.error ||
+        !availability.settings ||
+        !packageCustomerInfo.preferredDate ||
+        !availability.isDateAvailable(packageCustomerInfo.preferredDate)
+          ? { preferredDate: true }
+          : {}
+      ),
       ...(packageCustomerInfo.fulfillment === 'pickup' && !packageCustomerInfo.preferredPickupTime
+        ? { preferredPickupTime: true }
+        : {}),
+      ...(packageCustomerInfo.fulfillment === 'pickup' &&
+      packageCustomerInfo.preferredPickupTime &&
+      !availability.isTimeAvailable(packageCustomerInfo.preferredPickupTime)
         ? { preferredPickupTime: true }
         : {}),
       ...(packageCustomerInfo.fulfillment === 'delivery' &&
@@ -236,6 +329,11 @@ function PackagePage({
         : {}),
       ...(packageCustomerInfo.fulfillment === 'delivery' &&
       !packageCustomerInfo.preferredDeliveryTime
+        ? { preferredDeliveryTime: true }
+        : {}),
+      ...(packageCustomerInfo.fulfillment === 'delivery' &&
+      packageCustomerInfo.preferredDeliveryTime &&
+      !availability.isTimeAvailable(packageCustomerInfo.preferredDeliveryTime)
         ? { preferredDeliveryTime: true }
         : {}),
       ...(packageCustomerInfo.fulfillment === 'delivery' &&
@@ -303,7 +401,7 @@ function PackagePage({
     return firstStep3Field ? { step: 3, field: firstStep3Field } : null
   }
 
-  const handleSubmitRequest = () => {
+  const handleSubmitRequest = async () => {
     const step2Errors = getStep2Errors()
     const step3Errors = getStep3Errors()
     const invalidField = findInvalidSubmissionField(step2Errors, step3Errors)
@@ -346,7 +444,9 @@ function PackagePage({
         customerInfo: packageCustomerInfo,
       }
 
+      assertCanAcceptOrderForDate(packageCustomerInfo.preferredDate, availability.settings)
       saveSubmittedRequest(request)
+      await clearCustomDraft('party-package', draftScopeRef.current)
       onRequestSubmitted?.(request.requestNumber)
       setSubmittedRequest(request)
       setSubmissionError('')

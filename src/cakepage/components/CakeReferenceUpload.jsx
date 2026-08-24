@@ -1,29 +1,36 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useState } from 'react'
 
 const maxReferenceImages = 3
-const maxFileSize = 10 * 1024 * 1024
-const acceptedTypes = ['image/jpeg', 'image/png']
+const maxFileSize = 5 * 1024 * 1024
+const acceptedTypes = ['image/jpeg', 'image/png', 'image/webp']
+
+function CakeReferenceImage({ reference }) {
+  const source = reference.previewUrl || ''
+  const [status, setStatus] = useState(source ? 'loading' : 'error')
+
+  return (
+    <div className={`cake-reference-thumbnail cake-reference-thumbnail--${status}`}>
+      {source ? (
+        <img
+          src={source}
+          alt={reference.name}
+          onLoad={() => setStatus('loaded')}
+          onError={() => setStatus('error')}
+        />
+      ) : null}
+      {status === 'error' ? (
+        <span className="cake-reference-image-error">
+          {reference.status === 'error' ? 'Upload failed. Try again.' : 'Image unavailable'}
+        </span>
+      ) : null}
+    </div>
+  )
+}
 
 function CakeReferenceUpload({ referenceImages, onReferenceImagesChange }) {
   const [isDragging, setIsDragging] = useState(false)
   const [message, setMessage] = useState('')
   const isLimitReached = referenceImages.length >= maxReferenceImages
-
-  const previews = useMemo(
-    () =>
-      referenceImages.map((file) => ({
-        file,
-        url: URL.createObjectURL(file),
-      })),
-    [referenceImages],
-  )
-
-  useEffect(
-    () => () => {
-      previews.forEach((preview) => URL.revokeObjectURL(preview.url))
-    },
-    [previews],
-  )
 
   const addFiles = (fileList) => {
     if (isLimitReached) {
@@ -32,12 +39,21 @@ function CakeReferenceUpload({ referenceImages, onReferenceImagesChange }) {
     }
 
     const availableSlots = maxReferenceImages - referenceImages.length
-    const validFiles = Array.from(fileList)
+    const selectedFiles = Array.from(fileList)
+    const invalidFile = selectedFiles.find(
+      (file) => !acceptedTypes.includes(file.type) || file.size > maxFileSize,
+    )
+    const validFiles = selectedFiles
       .filter((file) => acceptedTypes.includes(file.type) && file.size <= maxFileSize)
       .slice(0, availableSlots)
 
     if (validFiles.length) {
       onReferenceImagesChange([...referenceImages, ...validFiles])
+    }
+
+    if (invalidFile) {
+      setMessage(`${invalidFile.name} is not supported or is larger than 5MB.`)
+      return
     }
 
     setMessage(
@@ -55,7 +71,7 @@ function CakeReferenceUpload({ referenceImages, onReferenceImagesChange }) {
   }
 
   const removeFile = (fileToRemove) => {
-    onReferenceImagesChange(referenceImages.filter((file) => file !== fileToRemove))
+      onReferenceImagesChange(referenceImages.filter((file) => file !== fileToRemove))
     setMessage('')
   }
 
@@ -65,7 +81,7 @@ function CakeReferenceUpload({ referenceImages, onReferenceImagesChange }) {
         <h3 id="reference-image-title">
           Reference Image <span className="cake-optional-label">Optional</span>
         </h3>
-        <span>{referenceImages.length} / 3 uploaded</span>
+        <span>{referenceImages.length} / 3 selected</span>
       </div>
       <label
         className={`cake-upload-area${isDragging ? ' cake-upload-area--active' : ''}${
@@ -83,7 +99,7 @@ function CakeReferenceUpload({ referenceImages, onReferenceImagesChange }) {
       >
         <input
           type="file"
-          accept="image/jpeg,image/png"
+          accept="image/jpeg,image/png,image/webp"
           multiple
           disabled={isLimitReached}
           onChange={(event) => {
@@ -108,17 +124,17 @@ function CakeReferenceUpload({ referenceImages, onReferenceImagesChange }) {
           />
         </svg>
         <span>Upload Inspiration Photo</span>
-        <small>JPG, PNG up to 10MB each</small>
+        <small>JPG, PNG, WebP up to 5MB each</small>
       </label>
-      {previews.length ? (
-        <div className="cake-reference-thumbnails" aria-label="Uploaded reference images">
-          {previews.map((preview) => (
-            <div className="cake-reference-thumbnail" key={`${preview.file.name}-${preview.url}`}>
-              <img src={preview.url} alt={preview.file.name} />
+      {referenceImages.length ? (
+        <div className="cake-reference-thumbnails" aria-label="Selected reference images">
+          {referenceImages.map((reference, index) => (
+            <div className="cake-reference-thumbnail-wrapper" key={`${reference.path || `${reference.name}-${index}`}-${reference.previewUrl || ''}`}>
+              <CakeReferenceImage reference={reference} />
               <button
                 type="button"
-                aria-label={`Remove ${preview.file.name}`}
-                onClick={() => removeFile(preview.file)}
+                aria-label={`Remove ${reference.name}`}
+                onClick={() => removeFile(reference)}
               >
                 ×
               </button>

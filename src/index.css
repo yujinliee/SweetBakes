@@ -202,8 +202,9 @@ code {
 }
 
 .order-track-search-control {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 112px;
+  display: flex;
+  width: 100%;
+  min-width: 0;
   overflow: hidden;
   border: 1px solid #e8e3e3;
   border-radius: 6px;
@@ -219,6 +220,8 @@ code {
 }
 
 .order-track-search input {
+  flex: 1 1 0;
+  min-width: 0;
   height: 48px;
   padding: 0 13px;
   border: 0;
@@ -230,6 +233,10 @@ code {
   text-align: left;
 }
 
+.order-track-search input:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
 .order-track-search input::placeholder {
   font-size: 15px;
 }
@@ -239,6 +246,7 @@ code {
 }
 
 .order-track-search button {
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -246,7 +254,7 @@ code {
   height: 48px;
   border: 0;
   border-left: 1px solid #3a2e2e;
-  border-radius: 0;
+  border-radius: 0 6px 6px 0;
   background: #3a2e2e;
   color: #fff;
   font: inherit;
@@ -259,6 +267,39 @@ code {
 }
 
 .order-track-search button:hover {
+  border-color: #2f2525;
+  background: #2f2525;
+}
+
+.order-track-auth-notice {
+  display: grid;
+  justify-items: start;
+  gap: 16px;
+  margin-top: 30px;
+}
+
+.order-track-auth-notice p {
+  margin: 0;
+  color: #6f6262;
+  font-size: 15px;
+}
+
+.order-track-sign-in {
+  min-height: 44px;
+  padding: 0 20px;
+  border: 1px solid #3a2e2e;
+  border-radius: 6px;
+  background: #3a2e2e;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 250ms ease,
+    border-color 250ms ease;
+}
+
+.order-track-sign-in:hover {
   border-color: #2f2525;
   background: #2f2525;
 }

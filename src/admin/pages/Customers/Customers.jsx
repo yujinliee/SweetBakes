@@ -1,88 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { fetchAdminCustomers } from '../../services/customerService.js'
 import './Customers.css'
-
-const CUSTOMERS = [
-  {
-    id: 'C001',
-    name: 'Maria Santos',
-    email: 'maria.santos@email.com',
-    phone: '0917 123 4567',
-    orders: 12,
-    totalSpent: 18500,
-    lastOrder: 'Aug 15, 2026',
-    status: 'Active',
-  },
-  {
-    id: 'C002',
-    name: 'John Reyes',
-    email: 'john.reyes@email.com',
-    phone: '0928 456 7890',
-    orders: 8,
-    totalSpent: 12800,
-    lastOrder: 'Aug 12, 2026',
-    status: 'Active',
-  },
-  {
-    id: 'C003',
-    name: 'Angela Cruz',
-    email: 'angela.cruz@email.com',
-    phone: '0918 789 1234',
-    orders: 5,
-    totalSpent: 7250,
-    lastOrder: 'Aug 8, 2026',
-    status: 'Active',
-  },
-  {
-    id: 'C004',
-    name: 'Carlo Mendoza',
-    email: 'carlo.mendoza@email.com',
-    phone: '0906 321 9876',
-    orders: 4,
-    totalSpent: 6400,
-    lastOrder: 'Aug 5, 2026',
-    status: 'Active',
-  },
-  {
-    id: 'C005',
-    name: 'Sofia Garcia',
-    email: 'sofia.garcia@email.com',
-    phone: '0917 555 2468',
-    orders: 3,
-    totalSpent: 4850,
-    lastOrder: 'Aug 2, 2026',
-    status: 'Active',
-  },
-  {
-    id: 'C006',
-    name: 'Daniel Flores',
-    email: 'daniel.flores@email.com',
-    phone: '0920 111 3344',
-    orders: 2,
-    totalSpent: 3200,
-    lastOrder: 'Jul 29, 2026',
-    status: 'Active',
-  },
-  {
-    id: 'C007',
-    name: 'Patricia Lim',
-    email: 'patricia.lim@email.com',
-    phone: '0919 777 8899',
-    orders: 1,
-    totalSpent: 2500,
-    lastOrder: 'Jul 25, 2026',
-    status: 'Active',
-  },
-  {
-    id: 'C008',
-    name: 'Kevin Tan',
-    email: 'kevin.tan@email.com',
-    phone: '0908 444 5566',
-    orders: 0,
-    totalSpent: 0,
-    lastOrder: 'Never',
-    status: 'Inactive',
-  },
-]
 
 const CURRENCY_FORMATTER = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -91,10 +9,63 @@ const CURRENCY_FORMATTER = new Intl.NumberFormat('en-PH', {
 })
 
 const STATUS_OPTIONS = ['All Status', 'Active', 'Inactive']
-const ACTIVITY_OPTIONS = ['All Customers', 'Has Orders', 'No Orders']
+
+const DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+})
 
 function normalizeText(value) {
   return String(value ?? '').toLowerCase()
+}
+
+function formatDate(value) {
+  if (!value) return 'Never'
+
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? 'Never' : DATE_FORMATTER.format(date)
+}
+
+function formatCustomerName(customer) {
+  const name = [customer.first_name, customer.last_name].filter(Boolean).join(' ').trim()
+  return name || customer.email || 'Customer'
+}
+
+function formatOrderNumber(order) {
+  if (order.order_number) {
+    return order.order_number
+  }
+
+  const shortId = String(order.id || '').replace(/-/g, '').slice(0, 8).toUpperCase()
+  return shortId ? `#SB-${shortId}` : '#SB'
+}
+
+function toTitleCase(value) {
+  return String(value || '')
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1).toLowerCase()}`)
+    .join(' ')
+}
+
+function mapCustomerForDisplay(customer) {
+  const validOrderCount = customer.stats?.validOrderCount || 0
+  const name = formatCustomerName(customer)
+
+  return {
+    ...customer,
+    name,
+    orders: validOrderCount,
+    totalSpent: Number(customer.stats?.totalSpent) || 0,
+    lastOrder: customer.stats?.lastOrder ? formatDate(customer.stats.lastOrder.created_at) : 'Never',
+    status: validOrderCount > 0 ? 'Active' : 'Inactive',
+    latestOrderContact: customer.stats?.latestContactNumber || '—',
+    recentOrders: customer.stats?.recentOrders || [],
+    searchText: [name, customer.first_name, customer.last_name, customer.email]
+      .map(normalizeText)
+      .join(' '),
+  }
 }
 
 function FilterDropdown({ id, value, options, icon, isOpen, onToggle, onSelect }) {
@@ -153,13 +124,17 @@ function CustomerDetailModal({ customer, onClose }) {
         </div>
         <div className="admin-customers-modal-body">
           <div className="admin-customers-modal-section">
+            <span className="admin-customers-modal-section-title">Customer Profile</span>
             <p className="admin-customers-modal-name">{customer.name}</p>
             <p className="admin-customers-modal-meta">{customer.email}</p>
-            <p className="admin-customers-modal-meta">{customer.phone}</p>
+            <p className="admin-customers-modal-meta">First Name: {customer.first_name || '—'}</p>
+            <p className="admin-customers-modal-meta">Last Name: {customer.last_name || '—'}</p>
+            <p className="admin-customers-modal-meta">Account Created: {formatDate(customer.created_at)}</p>
+            <p className="admin-customers-modal-meta">Latest order contact: {customer.latestOrderContact}</p>
           </div>
           <div className="admin-customers-modal-stats">
             <div className="admin-customers-modal-stat">
-              <span className="admin-customers-modal-stat-label">Order History</span>
+              <span className="admin-customers-modal-stat-label">Total Orders</span>
               <span className="admin-customers-modal-stat-value">{customer.orders} {customer.orders === 1 ? 'Order' : 'Orders'}</span>
             </div>
             <div className="admin-customers-modal-stat">
@@ -170,6 +145,32 @@ function CustomerDetailModal({ customer, onClose }) {
               <span className="admin-customers-modal-stat-label">Last Order</span>
               <span className="admin-customers-modal-stat-value">{customer.lastOrder}</span>
             </div>
+          </div>
+
+          <div className="admin-customers-modal-section">
+            <span className="admin-customers-modal-section-title">Recent Orders</span>
+            {(customer.recentOrders || []).length === 0 ? (
+              <p className="admin-customers-modal-meta">No valid orders found.</p>
+            ) : (
+              <div className="admin-customers-modal-orders">
+                {customer.recentOrders.map((order) => (
+                  <div className="admin-customers-modal-order" key={order.id}>
+                    <div>
+                      <span className="admin-customers-modal-order-id">{formatOrderNumber(order)}</span>
+                      <span className="admin-customers-modal-order-meta">{formatDate(order.created_at)}</span>
+                    </div>
+                    <div className="admin-customers-modal-order-side">
+                      <span>
+                        {String(order.order_status || '').toLowerCase() === 'pending' && Number(order.total) === 0
+                          ? 'Price Pending'
+                          : CURRENCY_FORMATTER.format(Number(order.total) || 0)}
+                      </span>
+                      <span>{toTitleCase(order.order_status) || 'Pending'} · {toTitleCase(order.payment_status) || 'Unpaid'}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -182,32 +183,30 @@ function Customers() {
   const filtersRef = useRef(null)
   const [searchValue, setSearchValue] = useState('')
   const [selectedStatus, setSelectedStatus] = useState('All Status')
-  const [selectedActivity, setSelectedActivity] = useState('All Customers')
   const [openDropdown, setOpenDropdown] = useState(null)
   const [rowsPerPage, setRowsPerPage] = useState(10)
   const [page, setPage] = useState(1)
   const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [managingCustomer, setManagingCustomer] = useState(null)
+  const [customers, setCustomers] = useState([])
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(true)
+  const [customersError, setCustomersError] = useState('')
+
+  const displayCustomers = useMemo(() => customers.map(mapCustomerForDisplay), [customers])
 
   const filteredCustomers = useMemo(() => {
     const needle = normalizeText(searchValue).trim()
 
-    return CUSTOMERS.filter((customer) => {
+    return displayCustomers.filter((customer) => {
       const matchesSearch =
         needle.length === 0 ||
-        normalizeText(customer.name).includes(needle) ||
-        normalizeText(customer.email).includes(needle) ||
-        normalizeText(customer.phone).includes(needle)
+        customer.searchText.includes(needle)
 
       const matchesStatus = selectedStatus === 'All Status' || customer.status === selectedStatus
 
-      const matchesActivity =
-        selectedActivity === 'All Customers' ||
-        (selectedActivity === 'Has Orders' ? customer.orders > 0 : customer.orders === 0)
-
-      return matchesSearch && matchesStatus && matchesActivity
+      return matchesSearch && matchesStatus
     })
-  }, [searchValue, selectedStatus, selectedActivity])
+  }, [displayCustomers, searchValue, selectedStatus])
 
   const pageCount = Math.max(1, Math.ceil(filteredCustomers.length / rowsPerPage))
   const currentPage = Math.min(page, pageCount)
@@ -228,6 +227,40 @@ function Customers() {
       selectAllRef.current.indeterminate = isPartiallySelected
     }
   }, [isPartiallySelected])
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadCustomers() {
+      try {
+        setIsLoadingCustomers(true)
+        setCustomersError('')
+
+        const nextCustomers = await fetchAdminCustomers()
+
+        if (isMounted) {
+          setCustomers(nextCustomers)
+        }
+      } catch (error) {
+        console.error('[ADMIN CUSTOMERS] load error:', error)
+
+        if (isMounted) {
+          setCustomers([])
+          setCustomersError('Unable to load customers from Supabase.')
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingCustomers(false)
+        }
+      }
+    }
+
+    loadCustomers()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   useEffect(() => {
     const handlePointerDown = (event) => {
@@ -334,27 +367,6 @@ function Customers() {
             />
           </label>
 
-          <label className="admin-customers-filter" aria-label="Order activity filter">
-            <FilterDropdown
-              id="customers-activity"
-              value={selectedActivity}
-              options={ACTIVITY_OPTIONS}
-              isOpen={openDropdown === 'activity'}
-              onToggle={() => handleToggleDropdown('activity')}
-              onSelect={handleSelectDropdownValue(setSelectedActivity)}
-              icon={
-                <svg className="admin-customers-control-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path
-                    d="M7 4h10l2 3v13H5V7l2-3Zm0 3h10M8 11h8M8 15h6"
-                    stroke="currentColor"
-                    strokeWidth="1.7"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              }
-            />
-          </label>
         </div>
       </div>
 
@@ -375,7 +387,6 @@ function Customers() {
                   />
                 </th>
                 <th>Customer</th>
-                <th>Contact</th>
                 <th>Orders</th>
                 <th>Total Spent</th>
                 <th>Last Order</th>
@@ -384,10 +395,22 @@ function Customers() {
               </tr>
             </thead>
             <tbody>
-              {paginatedCustomers.length === 0 ? (
+              {isLoadingCustomers ? (
                 <tr>
-                  <td className="admin-customers-empty" colSpan={8}>
-                    No customers matched your filters.
+                  <td className="admin-customers-empty" colSpan={7}>
+                    Loading customers...
+                  </td>
+                </tr>
+              ) : customersError ? (
+                <tr>
+                  <td className="admin-customers-empty admin-customers-empty--error" colSpan={7}>
+                    {customersError}
+                  </td>
+                </tr>
+              ) : paginatedCustomers.length === 0 ? (
+                <tr>
+                  <td className="admin-customers-empty" colSpan={7}>
+                    No customers found.
                   </td>
                 </tr>
               ) : (
@@ -406,7 +429,6 @@ function Customers() {
                       <div className="admin-customers-name">{customer.name}</div>
                       <div className="admin-customers-email">{customer.email}</div>
                     </td>
-                    <td>{customer.phone}</td>
                     <td className="admin-customers-orders">{customer.orders}</td>
                     <td className="admin-customers-spent">{CURRENCY_FORMATTER.format(customer.totalSpent)}</td>
                     <td className={customer.lastOrder === 'Never' ? 'admin-customers-never' : ''}>{customer.lastOrder}</td>
