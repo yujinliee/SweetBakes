@@ -140,8 +140,6 @@ export function SiteTopbar({
   homeHref = '#home',
   locationHref = '#location',
   contactHref = '#contact',
-  latestRequest = '',
-  onTrackOrder,
   onNavigate,
   isCustomerAuthenticated = false,
   onCustomerLogout,
@@ -155,8 +153,6 @@ export function SiteTopbar({
   const isScrolledRef = useRef(forceScrolled || getIsTopbarScrolled())
   const topbarMotionTimeoutRef = useRef(null)
   const topbarIsScrolled = forceScrolled || isScrolled
-  const hasTrackOrder = Boolean(onTrackOrder)
-  const showTrackOrder = hasTrackOrder && Boolean(latestRequest)
   const cartCount = useSyncExternalStore(subscribeCart, getCartCount)
   const currentPathname = window.location.pathname
   const isCartActive = currentPathname === '/cart'
@@ -438,15 +434,14 @@ export function SiteTopbar({
         </nav>
 
         <div className="topbar-actions" aria-label="Quick actions">
-          {hasTrackOrder ? (
-            <div
-              className={`topbar-account${isAccountMenuOpen ? ' topbar-account--open' : ''}`}
-              ref={accountMenuRef}
-              onMouseEnter={() => {
-                if (isAccountMenuEnabled) setIsAccountMenuOpen(true)
-              }}
-              onMouseLeave={() => setIsAccountMenuOpen(false)}
-            >
+          <div
+            className={`topbar-account${isAccountMenuOpen ? ' topbar-account--open' : ''}`}
+            ref={accountMenuRef}
+            onMouseEnter={() => {
+              if (isAccountMenuEnabled) setIsAccountMenuOpen(true)
+            }}
+            onMouseLeave={() => setIsAccountMenuOpen(false)}
+          >
               <a
                 className="topbar-login topbar-login-link"
                 href={isAccountMenuEnabled ? profileHref : loginHref}
@@ -503,22 +498,7 @@ export function SiteTopbar({
                   </button>
                 </div>
               ) : null}
-            </div>
-          ) : (
-            <a
-              className="topbar-login-text"
-              href={loginHref}
-              onClick={handleLoginNavigation}
-            >
-              <span className="topbar-login-pill-label">Login</span>
-              <span className="topbar-login-pill-arrow" aria-hidden="true">
-                <svg viewBox="0 0 18 18" focusable="false">
-                  <path d="M6.5 11.5L11.5 6.5" />
-                  <path d="M7.5 6.5H11.5V10.5" />
-                </svg>
-              </span>
-            </a>
-          )}
+          </div>
           <a
             className={`topbar-cart${isCartActive ? ' topbar-cart--active' : ''}`}
             href="/cart"
@@ -539,48 +519,6 @@ export function SiteTopbar({
             </span>
             {cartCount > 0 ? <span className="topbar-cart-badge">{cartCount}</span> : null}
           </a>
-          {showTrackOrder ? (
-            <button
-              className="topbar-track-order"
-              type="button"
-              onClick={() => onTrackOrder?.(latestRequest)}
-            >
-              <span>Track Order</span>
-              <svg
-                className="track-order-border"
-                viewBox="0 0 100 40"
-                preserveAspectRatio="none"
-                aria-hidden="true"
-              >
-                <defs>
-                  <linearGradient id="track-order-streak-gradient" x1="0" x2="1" y1="0" y2="0">
-                    <stop offset="0%" stopColor="#9D62D9" stopOpacity="0.08" />
-                    <stop offset="22%" stopColor="#BB86EA" stopOpacity="0.55" />
-                    <stop offset="48%" stopColor="#D4ACF5" stopOpacity="0.95" />
-                    <stop offset="66%" stopColor="#F0DEFF" stopOpacity="1" />
-                    <stop offset="84%" stopColor="#BB86EA" stopOpacity="0.52" />
-                    <stop offset="100%" stopColor="#9D62D9" stopOpacity="0" />
-                  </linearGradient>
-                  <filter id="track-order-soft-glow" x="-28%" y="-48%" width="156%" height="196%">
-                    <feGaussianBlur stdDeviation="2.1" result="blur" />
-                    <feMerge>
-                      <feMergeNode in="blur" />
-                      <feMergeNode in="SourceGraphic" />
-                    </feMerge>
-                  </filter>
-                </defs>
-                <rect
-                  className="track-order-border-trail"
-                  x="2"
-                  y="2"
-                  width="96"
-                  height="36"
-                  rx="6"
-                  pathLength="100"
-                />
-              </svg>
-            </button>
-          ) : null}
         </div>
       </div>
     </header>
@@ -1427,8 +1365,6 @@ function MoreTreatsSection() {
 }
 
 function LandingPage({
-  latestRequest,
-  onTrackOrder,
   onNavigate,
   onCustomerLogout,
   isCustomerAuthenticated = false,
@@ -1584,8 +1520,6 @@ useEffect(() => {
   return (
     <div className="page-shell">
       <SiteTopbar
-        latestRequest={latestRequest}
-        onTrackOrder={onTrackOrder}
         onNavigate={onNavigate}
         onCustomerLogout={onCustomerLogout}
         isCustomerAuthenticated={isCustomerAuthenticated}
@@ -1770,7 +1704,6 @@ useEffect(() => {
       <SiteFooter />
       <Chatbot
         onNavigate={onNavigate}
-        onTrackOrder={onTrackOrder}
         isCustomerAuthenticated={isCustomerAuthenticated}
       />
     </div>

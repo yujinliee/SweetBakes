@@ -10,7 +10,6 @@ import {
 } from './auth/authReturnTo.js'
 import { getCustomerAuthStatus } from './auth/customerAuth.js'
 import CartPage from './cartpage/CartPage.jsx'
-import OrderTrackingDrawer from './components/OrderTrackingDrawer.jsx'
 import CustomizationPage from './customization/CustomizationPage.jsx'
 import LandingPage from './landingpage/LandingPage.jsx'
 import LoginPage from './loginpage/LoginPage.jsx'
@@ -19,9 +18,7 @@ import ProfilePage from './profilepage/ProfilePage.jsx'
 import RegisterPage from './registerpage/RegisterPage.jsx'
 import { supabase } from './lib/supabase.js'
 
-const latestRequestStorageKey = 'sweetbakes_latest_request'
 const customerAuthStorageKey = 'sweetbakes_customer_authenticated'
-const trackOrderLoginStorageKey = 'sweetbakes_track_order_login'
 
 const getCurrentLocationKey = () =>
   `${window.location.pathname}${window.location.search}${window.location.hash}`
@@ -47,15 +44,8 @@ const logNavigationDebug = (...values) => {
 
 function App() {
   const [locationKey, setLocationKey] = useState(getCurrentLocationKey)
-  const [latestRequest, setLatestRequest] = useState(
-    () => window.localStorage.getItem(latestRequestStorageKey) || '',
-  )
   const [isCustomerAuthenticated, setIsCustomerAuthenticated] = useState(getCustomerAuthenticated)
   const [customerRouteCheckedKey, setCustomerRouteCheckedKey] = useState('')
-  const [trackingDrawer, setTrackingDrawer] = useState({
-    isOpen: false,
-    requestNumber: '',
-  })
 
   useEffect(() => {
     const syncLocation = () => setLocationKey(getCurrentLocationKey())
@@ -167,31 +157,7 @@ function App() {
     return () => listener.subscription.unsubscribe()
   }, [])
 
-  const openTrackOrder = (requestNumber = '') => {
-    setTrackingDrawer({
-      isOpen: true,
-      requestNumber: requestNumber || latestRequest,
-    })
-  }
-
-  const saveLatestRequest = (requestNumber) => {
-    window.localStorage.setItem(latestRequestStorageKey, requestNumber)
-    setLatestRequest(requestNumber)
-  }
-
   const handleCustomerLogin = (targetHref = '/', options = {}) => {
-    const pendingTracking = window.localStorage.getItem(trackOrderLoginStorageKey)
-    let trackingRequestNumber = ''
-
-    if (pendingTracking) {
-      try {
-        trackingRequestNumber = JSON.parse(pendingTracking).requestNumber || ''
-      } catch {
-        trackingRequestNumber = ''
-      }
-      window.localStorage.removeItem(trackOrderLoginStorageKey)
-    }
-
     window.localStorage.setItem(customerAuthStorageKey, 'true')
     setIsCustomerAuthenticated(true)
 
@@ -199,34 +165,12 @@ function App() {
     const safeTargetHref = getCustomerAuthReturnPath(targetHref)
     navigate(savedReturnTo || safeTargetHref || '/', options)
 
-    if (pendingTracking !== null) {
-      setTrackingDrawer({
-        isOpen: true,
-        requestNumber: trackingRequestNumber,
-      })
-    }
-  }
-
-  const handleTrackOrderSignIn = (requestNumber = '') => {
-    window.localStorage.setItem(
-      trackOrderLoginStorageKey,
-      JSON.stringify({ requestNumber, returnTo: getCurrentLocationKey() }),
-    )
-    closeTrackOrder()
-    navigate(`/login?redirect=${encodeURIComponent(getCurrentLocationKey())}`)
   }
 
   const handleCustomerLogout = () => {
     clearAuthReturnTo()
     window.localStorage.removeItem(customerAuthStorageKey)
     setIsCustomerAuthenticated(false)
-  }
-
-  const closeTrackOrder = () => {
-    setTrackingDrawer((current) => ({
-      ...current,
-      isOpen: false,
-    }))
   }
 
   const currentPathname = getPathnameFromLocationKey(locationKey)
@@ -241,9 +185,6 @@ function App() {
     ) : currentPathname === '/cakes' || currentPathname === '/cake' ? (
       <CustomizationPage
         initialProduct="cakes"
-        latestRequest={latestRequest}
-        onRequestSubmitted={saveLatestRequest}
-        onTrackOrder={openTrackOrder}
         onNavigate={navigate}
         onCustomerLogout={handleCustomerLogout}
         isCustomerAuthenticated={isCustomerAuthenticated}
@@ -252,9 +193,6 @@ function App() {
     ) : currentPathname === '/cupcakes' ? (
       <CustomizationPage
         initialProduct="cupcakes"
-        latestRequest={latestRequest}
-        onRequestSubmitted={saveLatestRequest}
-        onTrackOrder={openTrackOrder}
         onNavigate={navigate}
         onCustomerLogout={handleCustomerLogout}
         isCustomerAuthenticated={isCustomerAuthenticated}
@@ -262,9 +200,6 @@ function App() {
       />
     ) : currentPathname === '/customize' ? (
       <CustomizationPage
-        latestRequest={latestRequest}
-        onRequestSubmitted={saveLatestRequest}
-        onTrackOrder={openTrackOrder}
         onNavigate={navigate}
         onCustomerLogout={handleCustomerLogout}
         isCustomerAuthenticated={isCustomerAuthenticated}
@@ -272,8 +207,6 @@ function App() {
       />
     ) : currentPathname === '/login' ? (
       <LoginPage
-        latestRequest={latestRequest}
-        onTrackOrder={openTrackOrder}
         onNavigate={navigate}
         onCustomerLogin={handleCustomerLogin}
         onCustomerLogout={handleCustomerLogout}
@@ -282,8 +215,6 @@ function App() {
       />
     ) : currentPathname === '/register' ? (
       <RegisterPage
-        latestRequest={latestRequest}
-        onTrackOrder={openTrackOrder}
         onNavigate={navigate}
         onCustomerLogin={handleCustomerLogin}
         onCustomerLogout={handleCustomerLogout}
@@ -298,8 +229,6 @@ function App() {
       />
     ) : currentPathname === '/profile' ? (
       <ProfilePage
-        latestRequest={latestRequest}
-        onTrackOrder={openTrackOrder}
         onNavigate={navigate}
         onCustomerLogout={handleCustomerLogout}
         isCustomerAuthenticated={isCustomerAuthenticated}
@@ -307,8 +236,6 @@ function App() {
       />
     ) : currentPathname === '/my-orders' ? (
       <MyOrdersPage
-        latestRequest={latestRequest}
-        onTrackOrder={openTrackOrder}
         onNavigate={navigate}
         onCustomerLogout={handleCustomerLogout}
         isCustomerAuthenticated={isCustomerAuthenticated}
@@ -316,8 +243,6 @@ function App() {
       />
     ) : currentPathname === '/cart' ? (
       <CartPage
-        latestRequest={latestRequest}
-        onTrackOrder={openTrackOrder}
         onNavigate={navigate}
         onCustomerLogout={handleCustomerLogout}
         isCustomerAuthenticated={isCustomerAuthenticated}
@@ -325,8 +250,6 @@ function App() {
       />
     ) : (
       <LandingPage
-        latestRequest={latestRequest}
-        onTrackOrder={openTrackOrder}
         onNavigate={navigate}
         onCustomerLogout={handleCustomerLogout}
         isCustomerAuthenticated={isCustomerAuthenticated}
@@ -337,14 +260,6 @@ function App() {
   return (
     <>
       {page}
-      {trackingDrawer.isOpen && !currentPathname.startsWith('/admin') ? (
-        <OrderTrackingDrawer
-          key={trackingDrawer.requestNumber || 'track-order'}
-          initialRequestNumber={trackingDrawer.requestNumber}
-          onClose={closeTrackOrder}
-          onRequestSignIn={handleTrackOrderSignIn}
-        />
-      ) : null}
     </>
   )
 }

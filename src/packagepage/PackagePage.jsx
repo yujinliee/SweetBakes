@@ -140,9 +140,6 @@ const saveSubmittedRequest = (request) => {
 }
 
 function PackagePage({
-  latestRequest,
-  onRequestSubmitted,
-  onTrackOrder,
   embedded = false,
   onProductChange,
 }) {
@@ -447,7 +444,6 @@ function PackagePage({
       assertCanAcceptOrderForDate(packageCustomerInfo.preferredDate, availability.settings)
       saveSubmittedRequest(request)
       await clearCustomDraft('party-package', draftScopeRef.current)
-      onRequestSubmitted?.(request.requestNumber)
       setSubmittedRequest(request)
       setSubmissionError('')
     } catch {
@@ -535,10 +531,6 @@ function PackagePage({
       {submittedRequest ? (
         <PackageSuccessModal
           request={submittedRequest}
-          onTrackOrder={(requestNumber) => {
-            setSubmittedRequest(null)
-            onTrackOrder?.(requestNumber)
-          }}
         />
       ) : null}
     </>
@@ -555,8 +547,6 @@ function PackagePage({
         homeHref="/"
         locationHref="/#location"
         contactHref="#contact"
-        latestRequest={latestRequest}
-        onTrackOrder={onTrackOrder}
       />
 
       <main className="cake-main">

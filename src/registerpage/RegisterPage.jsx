@@ -75,7 +75,7 @@ const privacyContent = [
   },
   {
     heading: '4. Order Information',
-    body: 'Order information may include selected products, custom design details, messages, quantities, request numbers, and details needed to prepare or track an order.',
+    body: 'Order information may include selected products, custom design details, messages, quantities, order references, and details needed to prepare an order.',
   },
   {
     heading: '5. Payment Information',
@@ -268,8 +268,6 @@ async function verifyCustomerProfile(userId) {
 }
 
 function RegisterPage({
-  latestRequest,
-  onTrackOrder,
   onNavigate,
   onCustomerLogin,
   onCustomerLogout,
@@ -394,8 +392,6 @@ function RegisterPage({
         homeHref="/"
         locationHref="/#location"
         contactHref="/#contact"
-        latestRequest={latestRequest}
-        onTrackOrder={onTrackOrder}
         onNavigate={onNavigate}
         onCustomerLogout={onCustomerLogout}
         isCustomerAuthenticated={isCustomerAuthenticated}

@@ -160,8 +160,6 @@ function CartSummaryThumb({ product }) {
 }
 
 function CartPage({
-  latestRequest,
-  onTrackOrder,
   onNavigate,
   onCustomerLogout,
   isCustomerAuthenticated = false,
@@ -563,8 +561,6 @@ function CartPage({
         homeHref="/"
         locationHref="/#location"
         contactHref="#contact"
-        latestRequest={latestRequest}
-        onTrackOrder={onTrackOrder}
         onNavigate={onNavigate}
         onCustomerLogout={onCustomerLogout}
         isCustomerAuthenticated={isCustomerAuthenticated}

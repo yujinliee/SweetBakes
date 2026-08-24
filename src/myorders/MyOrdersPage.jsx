@@ -52,8 +52,6 @@ const formatStatus = (value) => {
 }
 
 function MyOrdersPage({
-  latestRequest,
-  onTrackOrder,
   onNavigate,
   onCustomerLogout,
   isCustomerAuthenticated = false,
@@ -163,8 +161,6 @@ function MyOrdersPage({
         homeHref="/"
         locationHref="/#location"
         contactHref="/#contact"
-        latestRequest={latestRequest}
-        onTrackOrder={onTrackOrder}
         onNavigate={onNavigate}
         onCustomerLogout={onCustomerLogout}
         isCustomerAuthenticated={isCustomerAuthenticated}

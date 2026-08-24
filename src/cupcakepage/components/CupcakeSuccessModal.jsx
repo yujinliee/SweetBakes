@@ -13,13 +13,9 @@ const formatSubmittedOn = (submittedAt) => {
   return `${date} - ${time}`
 }
 
-function CupcakeSuccessModal({ request, onTrackOrder }) {
+function CupcakeSuccessModal({ request }) {
   const goHome = () => {
     window.location.href = '/'
-  }
-
-  const trackOrder = () => {
-    onTrackOrder?.(request.requestNumber)
   }
 
   return (
@@ -54,7 +50,7 @@ function CupcakeSuccessModal({ request, onTrackOrder }) {
 
         <dl className="cake-success-details">
           <div>
-            <dt>Request Number</dt>
+            <dt>Order ID</dt>
             <dd>{request.requestNumber}</dd>
           </div>
           <div>
@@ -66,9 +62,6 @@ function CupcakeSuccessModal({ request, onTrackOrder }) {
         <div className="cake-success-actions">
           <button className="cake-success-button cake-success-button--secondary" type="button" onClick={goHome}>
             Back to Home
-          </button>
-          <button className="cake-success-button cake-success-button--primary" type="button" onClick={trackOrder}>
-            Track My Order
           </button>
         </div>
       </section>

@@ -82,9 +82,6 @@ const getInitialProduct = (initialProduct) => {
 
 function CustomizationPage({
   initialProduct,
-  latestRequest,
-  onRequestSubmitted,
-  onTrackOrder,
   onNavigate,
   onCustomerLogout,
   isCustomerAuthenticated = false,
@@ -114,8 +111,6 @@ function CustomizationPage({
         homeHref="/"
         locationHref="/#location"
         contactHref="#contact"
-        latestRequest={latestRequest}
-        onTrackOrder={onTrackOrder}
         onNavigate={onNavigate}
         onCustomerLogout={onCustomerLogout}
         isCustomerAuthenticated={isCustomerAuthenticated}
@@ -139,9 +134,6 @@ function CustomizationPage({
         >
           <CakePage
             embedded
-            latestRequest={latestRequest}
-            onRequestSubmitted={onRequestSubmitted}
-            onTrackOrder={onTrackOrder}
           />
         </div>
 
@@ -153,9 +145,6 @@ function CustomizationPage({
         >
           <CupcakePage
             embedded
-            latestRequest={latestRequest}
-            onRequestSubmitted={onRequestSubmitted}
-            onTrackOrder={onTrackOrder}
           />
         </div>
 
@@ -167,9 +156,6 @@ function CustomizationPage({
         >
           <PackagePage
             embedded
-            latestRequest={latestRequest}
-            onRequestSubmitted={onRequestSubmitted}
-            onTrackOrder={onTrackOrder}
           />
         </div>
       </main>

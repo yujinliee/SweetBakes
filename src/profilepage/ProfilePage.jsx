@@ -60,8 +60,6 @@ function ProfileSection({ title, action, children }) {
 }
 
 function ProfilePage({
-  latestRequest,
-  onTrackOrder,
   onNavigate,
   onCustomerLogout,
   isCustomerAuthenticated = false,
@@ -383,8 +381,6 @@ function ProfilePage({
         homeHref="/"
         locationHref="/#location"
         contactHref="/#contact"
-        latestRequest={latestRequest}
-        onTrackOrder={onTrackOrder}
         onNavigate={onNavigate}
         onCustomerLogout={onCustomerLogout}
         isCustomerAuthenticated={isCustomerAuthenticated}

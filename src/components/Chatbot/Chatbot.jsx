@@ -37,14 +37,6 @@ const quickActions = [
     href: '/customize?type=packages',
   },
   {
-    id: 'track',
-    label: 'Track My Order',
-    response:
-      'Already placed an order? You can check its current status through Track Order.',
-    cta: 'Track Order',
-    action: 'track',
-  },
-  {
     id: 'pickup',
     label: 'Pickup & Delivery',
     response:
@@ -209,14 +201,6 @@ const getMatchedAction = (text) => {
     return quickActions.find((action) => action.id === 'packages')
   }
 
-  if (
-    normalizedText.includes('track') ||
-    normalizedText.includes('status') ||
-    normalizedText.includes('order status')
-  ) {
-    return quickActions.find((action) => action.id === 'track')
-  }
-
   if (normalizedText.includes('delivery') || normalizedText.includes('pickup')) {
     return quickActions.find((action) => action.id === 'pickup')
   }
@@ -259,7 +243,7 @@ const getMatchedAction = (text) => {
   return null
 }
 
-function Chatbot({ onNavigate, onTrackOrder, isCustomerAuthenticated = false }) {
+function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
   const [isOpen, setIsOpen] = useState(false)
   const [isMaximized, setIsMaximized] = useState(false)
   const [messages, setMessages] = useState(getStoredMessages)
@@ -323,11 +307,6 @@ function Chatbot({ onNavigate, onTrackOrder, isCustomerAuthenticated = false }) 
   })
 
   const navigateTo = (action) => {
-    if (action.action === 'track') {
-      onTrackOrder?.()
-      return
-    }
-
     if (!action.href) {
       return
     }

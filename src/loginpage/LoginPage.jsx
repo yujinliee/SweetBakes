@@ -31,8 +31,6 @@ function GoogleIcon() {
 }
 
 function LoginPage({
-  latestRequest,
-  onTrackOrder,
   onNavigate,
   onCustomerLogin,
   onCustomerLogout,
@@ -127,8 +125,6 @@ function LoginPage({
         homeHref="/"
         locationHref="/#location"
         contactHref="/#contact"
-        latestRequest={latestRequest}
-        onTrackOrder={onTrackOrder}
         onNavigate={onNavigate}
         onCustomerLogout={onCustomerLogout}
         isCustomerAuthenticated={isCustomerAuthenticated}

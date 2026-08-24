@@ -95,9 +95,6 @@ const saveSubmittedRequest = (request) => {
 }
 
 function CupcakePage({
-  latestRequest,
-  onRequestSubmitted,
-  onTrackOrder,
   embedded = false,
   onProductChange,
 }) {
@@ -324,7 +321,6 @@ function CupcakePage({
       assertCanAcceptOrderForDate(customerInfo.preferredDate, availability.settings)
       saveSubmittedRequest(request)
       await clearCustomDraft('cupcake', draftScopeRef.current)
-      onRequestSubmitted?.(request.requestNumber)
       setSubmittedRequest(request)
       setSubmissionError('')
     } catch {
@@ -412,10 +408,6 @@ function CupcakePage({
       {submittedRequest ? (
         <CupcakeSuccessModal
           request={submittedRequest}
-          onTrackOrder={(requestNumber) => {
-            setSubmittedRequest(null)
-            onTrackOrder?.(requestNumber)
-          }}
         />
       ) : null}
     </>
@@ -432,8 +424,6 @@ function CupcakePage({
         homeHref="/"
         locationHref="/#location"
         contactHref="#contact"
-        latestRequest={latestRequest}
-        onTrackOrder={onTrackOrder}
       />
 
       <main className="cake-main">

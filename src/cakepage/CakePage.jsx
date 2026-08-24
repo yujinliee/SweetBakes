@@ -100,9 +100,6 @@ const shouldStartAtStepOne = () => {
 }
 
 function CakePage({
-  latestRequest,
-  onRequestSubmitted,
-  onTrackOrder,
   embedded = false,
   onProductChange,
 }) {
@@ -441,7 +438,6 @@ function CakePage({
         customerInfo,
       }
 
-      onRequestSubmitted?.(request.requestNumber)
       setSubmittedRequest(request)
       try {
         await completeCustomCakeDraft(draftIdRef.current)
@@ -697,10 +693,6 @@ function CakePage({
       {submittedRequest ? (
         <CakeSuccessModal
           request={submittedRequest}
-          onTrackOrder={(requestNumber) => {
-            setSubmittedRequest(null)
-            onTrackOrder?.(requestNumber)
-          }}
         />
       ) : null}
     </>
@@ -717,8 +709,6 @@ function CakePage({
         homeHref="/"
         locationHref="/#location"
         contactHref="#contact"
-        latestRequest={latestRequest}
-        onTrackOrder={onTrackOrder}
       />
 
       <main className="cake-main">
