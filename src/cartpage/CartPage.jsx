@@ -187,10 +187,11 @@ function CartPage({
   const [touched, setTouched] = useState({})
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false)
   const [orderSubmissionError, setOrderSubmissionError] = useState('')
+  const guestPaymentStatus = new URLSearchParams(window.location.search).get('payment')
   const pendingOrderIdRef = useRef(null)
   const profileUserIdRef = useRef(null)
   const items = useSyncExternalStore(subscribeCart, getCartItems)
-  const availability = useAvailability()
+  const availability = useAvailability({ active: true })
   const serviceHoursLabel = availability.serviceHoursLabel || 'Loading...'
   const timeAvailabilityMessage = availability.serviceHoursLabel
     ? `Please select a time between ${availability.serviceHoursLabel}.`
@@ -452,7 +453,13 @@ function CartPage({
     }
 
     try {
-      assertCanAcceptOrderForDate(preferredDate, availability.settings)
+      const latestAvailability = await availability.refresh()
+      if (!availability.isDateAvailable(preferredDate, latestAvailability)) {
+        setPreferredDate('')
+        setTouched((current) => ({ ...current, preferredDate: true }))
+        return
+      }
+      assertCanAcceptOrderForDate(preferredDate, latestAvailability)
     } catch {
       setPreferredDate('')
       setTouched((current) => ({ ...current, preferredDate: true }))
@@ -471,17 +478,13 @@ function CartPage({
       const recipientName = customerInfo.deliverDifferentRecipient
         ? `${customerInfo.recipientFirstName} ${customerInfo.recipientLastName}`.trim()
         : null
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
-      const session = sessionData?.session
-      if (sessionError || !session?.user?.id || !session.access_token) {
-        setOrderSubmissionError('Please sign in before starting payment.')
-        return
-      }
+      const { data: sessionData } = await supabase.auth.getSession()
+      const session = sessionData?.session || null
 
       let orderId = pendingOrderIdRef.current
       if (!orderId) {
         const rpcPayload = {
-          p_customer_id: session.user.id,
+          p_customer_id: session?.user?.id || null,
           p_first_name: customerInfo.customerFirstName.trim(),
           p_last_name: customerInfo.customerLastName.trim(),
           p_contact_number: customerInfo.contactNumber,
@@ -538,8 +541,13 @@ function CartPage({
       const { data: paymentData, error: paymentError } = await supabase.functions.invoke(
         'create-cart-xendit-payment',
         {
-          body: { orderId },
-          headers: { Authorization: `Bearer ${session.access_token}` },
+          body: {
+            orderId,
+            ...(session?.access_token ? {} : { guestEmail: customerInfo.email.trim() }),
+          },
+          ...(session?.access_token
+            ? { headers: { Authorization: `Bearer ${session.access_token}` } }
+            : {}),
         },
       )
 
@@ -938,6 +946,16 @@ function CartPage({
                 ) : null}
 
                 <div className="cart-checkout-actions">
+                  {!isCustomerAuthenticated && guestPaymentStatus === 'success' ? (
+                    <p className="cart-payment-placeholder cart-payment-success" role="status">
+                      Payment submitted successfully. We are confirming your order now.
+                    </p>
+                  ) : null}
+                  {!isCustomerAuthenticated && guestPaymentStatus === 'cancelled' ? (
+                    <p className="cart-payment-placeholder" role="status">
+                      Payment was cancelled. Your order remains unpaid and you may try again.
+                    </p>
+                  ) : null}
                   {/*
                     This is a UI placeholder — no payment will be processed.
                   */}

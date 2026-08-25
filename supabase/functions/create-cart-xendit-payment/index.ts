@@ -16,6 +16,7 @@ type Order = {
   email: string | null;
   first_name: string | null;
   last_name: string | null;
+  created_at: string | null;
   total: number | string | null;
   payment_status: string | null;
   order_status: string | null;
@@ -39,21 +40,22 @@ export default {
     if (req.method !== "POST") return jsonResponse({ error: "Method not allowed." }, 405);
 
     const authorization = req.headers.get("Authorization");
-    if (!authorization?.match(/^Bearer\s+\S+$/i)) {
-      return jsonResponse({ error: "Authentication is required." }, 401);
-    }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
     if (!supabaseUrl || !supabaseAnonKey) return jsonResponse({ error: "Authentication service is not configured." }, 500);
 
-    const customerSupabase = createClient(supabaseUrl, supabaseAnonKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-      global: { headers: { Authorization: authorization } },
-    });
-    const { data: userData, error: userError } = await customerSupabase.auth.getUser();
-    const user = userData?.user;
-    if (userError || !user) return jsonResponse({ error: "Authentication is required." }, 401);
+    let user: { id: string } | null = null;
+    if (authorization) {
+      if (!authorization.match(/^Bearer\s+\S+$/i)) return jsonResponse({ error: "Invalid authorization header." }, 401);
+      const customerSupabase = createClient(supabaseUrl, supabaseAnonKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+        global: { headers: { Authorization: authorization } },
+      });
+      const { data: userData, error: userError } = await customerSupabase.auth.getUser();
+      if (userError || !userData?.user) return jsonResponse({ error: "Authentication is invalid." }, 401);
+      user = userData.user;
+    }
 
     let input: unknown;
     try { input = await req.json(); } catch { return jsonResponse({ error: "Request body must be valid JSON." }, 400); }
@@ -61,13 +63,42 @@ export default {
       return jsonResponse({ error: "A non-empty orderId is required." }, 400);
     }
 
-    const orderId = (input as { orderId: string }).orderId.trim();
-    const { data: order, error: orderError } = await customerSupabase
-      .from("orders")
-      .select("id, order_number, customer_id, email, first_name, last_name, total, payment_status, order_status")
-      .eq("id", orderId)
-      .eq("customer_id", user.id)
-      .maybeSingle() as { data: Order | null; error: { message?: string; code?: string } | null };
+    const request = input as { orderId: string; guestEmail?: unknown };
+    const orderId = request.orderId.trim();
+    let order: Order | null = null;
+    let orderError: { message?: string; code?: string } | null = null;
+    if (user) {
+      const customerSupabase = createClient(supabaseUrl, supabaseAnonKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+        global: { headers: { Authorization: authorization as string } },
+      });
+      const result = await customerSupabase
+        .from("orders")
+        .select("id, order_number, customer_id, email, first_name, last_name, created_at, total, payment_status, order_status")
+        .eq("id", orderId)
+        .eq("customer_id", user.id)
+        .maybeSingle() as { data: Order | null; error: { message?: string; code?: string } | null };
+      order = result.data;
+      orderError = result.error;
+    } else {
+      if (typeof request.guestEmail !== "string" || !request.guestEmail.trim()) {
+        return jsonResponse({ error: "A guest checkout email is required." }, 400);
+      }
+      const result = await ctx.supabaseAdmin
+        .from("orders")
+        .select("id, order_number, customer_id, email, first_name, last_name, created_at, total, payment_status, order_status")
+        .eq("id", orderId)
+        .is("customer_id", null)
+        .maybeSingle() as { data: Order | null; error: { message?: string; code?: string } | null };
+      order = result.data;
+      orderError = result.error;
+      if (order && String(order.email || "").trim().toLowerCase() !== request.guestEmail.trim().toLowerCase()) {
+        order = null;
+      }
+      if (order && (!order.created_at || Date.now() - new Date(order.created_at).getTime() > 24 * 60 * 60 * 1000)) {
+        order = null;
+      }
+    }
 
     if (orderError) {
       console.error("[CREATE CART XENDIT ORDER LOAD]", { orderId, code: orderError.code ?? null, message: orderError.message ?? null });
@@ -115,8 +146,12 @@ export default {
       capture_method: "AUTOMATIC",
       locale: "en",
       description: `Sweet Bakes payment for order ${order.order_number ?? order.id}`.slice(0, 255),
-      success_return_url: `${appOrigin}/my-orders?payment=success&order=${encodeURIComponent(order.id)}`,
-      cancel_return_url: `${appOrigin}/my-orders?payment=cancelled&order=${encodeURIComponent(order.id)}`,
+      success_return_url: user
+        ? `${appOrigin}/my-orders?payment=success&order=${encodeURIComponent(order.id)}`
+        : `${appOrigin}/cart?payment=success`,
+      cancel_return_url: user
+        ? `${appOrigin}/my-orders?payment=cancelled&order=${encodeURIComponent(order.id)}`
+        : `${appOrigin}/cart?payment=cancelled`,
     };
 
     let response: Response;

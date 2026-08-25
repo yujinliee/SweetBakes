@@ -256,7 +256,32 @@ export async function fetchAdminAvailabilitySettings(options = {}) {
   }, mapBlockedDateRows(blockedDatesResult.data || []))
 }
 
-export const fetchAvailabilitySettings = fetchAdminAvailabilitySettings
+// Storefront calendars must use one public-safe aggregate for guests and
+// customers. Do not read public.orders directly here: customer RLS would make
+// capacity depend on the current auth.uid().
+export async function fetchPublicAvailabilitySettings(options = {}) {
+  const { startDate = null, endDate = null } = options
+  const { data, error } = await supabase.rpc('get_public_availability', {
+    p_start_date: startDate,
+    p_end_date: endDate,
+  })
+
+  if (error || !data) {
+    throw new Error('Unable to load availability settings.')
+  }
+
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row) {
+    throw new Error('Unable to load availability settings.')
+  }
+
+  return mapAvailabilitySettingsRow({
+    ...row,
+    orderCounts: row.order_counts || {},
+  }, row.blocked_dates || {})
+}
+
+export const fetchAvailabilitySettings = fetchPublicAvailabilitySettings
 
 export async function saveAdminAvailabilitySettings(settings) {
   const normalizedSettings = normalizeAvailabilitySettings(settings)
