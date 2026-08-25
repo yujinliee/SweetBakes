@@ -219,6 +219,7 @@ function CartPage({
 
     let isMounted = true
     let attempts = 0
+    let timeoutId = null
     const pollPaymentStatus = async () => {
       attempts += 1
       const { data, error } = await supabase.functions.invoke('create-cart-xendit-payment', {
@@ -239,7 +240,7 @@ function CartPage({
         return
       }
 
-      window.setTimeout(pollPaymentStatus, 1500)
+      timeoutId = window.setTimeout(pollPaymentStatus, 1500)
     }
 
     pollPaymentStatus().catch(() => {
@@ -248,8 +249,25 @@ function CartPage({
 
     return () => {
       isMounted = false
+      if (timeoutId) window.clearTimeout(timeoutId)
     }
   }, [guestPaymentStatus, isCustomerAuthenticated])
+
+  useEffect(() => {
+    if (
+      guestPaymentStatus !== 'cancelled' &&
+      !guestPaymentVerified &&
+      !guestPaymentTimedOut
+    ) return
+
+    if (guestPaymentStatus === 'cancelled' || guestPaymentTimedOut) {
+      window.localStorage.removeItem(CART_PAYMENT_RETURN_STORAGE_KEY)
+    }
+
+    const url = new URL(window.location.href)
+    url.searchParams.delete('payment')
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+  }, [guestPaymentStatus, guestPaymentTimedOut, guestPaymentVerified])
 
   useEffect(() => {
     if (!isCustomerAuthenticated) return undefined
@@ -485,7 +503,7 @@ function CartPage({
     }))
 
   const handlePayNow = async () => {
-    if (isSubmittingOrder) {
+    if (isSubmittingOrder || guestPaymentStatus === 'success') {
       return
     }
 
@@ -1026,7 +1044,7 @@ function CartPage({
                   ) : null}
                   {!isCustomerAuthenticated && guestPaymentStatus === 'cancelled' ? (
                     <p className="cart-payment-placeholder" role="status">
-                      Payment was cancelled. Your order remains unpaid and you may try again.
+                      Payment was not completed. Your cart is still available if you&apos;d like to try again.
                     </p>
                   ) : null}
                   {/*
@@ -1036,7 +1054,7 @@ function CartPage({
                     className="cart-pay-button"
                     type="button"
                     onClick={handlePayNow}
-                    disabled={isSubmittingOrder}
+                    disabled={isSubmittingOrder || guestPaymentStatus === 'success'}
                   >
                     {isSubmittingOrder ? 'Processing...' : 'Pay Now'}
                   </button>
@@ -1146,9 +1164,12 @@ function CartPage({
           request={{}}
           title="Payment Successful"
           description="Your payment has been received successfully. Your order has been placed and is now being processed."
-          primaryLabel="Done"
+          primaryLabel="Continue Shopping"
           onClose={() => setGuestPaymentVerified(false)}
-          onPrimary={() => setGuestPaymentVerified(false)}
+          onPrimary={() => {
+            setGuestPaymentVerified(false)
+            onNavigate?.('/')
+          }}
         />
       ) : null}
     </div>
