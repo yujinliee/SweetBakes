@@ -15,8 +15,22 @@ const CONFETTI_PIECES = [
   { x: '88%', y: '76%', rotate: '26deg', delay: '240ms', color: '#f0b2bd' },
 ]
 
-function OrderRequestSuccessModal({ request, productType, onClose, onNavigate }) {
+function OrderRequestSuccessModal({
+  request,
+  productType,
+  onClose,
+  onNavigate,
+  title = 'Request Submitted Successfully',
+  description,
+  primaryLabel = 'View Order',
+  onPrimary,
+}) {
   const viewOrder = () => {
+    if (onPrimary) {
+      onPrimary()
+      return
+    }
+
     const orderPath = request?.orderId
       ? `/my-orders?order=${encodeURIComponent(request.orderId)}`
       : '/my-orders'
@@ -71,13 +85,17 @@ function OrderRequestSuccessModal({ request, productType, onClose, onNavigate })
               />
             </svg>
           </div>
-          <h2 id="order-success-title">Request Submitted Successfully</h2>
+          <h2 id="order-success-title">{title}</h2>
           <p className="order-success-description">
-            We&apos;ve received your {productType} request. Our team will review your customization
-            details and send your quotation once it&apos;s ready.
+            {description || (
+              <>
+                We&apos;ve received your {productType} request. Our team will review your customization
+                details and send your quotation once it&apos;s ready.
+              </>
+            )}
           </p>
           <button className="order-success-button" type="button" onClick={viewOrder}>
-            View Order
+            {primaryLabel}
           </button>
         </div>
       </section>

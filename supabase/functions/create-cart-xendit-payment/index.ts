@@ -45,7 +45,12 @@ function safeName(value: string | null, fallback: string) {
 }
 
 export default {
-  fetch: withSupabase({ auth: "none" }, async (req) => {
+  fetch: withSupabase({ auth: "none" }, async (req, ctx) => {
+    console.log("[CREATE CART XENDIT ENTRY]", {
+      method: req.method,
+      origin: req.headers.get("origin"),
+      hasContext: Boolean(ctx),
+    });
     if (req.method === "OPTIONS") {
       return new Response("ok", { status: 200, headers: corsHeaders(req) });
     }
@@ -76,7 +81,7 @@ export default {
       return respond({ error: "A non-empty orderId is required." }, 400);
     }
 
-    const request = input as { orderId: string; guestEmail?: unknown };
+    const request = input as { orderId: string; guestEmail?: unknown; statusOnly?: unknown };
     const orderId = request.orderId.trim();
     let order: Order | null = null;
     let orderError: { message?: string; code?: string } | null = null;
@@ -121,6 +126,9 @@ export default {
 
     const paymentStatus = (order.payment_status ?? "").toLowerCase();
     const orderStatus = (order.order_status ?? "").toLowerCase();
+    if (request.statusOnly === true) {
+      return respond({ orderId: order.id, paymentStatus });
+    }
     if (["paid", "verified", "payment_verified"].includes(paymentStatus)) return respond({ error: "This order is already paid." }, 400);
     if (["cancelled", "canceled", "rejected", "declined", "void", "refunded"].includes(orderStatus)) return respond({ error: "This order cannot be paid." }, 400);
     if (orderStatus !== "pending" || !["unpaid", "pending"].includes(paymentStatus)) return respond({ error: "This order is not eligible for payment yet." }, 400);

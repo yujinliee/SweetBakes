@@ -5,6 +5,7 @@ import {
   getCartItems,
   getCartItemMetadata,
   setCartQuantity,
+  removeCartQuantity,
   removeFromCart,
 } from '../cartStore.js'
 import CakeAvailabilityCalendar from '../cakepage/components/CakeAvailabilityCalendar.jsx'
@@ -16,6 +17,7 @@ import { useAvailability } from '../hooks/useAvailability.js'
 import { assertCanAcceptOrderForDate } from '../admin/services/availabilityService.js'
 import { supabase } from '../lib/supabase.js'
 import { fetchAuthenticatedCustomerProfile } from '../services/customerProfileService.js'
+import OrderRequestSuccessModal from '../components/OrderRequestSuccessModal.jsx'
 import chocolateCakeImage from '../assets/othersweettreats/regular_chocolate.jpg'
 import redVelvetCakeImage from '../assets/othersweettreats/regular_redvelvet.png'
 import cheesecakeImage from '../assets/othersweettreats/halfordozen_cheesecake.png'
@@ -43,6 +45,7 @@ const ORDER_METHODS = [
 ]
 
 const CART_ORDER_PAYMENT_METHOD = 'Xendit'
+const CART_PAYMENT_RETURN_STORAGE_KEY = 'sweetbakes:cart-payment-return-v1'
 
 const CART_IMAGE_FALLBACKS = {
   'Chocolate Cake': chocolateCakeImage,
@@ -187,6 +190,8 @@ function CartPage({
   const [touched, setTouched] = useState({})
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false)
   const [orderSubmissionError, setOrderSubmissionError] = useState('')
+  const [guestPaymentVerified, setGuestPaymentVerified] = useState(false)
+  const [guestPaymentTimedOut, setGuestPaymentTimedOut] = useState(false)
   const guestPaymentStatus = new URLSearchParams(window.location.search).get('payment')
   const pendingOrderIdRef = useRef(null)
   const profileUserIdRef = useRef(null)
@@ -196,6 +201,55 @@ function CartPage({
   const timeAvailabilityMessage = availability.serviceHoursLabel
     ? `Please select a time between ${availability.serviceHoursLabel}.`
     : 'Available times are temporarily unavailable. Please try again shortly.'
+
+  useEffect(() => {
+    if (isCustomerAuthenticated || guestPaymentStatus !== 'success') return undefined
+
+    let receipt = null
+    try {
+      receipt = JSON.parse(window.localStorage.getItem(CART_PAYMENT_RETURN_STORAGE_KEY) || 'null')
+    } catch {
+      receipt = null
+    }
+
+    if (!receipt?.orderId || !receipt?.guestEmail) {
+      const timeoutId = window.setTimeout(() => setGuestPaymentTimedOut(true), 0)
+      return () => window.clearTimeout(timeoutId)
+    }
+
+    let isMounted = true
+    let attempts = 0
+    const pollPaymentStatus = async () => {
+      attempts += 1
+      const { data, error } = await supabase.functions.invoke('create-cart-xendit-payment', {
+        body: { orderId: receipt.orderId, guestEmail: receipt.guestEmail, statusOnly: true },
+      })
+
+      if (!isMounted) return
+      if (!error && ['paid', 'verified', 'payment_verified'].includes(String(data?.paymentStatus || '').toLowerCase())) {
+        const purchasedItems = Array.isArray(receipt.items) ? receipt.items : []
+        purchasedItems.forEach((item) => removeCartQuantity(item.name, item.quantity))
+        window.localStorage.removeItem(CART_PAYMENT_RETURN_STORAGE_KEY)
+        setGuestPaymentVerified(true)
+        return
+      }
+
+      if (attempts >= 8) {
+        setGuestPaymentTimedOut(true)
+        return
+      }
+
+      window.setTimeout(pollPaymentStatus, 1500)
+    }
+
+    pollPaymentStatus().catch(() => {
+      if (isMounted) setGuestPaymentTimedOut(true)
+    })
+
+    return () => {
+      isMounted = false
+    }
+  }, [guestPaymentStatus, isCustomerAuthenticated])
 
   useEffect(() => {
     if (!isCustomerAuthenticated) return undefined
@@ -563,6 +617,20 @@ function CartPage({
           message: null,
         })
         throw new Error('Payment service returned no checkout URL.')
+      }
+
+      if (!session?.access_token) {
+        window.localStorage.setItem(
+          CART_PAYMENT_RETURN_STORAGE_KEY,
+          JSON.stringify({
+            orderId,
+            guestEmail: customerInfo.email.trim(),
+            items: cartProducts.map((product) => ({
+              name: product.name,
+              quantity: product.quantity,
+            })),
+          }),
+        )
       }
 
       window.location.assign(paymentData.paymentUrl)
@@ -946,9 +1014,14 @@ function CartPage({
                 ) : null}
 
                 <div className="cart-checkout-actions">
-                  {!isCustomerAuthenticated && guestPaymentStatus === 'success' ? (
+                  {!isCustomerAuthenticated && guestPaymentStatus === 'success' && !guestPaymentVerified && !guestPaymentTimedOut ? (
                     <p className="cart-payment-placeholder cart-payment-success" role="status">
-                      Payment submitted successfully. We are confirming your order now.
+                      Confirming your payment...
+                    </p>
+                  ) : null}
+                  {!isCustomerAuthenticated && guestPaymentStatus === 'success' && guestPaymentTimedOut ? (
+                    <p className="cart-payment-placeholder" role="status">
+                      Your payment is still being confirmed. Please check again shortly.
                     </p>
                   ) : null}
                   {!isCustomerAuthenticated && guestPaymentStatus === 'cancelled' ? (
@@ -1068,6 +1141,16 @@ function CartPage({
           </div>
         </div>
       </main>
+      {guestPaymentVerified ? (
+        <OrderRequestSuccessModal
+          request={{}}
+          title="Payment Successful"
+          description="Your payment has been received successfully. Your order has been placed and is now being processed."
+          primaryLabel="Done"
+          onClose={() => setGuestPaymentVerified(false)}
+          onPrimary={() => setGuestPaymentVerified(false)}
+        />
+      ) : null}
     </div>
   )
 }
