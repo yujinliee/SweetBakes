@@ -120,7 +120,6 @@ function LoginPage({
   return (
     <main className="login-page">
       <SiteTopbar
-        forceScrolled
         hideLogin
         homeHref="/"
         locationHref="/#location"

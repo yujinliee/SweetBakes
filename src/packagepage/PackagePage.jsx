@@ -26,7 +26,7 @@ import PackagePreview from './components/PackagePreview.jsx'
 import PackageReferenceReview from './components/PackageReferenceReview.jsx'
 import PackageReviewForm from './components/PackageReviewForm.jsx'
 import PackageSelectionForm from './components/PackageSelectionForm.jsx'
-import PackageSuccessModal from './components/PackageSuccessModal.jsx'
+import OrderRequestSuccessModal from '../components/OrderRequestSuccessModal.jsx'
 import StepProgress from './components/StepProgress.jsx'
 import { useAvailability } from '../hooks/useAvailability.js'
 import { assertCanAcceptOrderForDate } from '../admin/services/availabilityService.js'
@@ -142,6 +142,7 @@ const saveSubmittedRequest = (request) => {
 function PackagePage({
   embedded = false,
   onProductChange,
+  onNavigate,
 }) {
   const [currentStep, setCurrentStep] = useState(1)
   const [packageSelection, setPackageSelection] = useState(defaultPackageSelection)
@@ -155,7 +156,7 @@ function PackagePage({
   const [isDraftLoaded, setIsDraftLoaded] = useState(false)
   const draftScopeRef = useRef(null)
   const draftLoadVersionRef = useRef(0)
-  const availability = useAvailability()
+  const availability = useAvailability({ active: currentStep === 3 })
 
   useEffect(() => {
     let isMounted = true
@@ -422,6 +423,15 @@ function PackagePage({
     }
 
     try {
+      const latestAvailability = await availability.refresh()
+      if (!availability.isDateAvailable(packageCustomerInfo.preferredDate, latestAvailability)) {
+        setPackageCustomerInfo((current) => ({ ...current, preferredDate: '' }))
+        setStep3Touched((current) => ({ ...current, preferredDate: true }))
+        setCurrentStep(3)
+        setSubmissionError('This date has just become fully booked. Please select another available date.')
+        return
+      }
+
       const submittedAt = new Date().toISOString()
       const request = {
         requestNumber: generateRequestNumber(submittedAt),
@@ -441,12 +451,24 @@ function PackagePage({
         customerInfo: packageCustomerInfo,
       }
 
-      assertCanAcceptOrderForDate(packageCustomerInfo.preferredDate, availability.settings)
+      assertCanAcceptOrderForDate(packageCustomerInfo.preferredDate, latestAvailability)
       saveSubmittedRequest(request)
       await clearCustomDraft('party-package', draftScopeRef.current)
       setSubmittedRequest(request)
       setSubmissionError('')
     } catch {
+      try {
+        const latestAvailability = await availability.refresh()
+        if (!availability.isDateAvailable(packageCustomerInfo.preferredDate, latestAvailability)) {
+          setPackageCustomerInfo((current) => ({ ...current, preferredDate: '' }))
+          setStep3Touched((current) => ({ ...current, preferredDate: true }))
+          setCurrentStep(3)
+          setSubmissionError('This date has just become fully booked. Please select another available date.')
+          return
+        }
+      } catch {
+        // Keep the existing submission error when availability cannot refresh.
+      }
       setSubmissionError('We could not submit your request right now. Please try again.')
     }
   }
@@ -529,8 +551,11 @@ function PackagePage({
       ) : null}
 
       {submittedRequest ? (
-        <PackageSuccessModal
+        <OrderRequestSuccessModal
           request={submittedRequest}
+          productType="party package"
+          onClose={() => setSubmittedRequest(null)}
+          onNavigate={onNavigate}
         />
       ) : null}
     </>

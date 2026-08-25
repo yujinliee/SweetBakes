@@ -8,7 +8,7 @@ import CupcakePreview from './components/CupcakePreview.jsx'
 import CupcakeReferenceReview from './components/CupcakeReferenceReview.jsx'
 import CupcakeReferenceUpload from './components/CupcakeReferenceUpload.jsx'
 import CupcakeReviewForm from './components/CupcakeReviewForm.jsx'
-import CupcakeSuccessModal from './components/CupcakeSuccessModal.jsx'
+import OrderRequestSuccessModal from '../components/OrderRequestSuccessModal.jsx'
 import CupcakeTabs from './components/CupcakeTabs.jsx'
 import StepProgress from './components/StepProgress.jsx'
 import { useAvailability } from '../hooks/useAvailability.js'
@@ -97,6 +97,7 @@ const saveSubmittedRequest = (request) => {
 function CupcakePage({
   embedded = false,
   onProductChange,
+  onNavigate,
 }) {
   const [currentStep, setCurrentStep] = useState(1)
   const [selections, setSelections] = useState(defaultSelections)
@@ -109,7 +110,7 @@ function CupcakePage({
   const [isDraftLoaded, setIsDraftLoaded] = useState(false)
   const draftScopeRef = useRef(null)
   const draftLoadVersionRef = useRef(0)
-  const availability = useAvailability()
+  const availability = useAvailability({ active: currentStep === 3 })
 
   useEffect(() => {
     let isMounted = true
@@ -294,6 +295,15 @@ function CupcakePage({
     }
 
     try {
+      const latestAvailability = await availability.refresh()
+      if (!availability.isDateAvailable(customerInfo.preferredDate, latestAvailability)) {
+        setCustomerInfo((current) => ({ ...current, preferredDate: '' }))
+        setStep3Touched((current) => ({ ...current, preferredDate: true }))
+        setCurrentStep(3)
+        setSubmissionError('This date has just become fully booked. Please select another available date.')
+        return
+      }
+
       const submittedAt = new Date().toISOString()
       const request = {
         requestNumber: generateRequestNumber(submittedAt),
@@ -318,12 +328,24 @@ function CupcakePage({
         customerInfo,
       }
 
-      assertCanAcceptOrderForDate(customerInfo.preferredDate, availability.settings)
+      assertCanAcceptOrderForDate(customerInfo.preferredDate, latestAvailability)
       saveSubmittedRequest(request)
       await clearCustomDraft('cupcake', draftScopeRef.current)
       setSubmittedRequest(request)
       setSubmissionError('')
     } catch {
+      try {
+        const latestAvailability = await availability.refresh()
+        if (!availability.isDateAvailable(customerInfo.preferredDate, latestAvailability)) {
+          setCustomerInfo((current) => ({ ...current, preferredDate: '' }))
+          setStep3Touched((current) => ({ ...current, preferredDate: true }))
+          setCurrentStep(3)
+          setSubmissionError('This date has just become fully booked. Please select another available date.')
+          return
+        }
+      } catch {
+        // Keep the existing submission error when availability cannot refresh.
+      }
       setSubmissionError('We could not submit your request right now. Please try again.')
     }
   }
@@ -406,8 +428,11 @@ function CupcakePage({
         ) : null}
       </div>
       {submittedRequest ? (
-        <CupcakeSuccessModal
+        <OrderRequestSuccessModal
           request={submittedRequest}
+          productType="custom cupcake"
+          onClose={() => setSubmittedRequest(null)}
+          onNavigate={onNavigate}
         />
       ) : null}
     </>

@@ -1,9 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import './WheelTimePicker.css'
 
 const ROW_HEIGHT = 40
-const VISIBLE_ROWS = 5
-const CENTER_ROW = 2
 const MINUTES = [0, 15, 30, 45]
 const DEFAULT_START_TIME = '09:00'
 const DEFAULT_END_TIME = '19:00'
@@ -70,180 +68,156 @@ const isTimeAllowed = (hour12, minute, period, minTime, maxTime) => {
   return minutes >= timeToMinutes(minTime) && minutes <= timeToMinutes(maxTime)
 }
 
-const buildHourOptions = (minTime, maxTime) => {
-  const minMinutes = timeToMinutes(minTime)
-  const maxMinutes = timeToMinutes(maxTime)
-  const options = []
-  const seen = new Set()
-
-  for (let minutes = minMinutes; minutes <= maxMinutes; minutes += 15) {
-    const hour24 = Math.floor(minutes / 60)
-    const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12
-
-    if (!seen.has(hour12)) {
-      seen.add(hour12)
-      options.push(hour12)
-    }
-  }
-
-  return options.length ? options : [9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7]
-}
-
-const buildPeriodOptions = (minTime, maxTime) => {
-  const minMinutes = timeToMinutes(minTime)
-  const maxMinutes = timeToMinutes(maxTime)
-  const options = []
-
-  if (minMinutes < 12 * 60) {
-    options.push('AM')
-  }
-
-  if (maxMinutes >= 12 * 60) {
-    options.push('PM')
-  }
-
-  return options.length ? options : ['AM', 'PM']
-}
+const buildHourOptions = () => Array.from({ length: 12 }, (_, index) => index + 1)
+const buildPeriodOptions = () => ['AM', 'PM']
 
 const getHourIndex = (hours, hour) => Math.max(0, hours.indexOf(hour))
 const getMinuteIndex = (minute) => MINUTES.indexOf(minute)
 const getPeriodIndex = (periods, period) => Math.max(0, periods.indexOf(period))
 
-const resolveIndexes = (hourIndex, minuteIndex, periodIndex, hours, periods, minTime, maxTime) => {
-  const hour = hours[clamp(hourIndex, 0, hours.length - 1)]
-  const minute = MINUTES[clamp(minuteIndex, 0, MINUTES.length - 1)]
-  const period = periods[clamp(periodIndex, 0, periods.length - 1)]
+const resolveIndexes = (hourIndex, minuteIndex, periodIndex, hours, periods) => ({
+  hourIndex: clamp(hourIndex, 0, hours.length - 1),
+  minuteIndex: clamp(minuteIndex, 0, MINUTES.length - 1),
+  periodIndex: clamp(periodIndex, 0, periods.length - 1),
+})
 
-  if (isTimeAllowed(hour, minute, period, minTime, maxTime)) {
-    return { hourIndex, minuteIndex, periodIndex }
-  }
+const WHEEL_CYCLES = 101
+const WHEEL_EDGE_CYCLES = 8
 
-  const selectedMinutes = timeToMinutes(to24h(hour, minute, period))
-  const boundaryTime =
-    selectedMinutes < timeToMinutes(minTime) ? parseValue(minTime) : parseValue(maxTime)
-  const boundaryHourIndex = getHourIndex(hours, boundaryTime.hour12)
-  const boundaryMinuteIndex = Math.max(0, getMinuteIndex(boundaryTime.minute))
-  const boundaryPeriodIndex = getPeriodIndex(periods, boundaryTime.period)
-
-  return {
-    hourIndex: boundaryHourIndex,
-    minuteIndex: boundaryMinuteIndex,
-    periodIndex: boundaryPeriodIndex,
-  }
-}
-
-function WheelColumn({ label, options, getLabel, valueIndex, onSelect }) {
-  const innerRef = useRef(null)
+function WheelColumn({ label, options, getLabel, valueIndex, onSelect, loop = false }) {
+  const wheelRef = useRef(null)
+  const selectedIndexRef = useRef(valueIndex)
+  const isInitializedRef = useRef(false)
   const dragRef = useRef(null)
+  const didDragRef = useRef(false)
+  const cycleLength = options.length
+  const virtualCount = loop ? cycleLength * WHEEL_CYCLES : cycleLength
+  const middleIndex = loop ? Math.floor(WHEEL_CYCLES / 2) * cycleLength + valueIndex : valueIndex
+  const [centerIndex, setCenterIndex] = useState(middleIndex)
   const [isDragging, setIsDragging] = useState(false)
 
-  useEffect(() => {
-    const node = innerRef.current?.parentElement
+  const settleToIndex = (index) => {
+    const node = wheelRef.current
+    if (!node) return
+    const maxIndex = loop ? virtualCount - 1 : cycleLength - 1
+    node.scrollTo({
+      top: clamp(index, 0, maxIndex) * ROW_HEIGHT,
+      behavior: 'auto',
+    })
+  }
 
-    if (!node) {
-      return undefined
+  useLayoutEffect(() => {
+    const node = wheelRef.current
+    if (!node || isInitializedRef.current) return
+    node.scrollTop = middleIndex * ROW_HEIGHT
+    selectedIndexRef.current = valueIndex
+    setCenterIndex(middleIndex)
+    isInitializedRef.current = true
+  }, [middleIndex, valueIndex])
+
+  useEffect(() => {
+    const node = wheelRef.current
+    if (!node) return undefined
+
+    const handleScroll = () => {
+      const virtualIndex = Math.max(0, Math.round(node.scrollTop / ROW_HEIGHT))
+      const logicalIndex = loop ? virtualIndex % cycleLength : clamp(virtualIndex, 0, cycleLength - 1)
+      setCenterIndex(virtualIndex)
+
+      if (logicalIndex !== selectedIndexRef.current) {
+        selectedIndexRef.current = logicalIndex
+        onSelect(logicalIndex)
+      }
+
+      const edgeDistance = Math.min(virtualIndex, virtualCount - virtualIndex - 1)
+      if (loop && edgeDistance < WHEEL_EDGE_CYCLES * cycleLength) {
+        const recenteredIndex = Math.floor(WHEEL_CYCLES / 2) * cycleLength + logicalIndex
+        node.scrollTop = recenteredIndex * ROW_HEIGHT
+        setCenterIndex(recenteredIndex)
+      }
     }
+
+    node.addEventListener('scroll', handleScroll, { passive: true })
+    return () => node.removeEventListener('scroll', handleScroll)
+  }, [cycleLength, loop, onSelect, virtualCount])
+
+  useEffect(() => {
+    const node = wheelRef.current
+    if (!node) return undefined
 
     const handleWheel = (event) => {
       event.preventDefault()
-      onSelect(valueIndex + (event.deltaY > 0 ? 1 : -1))
+      const direction = event.deltaY > 0 ? 1 : -1
+      const currentIndex = Math.max(0, Math.round(node.scrollTop / ROW_HEIGHT))
+      settleToIndex(currentIndex + direction)
     }
 
     node.addEventListener('wheel', handleWheel, { passive: false })
-
     return () => node.removeEventListener('wheel', handleWheel)
-  }, [valueIndex, onSelect])
+  })
 
   const handlePointerDown = (event) => {
-    if (event.pointerType === 'mouse' && event.button !== 0) {
-      return
-    }
-
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    const node = wheelRef.current
+    if (!node) return
+    event.preventDefault()
+    didDragRef.current = false
     dragRef.current = {
       startY: event.clientY,
-      startIndex: valueIndex,
-      lastY: event.clientY,
-      lastTime: performance.now(),
-      velocity: 0,
-      preview: valueIndex,
+      startScrollTop: node.scrollTop,
     }
-
+    node.setPointerCapture(event.pointerId)
     setIsDragging(true)
-    event.currentTarget.setPointerCapture(event.pointerId)
   }
 
   const handlePointerMove = (event) => {
     const drag = dragRef.current
-
-    if (!drag) {
-      return
-    }
-
-    const now = performance.now()
-    const dt = now - drag.lastTime
-
-    if (dt > 0) {
-      drag.velocity = (event.clientY - drag.lastY) / dt
-    }
-
-    drag.lastY = event.clientY
-    drag.lastTime = now
-
-    const deltaRows = (event.clientY - drag.startY) / ROW_HEIGHT
-    const preview = clamp(Math.round(drag.startIndex - deltaRows), 0, options.length - 1)
-
-    drag.preview = preview
-
-    if (innerRef.current) {
-      innerRef.current.style.transform = `translateY(${-preview * ROW_HEIGHT}px)`
-    }
+    const node = wheelRef.current
+    if (!drag || !node) return
+    event.preventDefault()
+    if (Math.abs(event.clientY - drag.startY) > 4) didDragRef.current = true
+    const maxScroll = node.scrollHeight - node.clientHeight
+    node.scrollTop = clamp(drag.startScrollTop - (event.clientY - drag.startY), 0, maxScroll)
   }
 
-  const handlePointerEnd = () => {
+  const handlePointerEnd = (event) => {
     const drag = dragRef.current
+    const node = wheelRef.current
+    if (!drag || !node) return
+    const nearestIndex = Math.round(node.scrollTop / ROW_HEIGHT)
+    dragRef.current = null
+    if (node.hasPointerCapture(event.pointerId)) node.releasePointerCapture(event.pointerId)
+    setIsDragging(false)
+    settleToIndex(nearestIndex)
+  }
 
-    if (!drag) {
+  const handleOptionClick = (index) => {
+    if (didDragRef.current) {
+      didDragRef.current = false
       return
     }
-
-    const fling = clamp(Math.round(drag.velocity * 120), -2, 2)
-    const preview = clamp(drag.preview - fling, 0, options.length - 1)
-
-    dragRef.current = null
-    setIsDragging(false)
-
-    if (innerRef.current) {
-      innerRef.current.style.transform = ''
-    }
-
-    onSelect(preview)
+    settleToIndex(index)
   }
 
   return (
     <div className="wtp-col">
       <span className="wtp-col-label">{label}</span>
       <div
-        className="wtp-wheel"
+        className={`wtp-wheel${isDragging ? ' is-dragging' : ''}`}
+        ref={wheelRef}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}
         onPointerCancel={handlePointerEnd}
       >
-        <div
-          className={`wtp-wheel-inner${isDragging ? ' is-dragging' : ''}`}
-          ref={innerRef}
-          style={{
-            paddingTop: CENTER_ROW * ROW_HEIGHT,
-            paddingBottom: (VISIBLE_ROWS - 1 - CENTER_ROW) * ROW_HEIGHT,
-            transform: `translateY(${-valueIndex * ROW_HEIGHT}px)`,
-          }}
-        >
-          {options.map((option, index) => (
+        <div className="wtp-wheel-inner">
+          {Array.from({ length: virtualCount }, (_, index) => (
             <div
-              className={`wtp-option${index === valueIndex ? ' wtp-option--selected' : ''}`}
-              key={option}
+              className={`wtp-option${index === centerIndex ? ' wtp-option--selected' : ''}`}
+              key={`${index}-${options[index % cycleLength]}`}
+              onClick={() => handleOptionClick(index)}
             >
-              {getLabel(option)}
+              {getLabel(options[index % cycleLength])}
             </div>
           ))}
         </div>
@@ -268,8 +242,8 @@ function WheelTimePicker({
     timeToMinutes(normalizedMinTime) <= timeToMinutes(normalizedMaxCandidate)
       ? normalizedMaxCandidate
       : DEFAULT_END_TIME
-  const hours = buildHourOptions(normalizedMinTime, normalizedMaxTime)
-  const periods = buildPeriodOptions(normalizedMinTime, normalizedMaxTime)
+  const hours = buildHourOptions()
+  const periods = buildPeriodOptions()
   const [open, setOpen] = useState(false)
   const [placement, setPlacement] = useState('bottom')
   const [time, setTime] = useState(() =>
@@ -368,6 +342,18 @@ function WheelTimePicker({
   }, [open])
 
   const handleDone = () => {
+    const selectedIsValid = isTimeAllowed(
+      hours[time.hourIndex],
+      MINUTES[time.minuteIndex],
+      periods[time.periodIndex],
+      normalizedMinTime,
+      normalizedMaxTime,
+    )
+
+    if (!selectedIsValid) {
+      return
+    }
+
     onChange(to24h(hours[time.hourIndex], MINUTES[time.minuteIndex], periods[time.periodIndex]))
     setOpen(false)
   }
@@ -431,6 +417,14 @@ function WheelTimePicker({
     )
   }, [hours, normalizedMaxTime, normalizedMinTime, periods])
 
+  const selectedTimeIsValid = isTimeAllowed(
+    hours[time.hourIndex],
+    MINUTES[time.minuteIndex],
+    periods[time.periodIndex],
+    normalizedMinTime,
+    normalizedMaxTime,
+  )
+
   return (
     <div className="wtp-field" ref={containerRef}>
       <input
@@ -461,6 +455,7 @@ function WheelTimePicker({
               getLabel={(hour) => String(hour)}
               valueIndex={time.hourIndex}
               onSelect={selectHour}
+              loop
             />
             <WheelColumn
               label="MINUTE"
@@ -468,6 +463,7 @@ function WheelTimePicker({
               getLabel={(minute) => pad(minute)}
               valueIndex={time.minuteIndex}
               onSelect={selectMinute}
+              loop
             />
             <WheelColumn
               label="AM/PM"
@@ -481,7 +477,12 @@ function WheelTimePicker({
             <button type="button" className="wtp-btn wtp-btn--cancel" onClick={() => setOpen(false)}>
               Cancel
             </button>
-            <button type="button" className="wtp-btn wtp-btn--done" onClick={handleDone}>
+            <button
+              type="button"
+              className="wtp-btn wtp-btn--done"
+              disabled={!selectedTimeIsValid}
+              onClick={handleDone}
+            >
               Done
             </button>
           </div>

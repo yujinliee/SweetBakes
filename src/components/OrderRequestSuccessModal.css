@@ -1,0 +1,144 @@
+.order-success-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow: hidden;
+  background: rgba(58, 46, 46, 0.32);
+}
+
+.order-success-confetti {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.order-success-confetti-piece {
+  position: absolute;
+  top: var(--confetti-y);
+  left: var(--confetti-x);
+  width: 7px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--confetti-color);
+  opacity: 0;
+  transform: rotate(var(--confetti-rotate));
+  animation: orderSuccessConfetti 2800ms ease-out var(--confetti-delay) both;
+}
+
+.order-success-modal {
+  position: relative;
+  z-index: 2;
+  width: min(90vw, 780px);
+  padding: 34px 38px 32px;
+  border: 1px solid #eadfd9;
+  border-radius: 10px;
+  background: #fffdf8;
+  box-shadow: 0 24px 70px rgba(58, 46, 46, 0.18);
+  color: #3a2e2e;
+  font-family: 'Poppins', sans-serif;
+  animation: orderSuccessIn 260ms ease both;
+}
+
+.order-success-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: #75645e;
+  cursor: pointer;
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+.order-success-close:hover {
+  background: #f7f0f5;
+  color: #3a2e2e;
+}
+
+.order-success-content {
+  text-align: center;
+}
+
+.order-success-icon {
+  display: inline-grid;
+  width: 60px;
+  height: 60px;
+  place-items: center;
+  border-radius: 999px;
+  background: #eadcf7;
+  color: #7b4e87;
+}
+
+.order-success-content h2 {
+  margin: 17px 0 14px;
+  font-family: var(--heading);
+  font-size: 29px;
+  font-weight: 400;
+  line-height: 1.08;
+}
+
+.order-success-description {
+  max-width: 660px;
+  margin: 0 auto;
+  color: #75645e;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.order-success-button {
+  width: 100%;
+  min-height: 46px;
+  margin-top: 26px;
+  border: 1px solid #d8c9e6;
+  border-radius: 6px;
+  background: #eadcf7;
+  color: #3a2e2e;
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 250ms ease, border-color 250ms ease;
+}
+
+.order-success-button:hover {
+  border-color: #cbb8dd;
+  background: #dfcdec;
+}
+
+@keyframes orderSuccessIn {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes orderSuccessConfetti {
+  0% {
+    opacity: 0;
+    transform: translateY(-16px) rotate(var(--confetti-rotate));
+  }
+  12% { opacity: 1; }
+  100% {
+    opacity: 0;
+    transform: translateY(260px) rotate(calc(var(--confetti-rotate) + 180deg));
+  }
+}
+
+@media (max-width: 760px) {
+  .order-success-modal {
+    width: min(100%, 470px);
+    padding: 30px 22px 26px;
+  }
+
+  .order-success-content h2 {
+    font-size: 26px;
+  }
+}

@@ -6,7 +6,6 @@ import {
   getCartItemMetadata,
   setCartQuantity,
   removeFromCart,
-  clearCart,
 } from '../cartStore.js'
 import CakeAvailabilityCalendar from '../cakepage/components/CakeAvailabilityCalendar.jsx'
 import AutocompleteTextInput from './components/AutocompleteTextInput.jsx'
@@ -43,8 +42,7 @@ const ORDER_METHODS = [
   { value: 'pickup', title: 'Store Pickup', description: 'Pick up at our bakery' },
 ]
 
-const PAYMENT_OPTIONS = ['Online Payment', 'Cash / Remaining Balance']
-const CART_ORDER_PAYMENT_METHOD = 'Cash / Remaining Balance'
+const CART_ORDER_PAYMENT_METHOD = 'Xendit'
 
 const CART_IMAGE_FALLBACKS = {
   'Chocolate Cake': chocolateCakeImage,
@@ -115,6 +113,23 @@ const mapCreateOrderErrorMessage = (message = '') => {
   return 'We could not submit your order right now. Please try again.'
 }
 
+const readSafeFunctionErrorBody = async (error) => {
+  const response = error?.context
+  if (!response || typeof response.clone !== 'function') {
+    return {
+      error: error?.message || 'Unknown error',
+      code: error?.code ?? null,
+      message: error?.message || null,
+    }
+  }
+
+  try {
+    return await response.clone().json()
+  } catch {
+    return { error: error?.message || 'Unknown error' }
+  }
+}
+
 const EMPTY_CUSTOMER_INFO = {
   customerLastName: '',
   customerFirstName: '',
@@ -170,9 +185,9 @@ function CartPage({
   const [selectedProvince, setSelectedProvince] = useState(null)
   const [selectedCity, setSelectedCity] = useState(null)
   const [touched, setTouched] = useState({})
-  const [paymentMock, setPaymentMock] = useState(null)
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false)
   const [orderSubmissionError, setOrderSubmissionError] = useState('')
+  const pendingOrderIdRef = useRef(null)
   const profileUserIdRef = useRef(null)
   const items = useSyncExternalStore(subscribeCart, getCartItems)
   const availability = useAvailability()
@@ -433,7 +448,6 @@ function CartPage({
       const firstInvalid = getValidationOrder().find((field) => errors[field])
       if (firstInvalid) focusInvalidField(firstInvalid)
 
-      setPaymentMock(null)
       return
     }
 
@@ -442,7 +456,6 @@ function CartPage({
     } catch {
       setPreferredDate('')
       setTouched((current) => ({ ...current, preferredDate: true }))
-      setPaymentMock(null)
       return
     }
 
@@ -458,56 +471,96 @@ function CartPage({
       const recipientName = customerInfo.deliverDifferentRecipient
         ? `${customerInfo.recipientFirstName} ${customerInfo.recipientLastName}`.trim()
         : null
-      const { data: sessionData } = await supabase.auth.getSession()
-      const rpcPayload = {
-        p_customer_id: sessionData?.session?.user?.id || null,
-        p_first_name: customerInfo.customerFirstName.trim(),
-        p_last_name: customerInfo.customerLastName.trim(),
-        p_contact_number: customerInfo.contactNumber,
-        p_email: customerInfo.email.trim(),
-        p_order_method: orderMethod,
-        p_province: orderMethod === 'delivery' ? customerInfo.province.trim() || null : null,
-        p_city_municipality: orderMethod === 'delivery' ? customerInfo.city.trim() || null : null,
-        p_barangay: orderMethod === 'delivery' ? customerInfo.barangay.trim() || null : null,
-        p_postal_code: orderMethod === 'delivery' ? postalCode || null : null,
-        p_address: orderMethod === 'delivery' ? customerInfo.address.trim() || null : null,
-        p_apartment_unit: orderMethod === 'delivery' ? customerInfo.apartment.trim() || null : null,
-        p_landmark: orderMethod === 'delivery' ? customerInfo.landmark.trim() || null : null,
-        p_different_recipient:
-          orderMethod === 'delivery' ? customerInfo.deliverDifferentRecipient : false,
-        p_recipient_name: orderMethod === 'delivery' ? recipientName : null,
-        p_recipient_contact:
-          orderMethod === 'delivery' && customerInfo.deliverDifferentRecipient
-            ? customerInfo.recipientContact
-            : null,
-        p_preferred_date: preferredDate,
-        p_preferred_time: preferredTime,
-        p_subtotal: subtotal,
-        p_delivery_fee: deliveryFee,
-        p_total: total,
-        p_payment_method: CART_ORDER_PAYMENT_METHOD,
-        p_notes: '',
-        p_items: buildRpcItems(cartProducts),
-      }
-      const { data: orderId, error } = await supabase.rpc('create_order_safe', rpcPayload)
-
-      if (error) {
-        console.error('[CREATE ORDER]', error)
-        setOrderSubmissionError(mapCreateOrderErrorMessage(error.message))
-        setPaymentMock(null)
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+      const session = sessionData?.session
+      if (sessionError || !session?.user?.id || !session.access_token) {
+        setOrderSubmissionError('Please sign in before starting payment.')
         return
       }
 
-      if (import.meta.env.DEV) {
-        console.log('[CREATE ORDER] order id:', orderId)
+      let orderId = pendingOrderIdRef.current
+      if (!orderId) {
+        const rpcPayload = {
+          p_customer_id: session.user.id,
+          p_first_name: customerInfo.customerFirstName.trim(),
+          p_last_name: customerInfo.customerLastName.trim(),
+          p_contact_number: customerInfo.contactNumber,
+          p_email: customerInfo.email.trim(),
+          p_order_method: orderMethod,
+          p_province: orderMethod === 'delivery' ? customerInfo.province.trim() || null : null,
+          p_city_municipality: orderMethod === 'delivery' ? customerInfo.city.trim() || null : null,
+          p_barangay: orderMethod === 'delivery' ? customerInfo.barangay.trim() || null : null,
+          p_postal_code: orderMethod === 'delivery' ? postalCode || null : null,
+          p_address: orderMethod === 'delivery' ? customerInfo.address.trim() || null : null,
+          p_apartment_unit: orderMethod === 'delivery' ? customerInfo.apartment.trim() || null : null,
+          p_landmark: orderMethod === 'delivery' ? customerInfo.landmark.trim() || null : null,
+          p_different_recipient:
+            orderMethod === 'delivery' ? customerInfo.deliverDifferentRecipient : false,
+          p_recipient_name: orderMethod === 'delivery' ? recipientName : null,
+          p_recipient_contact:
+            orderMethod === 'delivery' && customerInfo.deliverDifferentRecipient
+              ? customerInfo.recipientContact
+              : null,
+          p_preferred_date: preferredDate,
+          p_preferred_time: preferredTime,
+          p_subtotal: subtotal,
+          p_delivery_fee: deliveryFee,
+          p_total: total,
+          p_payment_method: CART_ORDER_PAYMENT_METHOD,
+          p_notes: '',
+          p_items: buildRpcItems(cartProducts),
+        }
+        const { data: createdOrderId, error } = await supabase.rpc('create_order_safe', rpcPayload)
+
+        if (error) {
+          console.error('[CREATE ORDER RESPONSE]', {
+            error: error.message || 'Unable to create order.',
+            code: error.code ?? null,
+            message: error.message ?? null,
+          })
+          setOrderSubmissionError(mapCreateOrderErrorMessage(error.message))
+          return
+        }
+
+        orderId = createdOrderId
+        if (!orderId || typeof orderId !== 'string') {
+          console.error('[CREATE ORDER RESPONSE]', {
+            error: 'Order creation returned no valid order ID.',
+            code: 'INVALID_ORDER_ID',
+            message: null,
+          })
+          setOrderSubmissionError(mapCreateOrderErrorMessage())
+          return
+        }
+        pendingOrderIdRef.current = orderId
       }
 
-      clearCart()
-      setPaymentMock('ready')
+      const { data: paymentData, error: paymentError } = await supabase.functions.invoke(
+        'create-cart-xendit-payment',
+        {
+          body: { orderId },
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        },
+      )
+
+      if (paymentError) {
+        console.error('[CREATE CART XENDIT PAYMENT RESPONSE]', await readSafeFunctionErrorBody(paymentError))
+        throw paymentError
+      }
+
+      if (!paymentData?.paymentUrl || typeof paymentData.paymentUrl !== 'string') {
+        console.error('[CREATE CART XENDIT PAYMENT RESPONSE]', paymentData || {
+          error: 'Payment service returned no checkout URL.',
+          error_code: null,
+          message: null,
+        })
+        throw new Error('Payment service returned no checkout URL.')
+      }
+
+      window.location.assign(paymentData.paymentUrl)
     } catch (error) {
-      console.error('[CREATE ORDER]', error)
+      console.error('[CREATE CART CHECKOUT]', error)
       setOrderSubmissionError(mapCreateOrderErrorMessage(error?.message))
-      setPaymentMock(null)
     } finally {
       setIsSubmittingOrder(false)
     }
@@ -884,41 +937,28 @@ function CartPage({
                   </fieldset>
                 ) : null}
 
-                <fieldset className="cake-option-group cake-customer-section cart-payment cart-section">
-                  <legend>Payment</legend>
-                  <p className="cake-option-description">
-                    Payment options will be confirmed before completing your order.
-                  </p>
-                  <div className="cart-payment-options">
-                    {PAYMENT_OPTIONS.map((option) => (
-                      <label className="cake-radio" key={option}>
-                        <input type="radio" name="payment" disabled />
-                        <span className="cake-radio-control" aria-hidden="true" />
-                        <span>{option}</span>
-                      </label>
-                    ))}
-                  </div>
-                  <p className="cart-payment-placeholder">
+                <div className="cart-checkout-actions">
+                  {/*
                     This is a UI placeholder — no payment will be processed.
-                  </p>
+                  */}
                   <button
                     className="cart-pay-button"
                     type="button"
                     onClick={handlePayNow}
                     disabled={isSubmittingOrder}
                   >
-                    {isSubmittingOrder ? 'Submitting...' : 'Pay Now'}
+                    {isSubmittingOrder ? 'Processing...' : 'Pay Now'}
                   </button>
                   {orderSubmissionError ? (
                     <p className="cake-field-error">* {orderSubmissionError}</p>
                   ) : null}
-                  {paymentMock === 'ready' ? (
+                  {/*
                     <p className="cart-payment-placeholder cart-payment-success">
                       Your order details are ready — online payment integration is
                       coming soon.
                     </p>
-                  ) : null}
-                </fieldset>
+                  */}
+                </div>
               </form>
             </section>
 

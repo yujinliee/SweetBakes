@@ -674,7 +674,7 @@
 
 .cake-agreement {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   margin-top: 24px;
   color: #75645e;
@@ -688,13 +688,17 @@
 }
 
 .cake-agreement input {
-  margin-top: 5px;
+  margin: 0;
   accent-color: #a86495;
 }
 
 .cake-recipient-toggle {
   margin-top: 24px;
   margin-bottom: 0;
+}
+
+.cake-customer-form .cake-option-group:has(.cake-recipient-toggle) + .cake-agreement {
+  margin-top: 16px;
 }
 
 .cake-recipient-fields {
@@ -1351,6 +1355,111 @@
 .cake-success-button--primary:hover {
   border-color: #cbb8dd;
   background: #dfcdec;
+}
+
+/* The custom-cake confirmation is intentionally compact and action-focused. */
+.cake-success-modal {
+  position: relative;
+  z-index: 2;
+  width: min(90vw, 780px);
+  min-height: 0;
+  padding: 34px 38px 32px;
+  overflow: visible;
+}
+
+.cake-success-confetti {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.cake-success-confetti-burst {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(90vw, 780px);
+  height: 360px;
+  transform: translate(-50%, -50%);
+}
+
+.cake-success-confetti-piece {
+  position: absolute;
+  top: var(--confetti-y);
+  left: calc(50% + var(--confetti-x));
+  width: 6px;
+  height: 11px;
+  border-radius: 2px;
+  background: var(--confetti-color);
+  opacity: 0;
+  transform: rotate(var(--confetti-rotate));
+  animation: cakeSuccessConfetti 1500ms ease-out var(--confetti-delay) both;
+}
+
+.cake-success-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 2;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: #75645e;
+  cursor: pointer;
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+.cake-success-close:hover {
+  background: #f7f0f5;
+  color: #3a2e2e;
+}
+
+.cake-success-content {
+  position: relative;
+  z-index: 1;
+}
+
+.cake-success-intro h2 {
+  margin: 17px 0 14px;
+  font-size: 29px;
+  line-height: 1.08;
+}
+
+.cake-success-description {
+  max-width: 660px;
+  color: #75645e;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.cake-success-actions {
+  display: block;
+  margin-top: 26px;
+}
+
+.cake-success-button--primary {
+  width: 100%;
+}
+
+@keyframes cakeSuccessConfetti {
+  0% {
+    opacity: 0;
+    transform: translateY(0) rotate(var(--confetti-rotate));
+  }
+
+  14% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(175px) rotate(calc(var(--confetti-rotate) + 115deg));
+  }
 }
 
 @keyframes cakeSuccessIn {

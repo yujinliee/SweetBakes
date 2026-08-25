@@ -14,7 +14,7 @@ import CakePreview from './components/CakePreview.jsx'
 import CakeReferenceUpload from './components/CakeReferenceUpload.jsx'
 import CakeReferenceReview from './components/CakeReferenceReview.jsx'
 import CakeReviewForm from './components/CakeReviewForm.jsx'
-import CakeSuccessModal from './components/CakeSuccessModal.jsx'
+import OrderRequestSuccessModal from '../components/OrderRequestSuccessModal.jsx'
 import CakeTabs from './components/CakeTabs.jsx'
 import StepProgress from './components/StepProgress.jsx'
 import { useAvailability } from '../hooks/useAvailability.js'
@@ -102,6 +102,7 @@ const shouldStartAtStepOne = () => {
 function CakePage({
   embedded = false,
   onProductChange,
+  onNavigate,
 }) {
   const [shouldCleanStartUrl] = useState(shouldStartAtStepOne)
   const [currentStep, setCurrentStep] = useState(1)
@@ -123,7 +124,7 @@ function CakePage({
   const [isSubmittingRequest, setIsSubmittingRequest] = useState(false)
   const [isUploadingReferences, setIsUploadingReferences] = useState(false)
   const [submissionError, setSubmissionError] = useState('')
-  const availability = useAvailability()
+  const availability = useAvailability({ active: currentStep === 3 })
 
   useEffect(() => () => {
     localReferenceUrlsRef.current.forEach((url) => URL.revokeObjectURL(url))
@@ -416,7 +417,16 @@ function CakePage({
     }
 
     try {
-      assertCanAcceptOrderForDate(customerInfo.preferredDate, availability.settings)
+      const latestAvailability = await availability.refresh()
+      if (!availability.isDateAvailable(customerInfo.preferredDate, latestAvailability)) {
+        setCustomerInfo((current) => ({ ...current, preferredDate: '' }))
+        setStep3Touched((current) => ({ ...current, preferredDate: true }))
+        setCurrentStep(3)
+        setSubmissionError('This date has just become fully booked. Please select another available date.')
+        return
+      }
+
+      assertCanAcceptOrderForDate(customerInfo.preferredDate, latestAvailability)
       setIsSubmittingRequest(true)
 
       const { order, referenceImages } = await createCustomCakeOrderRequest({
@@ -427,6 +437,7 @@ function CakePage({
       })
       const submittedAt = order?.created_at || new Date().toISOString()
       const request = {
+        orderId: order?.id,
         requestNumber: order?.order_number,
         submittedAt,
         status: 'Pending',
@@ -448,7 +459,13 @@ function CakePage({
       requestUploadIdRef.current = createRequestUploadId()
     } catch (error) {
       console.error('[CUSTOM CAKE REQUEST]', error)
-      setSubmissionError(mapCustomCakeSubmitError(error?.message))
+      const message = mapCustomCakeSubmitError(error?.message)
+      if (message.includes('fully booked')) {
+        setCustomerInfo((current) => ({ ...current, preferredDate: '' }))
+        setStep3Touched((current) => ({ ...current, preferredDate: true }))
+        setCurrentStep(3)
+      }
+      setSubmissionError(message)
     } finally {
       setIsSubmittingRequest(false)
     }
@@ -691,8 +708,11 @@ function CakePage({
         )}
       </div>
       {submittedRequest ? (
-        <CakeSuccessModal
+        <OrderRequestSuccessModal
           request={submittedRequest}
+          productType="custom cake"
+          onClose={() => setSubmittedRequest(null)}
+          onNavigate={onNavigate}
         />
       ) : null}
     </>

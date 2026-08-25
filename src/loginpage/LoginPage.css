@@ -24,23 +24,29 @@
   transform: translateX(-50%);
 }
 
+/* Login keeps the storefront topbar geometry; only its appearance is solid. */
 .login-page .topbar-background {
-  border: 0;
-  box-shadow: none;
-  background: transparent;
-  opacity: 0;
-  visibility: hidden;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(58, 46, 46, 0.08);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+  opacity: 1;
+  visibility: visible;
+  transform: none;
 }
 
-.login-page .topbar--scrolled .topbar-background,
-.login-page .topbar--scrolled-entering .topbar-background,
-.login-page .topbar--scrolled-exiting .topbar-background {
-  border: 0;
-  box-shadow: none;
-  background: transparent;
+.login-page .nav a,
+.login-page .nav-dropdown-toggle,
+.login-page .topbar-actions button,
+.login-page .topbar-login-link {
+  color: #3a2e2e;
+}
+
+.login-page .topbar-icon--light {
   opacity: 0;
-  visibility: hidden;
-  animation: none;
+}
+
+.login-page .topbar-icon--dark {
+  opacity: 1;
 }
 
 .login-page-content {

@@ -17,6 +17,7 @@ type Order = {
   first_name: string | null;
   last_name: string | null;
   required_down_payment: number | string | null;
+  total: number | string | null;
   payment_status: string | null;
   order_status: string | null;
 };
@@ -92,19 +93,20 @@ export default {
       !input ||
       typeof input !== "object" ||
       Array.isArray(input) ||
-      Object.keys(input).length !== 1 ||
       !("orderId" in input) ||
       typeof (input as { orderId?: unknown }).orderId !== "string" ||
       !(input as { orderId: string }).orderId.trim()
     ) {
-      return jsonResponse({ error: "Only a non-empty orderId is accepted." }, 400);
+      return jsonResponse({ error: "A non-empty orderId is required." }, 400);
     }
 
-    const orderId = (input as { orderId: string }).orderId.trim();
+    const request = input as { orderId: string; paymentType?: unknown };
+    const orderId = request.orderId.trim();
+    const paymentType = request.paymentType === "regular" ? "regular" : "custom_down_payment";
     const { data: order, error: orderError } = await customerSupabase
       .from("orders")
       .select(
-        "id, order_number, customer_id, email, first_name, last_name, required_down_payment, payment_status, order_status",
+        "id, order_number, customer_id, email, first_name, last_name, required_down_payment, total, payment_status, order_status",
       )
       .eq("id", orderId)
       .eq("customer_id", user.id)
@@ -153,16 +155,22 @@ export default {
       return jsonResponse({ error: "You do not have access to this order." }, 403);
     }
 
-    if (["paid", "verified", "payment_verified"].includes(order.payment_status ?? "")) {
-      return jsonResponse({ error: "This order's down payment is already paid." }, 400);
+    const isPaid = ["paid", "verified", "payment_verified"].includes(order.payment_status ?? "");
+    if (isPaid) {
+      return jsonResponse({ error: paymentType === "regular" ? "This order is already paid." : "This order's down payment is already paid." }, 400);
     }
-    if (order.order_status !== "confirmed" || order.payment_status !== "pending") {
+
+    if (paymentType === "regular") {
+      if (order.order_status !== "pending" || !["unpaid", "pending"].includes(order.payment_status ?? "")) {
+        return jsonResponse({ error: "This order is not eligible for payment yet." }, 400);
+      }
+    } else if (order.order_status !== "confirmed" || order.payment_status !== "pending") {
       return jsonResponse({ error: "This order is not eligible for a down payment yet." }, 400);
     }
 
-    const amount = Number(order.required_down_payment);
+    const amount = Number(paymentType === "regular" ? order.total : order.required_down_payment);
     if (!Number.isFinite(amount) || amount <= 0) {
-      return jsonResponse({ error: "This order does not have a valid required down payment." }, 400);
+      return jsonResponse({ error: paymentType === "regular" ? "This order does not have a valid total." : "This order does not have a valid required down payment." }, 400);
     }
     const normalizedAmount = Math.round(amount * 100) / 100;
 
@@ -176,7 +184,7 @@ export default {
       order.order_number ?? order.id,
       order.id.replace(/[^a-zA-Z0-9]/g, ""),
     );
-    const referenceId = `SB${orderReference}DP`.slice(0, 64);
+    const referenceId = `SB${orderReference}${paymentType === "regular" ? "FULL" : "DP"}`.slice(0, 64);
     const givenNames = alphanumeric(order.first_name ?? "Sweet Bakes", "SweetBakes").slice(0, 255);
     const surname = alphanumeric(order.last_name ?? "Customer", "Customer").slice(0, 255);
     const customerReferenceId = `C${crypto.randomUUID().replace(/[^a-zA-Z0-9]/g, "")}`.slice(0, 64);
@@ -219,18 +227,18 @@ export default {
       items: [
         {
           reference_id: `I${orderReference}`.slice(0, 64),
-          name: "Sweet Bakes down payment",
+          name: paymentType === "regular" ? "Sweet Bakes order" : "Sweet Bakes down payment",
           type: "PHYSICAL_SERVICE",
           net_unit_amount: normalizedAmount,
           quantity: 1,
           currency: "PHP",
           category: "BAKERY",
-          description: `Down payment for order ${order.order_number ?? order.id}`.slice(0, 255),
+          description: `${paymentType === "regular" ? "Payment for" : "Down payment for"} order ${order.order_number ?? order.id}`.slice(0, 255),
         },
       ],
       capture_method: "AUTOMATIC",
       locale: "en",
-      description: `Sweet Bakes down payment for order ${order.order_number ?? order.id}`.slice(0, 255),
+      description: `Sweet Bakes ${paymentType === "regular" ? "payment" : "down payment"} for order ${order.order_number ?? order.id}`.slice(0, 255),
       ...returnUrls,
     };
 

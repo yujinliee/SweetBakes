@@ -58,8 +58,9 @@
   top: calc(24px + 80px);
   right: 0;
   left: 0;
-  z-index: 2;
+  z-index: 0;
   height: 40px;
+  background: #f6f0f8;
   border-top: 1px solid #e8e3e3;
   border-bottom: 1px solid #e8e3e3;
   pointer-events: none;
@@ -86,7 +87,12 @@
 .wtp-wheel {
   position: relative;
   height: 200px;
-  overflow: hidden;
+  z-index: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scroll-behavior: auto;
+  scroll-snap-type: none;
   touch-action: none;
   user-select: none;
   cursor: grab;
@@ -96,20 +102,20 @@
   cursor: grabbing;
 }
 
-.wtp-wheel-inner {
-  box-sizing: border-box;
-  will-change: transform;
-  transition: transform 0.18s cubic-bezier(0.22, 0.61, 0.36, 1);
+.wtp-wheel.is-dragging {
+  cursor: grabbing;
 }
 
-.wtp-wheel-inner.is-dragging {
-  transition: none;
+.wtp-wheel-inner {
+  box-sizing: border-box;
+  padding-block: 80px;
 }
 
 .wtp-option {
   box-sizing: border-box;
   display: flex;
   height: 40px;
+  scroll-snap-align: center;
   align-items: center;
   justify-content: center;
   color: #574944;
@@ -119,8 +125,15 @@
   text-align: center;
 }
 
+.wtp-wheel::-webkit-scrollbar {
+  display: none;
+}
+
+.wtp-wheel {
+  scrollbar-width: none;
+}
+
 .wtp-option--selected {
-  background: #f6f0f8;
   color: #3a2e2e;
   font-weight: 600;
 }
@@ -181,6 +194,13 @@
 .wtp-btn--done:hover {
   border-color: #95537f;
   background: #95537f;
+}
+
+.wtp-btn--done:disabled {
+  border-color: #e8e3e3;
+  background: #f7f3f1;
+  color: #aa9e99;
+  cursor: not-allowed;
 }
 
 @media (max-width: 560px) {

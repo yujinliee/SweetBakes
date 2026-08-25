@@ -3,6 +3,7 @@ import { ADMIN_DASHBOARD_ROUTE } from '../admin/adminRouteConstants.js'
 import { SiteFooter, SiteTopbar } from '../landingpage/LandingPage.jsx'
 import { getOrderProgressStage, ORDER_PROGRESS_STAGES } from '../services/orderStatusDisplay.js'
 import { supabase } from '../lib/supabase.js'
+import { removeCartQuantity } from '../cartStore.js'
 import './MyOrdersPage.css'
 
 const ORDER_SELECT = `id, order_number, first_name, last_name, email, order_method, province, city_municipality, barangay, postal_code, address, apartment_unit, landmark, different_recipient, recipient_name, recipient_contact, preferred_date, preferred_time, subtotal, delivery_fee, total, required_down_payment, order_status, payment_status, payment_method, created_at, updated_at`
@@ -17,6 +18,8 @@ const formatTime = (value) => value ? new Date(`1970-01-01T${value}`).toLocaleTi
 const isPaymentVerified = (status) => ['paid', 'verified', 'payment_verified'].includes(String(status || '').toLowerCase())
 
 function getItemSummary(items = []) { const first = items[0]; return items.length > 1 ? `${first?.product_name || 'Order'} + ${items.length - 1} more` : first?.product_name || 'Custom order' }
+function isCustomOrder(order) { return (order?.order_items || []).some((item) => item.customization_data?.request_type) }
+function removePurchasedCartItems(order) { (order?.order_items || []).forEach((item) => removeCartQuantity(item.product_name, item.quantity)) }
 function getCustomizationFields(value) {
   if (!value || typeof value !== 'object') return []
   const hidden = new Set(['request_type', 'reference_images', 'is_custom'])
@@ -79,9 +82,42 @@ function PaymentPanel({ order, downPayment }) {
   return <section className="my-orders-detail-card my-orders-payment-card"><h3>Payment</h3>{pendingReview ? <><strong>Quotation / Price Review Pending</strong><p>No payment is required until Sweet Bakes reviews your request.</p></> : verified ? <><strong>Down Payment Verified</strong><dl><div><dt>Amount Paid</dt><dd>{formatCurrency(downPayment)}</dd></div><div><dt>Payment Status</dt><dd>{formatStatus(order.payment_status)}</dd></div></dl></> : <><strong>Required Down Payment</strong><div className="my-orders-amount-due">{formatCurrency(downPayment)}</div><span className="my-orders-payment-note">Payment Status: {formatStatus(order.payment_status || 'pending')}</span>{eligible ? <button type="button" className="my-orders-pay-button" onClick={handlePayDownPayment} disabled={isCreatingPayment}>{isCreatingPayment ? 'Creating Payment...' : 'Pay Down Payment'}</button> : null}{paymentError ? <p className="my-orders-payment-error" role="alert">{paymentError}</p> : null}</>}</section>
 }
 
+function RegularPaymentPanel({ order }) {
+  const [isCreatingPayment, setIsCreatingPayment] = useState(false)
+  const [paymentError, setPaymentError] = useState('')
+  const verified = isPaymentVerified(order.payment_status)
+  const eligible = String(order.order_status || '').toLowerCase() === 'pending'
+    && ['unpaid', 'pending'].includes(String(order.payment_status || '').toLowerCase())
+    && Number(order.total) > 0
+
+  const handlePayNow = async () => {
+    if (isCreatingPayment || !eligible) return
+    setIsCreatingPayment(true)
+    setPaymentError('')
+    try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+      const session = sessionData?.session
+      if (sessionError || !session?.access_token) throw new Error('Authentication is required.')
+      const { data, error } = await supabase.functions.invoke('create-xendit-payment', {
+        body: { orderId: order.id, paymentType: 'regular' },
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      })
+      if (error || !data?.paymentUrl) throw error || new Error('Payment service returned no checkout URL.')
+      window.location.assign(data.paymentUrl)
+    } catch (error) {
+      console.error('[XENDIT REGULAR PAYMENT]', error)
+      setPaymentError('Unable to start payment. Please try again.')
+    } finally {
+      setIsCreatingPayment(false)
+    }
+  }
+
+  return <section className="my-orders-detail-card my-orders-payment-card"><h3>Payment</h3>{verified ? <><strong>Payment Verified</strong><dl><div><dt>Amount Paid</dt><dd>{formatCurrency(order.total)}</dd></div><div><dt>Payment Status</dt><dd>{formatStatus(order.payment_status)}</dd></div></dl></> : <><strong>Payment Pending</strong><div className="my-orders-amount-due">{formatCurrency(order.total)}</div><span className="my-orders-payment-note">Payment Status: {formatStatus(order.payment_status || 'unpaid')}</span>{eligible ? <button type="button" className="my-orders-pay-button" onClick={handlePayNow} disabled={isCreatingPayment}>{isCreatingPayment ? 'Creating Payment...' : 'Pay Now'}</button> : null}{paymentError ? <p className="my-orders-payment-error" role="alert">{paymentError}</p> : null}</>}</section>
+}
+
 function PaymentReturnNotice({ order, paymentReturn }) {
   if (!paymentReturn || paymentReturn.orderId !== order.id) return null
-  const amount = formatCurrency(order.required_down_payment)
+  const amount = formatCurrency(isCustomOrder(order) ? order.required_down_payment : order.total)
   if (paymentReturn.status === 'verified') {
     return <section className="my-orders-payment-return my-orders-payment-return--success" role="status"><span className="my-orders-payment-return-icon" aria-hidden="true">✓</span><div><strong>Payment Successful</strong><p>Payment Verified</p><span>Thank you! We received your {amount} down payment.</span><small>Order {order.order_number || 'Order'}</small></div></section>
   }
@@ -111,7 +147,7 @@ function OrderDetails({ order, onClose, onImageOpen, breakdownError, paymentRetu
       {referenceImages.length ? <section className="my-orders-detail-card"><h3>Reference Images</h3><div className="my-orders-reference-images">{referenceImages.map((image, index) => <button type="button" key={image.path || image.signed_url || index} onClick={() => onImageOpen(image.signed_url || image.url)}><img src={image.signed_url || image.url} alt={image.name || 'Order reference'} /></button>)}</div></section> : null}
       <section className="my-orders-detail-card"><h3>Price Breakdown</h3>{breakdownError ? <p className="my-orders-muted my-orders-breakdown-error">Unable to load the itemized pricing for this order.</p> : priceItems.length ? <dl className="my-orders-price-list">{priceItems.map((item) => <div key={item.id}><dt>{item.description}</dt><dd>{formatCurrency(item.amount)}</dd></div>)}<div className="is-total"><dt>Final Price</dt><dd>{formatCurrency(finalPrice)}</dd></div><div><dt>Required Down Payment (50%)</dt><dd>{formatCurrency(downPayment)}</dd></div></dl> : <div className="my-orders-price-list"><div className="is-total"><dt>Final Price</dt><dd>{formatCurrency(finalPrice)}</dd></div>{String(order.order_status || '').toLowerCase() === 'pending' ? <p className="my-orders-muted">Itemized pricing will appear after your request is reviewed.</p> : <p className="my-orders-muted">No itemized pricing has been recorded for this order.</p>}</div>}</section>
       <PaymentReturnNotice order={order} paymentReturn={paymentReturn} />
-      <PaymentPanel order={order} downPayment={downPayment} />
+      {isCustomOrder(order) ? <PaymentPanel order={order} downPayment={downPayment} /> : <RegularPaymentPanel order={order} />}
       <section className="my-orders-detail-card"><h3>Fulfillment Details</h3><dl className="my-orders-customization-list"><div><dt>Preferred Date</dt><dd>{formatDate(order.preferred_date)}</dd></div><div><dt>Preferred Time</dt><dd>{formatTime(order.preferred_time)}</dd></div>{isDelivery ? <><div><dt>Delivery Address</dt><dd>{address || 'Not provided'}</dd></div>{order.different_recipient ? <div><dt>Recipient</dt><dd>{order.recipient_name || 'Not provided'}{order.recipient_contact ? ` · ${order.recipient_contact}` : ''}</dd></div> : null}</> : <div><dt>Pickup</dt><dd>Sweet Bakes store pickup</dd></div>}</dl></section>
     </div>
   </article></div>
@@ -119,6 +155,7 @@ function OrderDetails({ order, onClose, onImageOpen, breakdownError, paymentRetu
 
 function MyOrdersPage({ onNavigate, onCustomerLogout, isCustomerAuthenticated = false }) {
   const [orders, setOrders] = useState([]); const [selectedOrder, setSelectedOrder] = useState(null); const [breakdownError, setBreakdownError] = useState(''); const [previewImage, setPreviewImage] = useState(''); const [isLoading, setIsLoading] = useState(true); const [error, setError] = useState(''); const [paymentReturn, setPaymentReturn] = useState(() => { const params = new URLSearchParams(window.location.search); const payment = params.get('payment'); const orderId = params.get('order'); if (!orderId || !['success', 'cancelled'].includes(payment)) return null; window.history.replaceState(window.history.state, '', '/my-orders'); return { orderId, status: payment === 'success' ? 'checking' : 'cancelled' } })
+  const handleSelectOrder = (order) => { setBreakdownError(''); setSelectedOrder({ ...order, price_items: [] }) }
   useEffect(() => { let isMounted = true; async function loadOrders() { try { setIsLoading(true); setError(''); const { data: sessionData, error: sessionError } = await supabase.auth.getSession(); const user = sessionData?.session?.user || null; if (sessionError || !user) { onNavigate?.('/login?redirect=/my-orders', { replace: true }); return }; const { data: profile, error: profileError } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle(); if (profileError) throw profileError; if (profile?.role === 'admin') { onNavigate?.(ADMIN_DASHBOARD_ROUTE, { replace: true }); return }; if (profile?.role !== 'customer') { await supabase.auth.signOut(); onNavigate?.('/login', { replace: true }); return }
       const { data: orderRows, error: ordersError } = await supabase.from('orders').select(ORDER_SELECT).eq('customer_id', user.id).order('created_at', { ascending: false }); if (ordersError) throw ordersError; const orderIds = (orderRows || []).map((order) => order.id).filter(Boolean); let items = []
       if (orderIds.length) { const itemsResult = await supabase.from('order_items').select(ORDER_ITEM_SELECT).in('order_id', orderIds); if (itemsResult.error) throw itemsResult.error; items = itemsResult.data || [] }
@@ -129,10 +166,12 @@ function MyOrdersPage({ onNavigate, onCustomerLogout, isCustomerAuthenticated = 
       if (isMounted) setOrders(nextOrders)
     } catch (loadError) { console.error('[MY ORDERS] load error:', loadError); if (isMounted) setError('Unable to load your orders. Please try again.') } finally { if (isMounted) setIsLoading(false) } } loadOrders(); return () => { isMounted = false } }, [onNavigate])
   useEffect(() => {
-    if (!paymentReturn?.orderId || !orders.length) return
+    if (!paymentReturn?.orderId || !orders.length) return undefined
     const returnedOrder = orders.find((order) => order.id === paymentReturn.orderId)
-    if (returnedOrder && selectedOrder?.id !== returnedOrder.id) handleSelectOrder(returnedOrder)
-  }, [orders, paymentReturn?.orderId])
+    if (!returnedOrder || selectedOrder?.id === returnedOrder.id) return undefined
+    const selectionTimer = window.setTimeout(() => handleSelectOrder(returnedOrder), 0)
+    return () => window.clearTimeout(selectionTimer)
+  }, [orders, paymentReturn?.orderId, selectedOrder?.id])
   useEffect(() => {
     if (!paymentReturn?.orderId || paymentReturn.status !== 'checking') return undefined
     let isMounted = true
@@ -149,6 +188,7 @@ function MyOrdersPage({ onNavigate, onCustomerLogout, isCustomerAuthenticated = 
         setOrders((current) => current.map((order) => order.id === freshOrder.id ? { ...order, ...freshOrder } : order))
         setSelectedOrder((current) => current?.id === freshOrder.id ? { ...current, ...freshOrder } : current)
         if (isPaymentVerified(freshOrder.payment_status)) {
+          removePurchasedCartItems({ ...freshOrder, order_items: orders.find((order) => order.id === freshOrder.id)?.order_items || [] })
           setPaymentReturn((current) => current ? { ...current, status: 'verified' } : current)
           return
         }
@@ -173,7 +213,6 @@ function MyOrdersPage({ onNavigate, onCustomerLogout, isCustomerAuthenticated = 
     })
     return () => { isMounted = false }
   }, [selectedOrder?.id])
-  const handleSelectOrder = (order) => { setBreakdownError(''); setSelectedOrder({ ...order, price_items: [] }) }
   return <div className="my-orders-page"><SiteTopbar forceScrolled homeHref="/" locationHref="/#location" contactHref="/#contact" onNavigate={onNavigate} onCustomerLogout={onCustomerLogout} isCustomerAuthenticated={isCustomerAuthenticated} /><main className="my-orders-content"><section className="my-orders-shell" aria-labelledby="my-orders-title"><div className="my-orders-heading"><p className="my-orders-eyebrow">Sweet Bakes Account</p><h1 id="my-orders-title">My Orders</h1></div>{isLoading ? <div className="my-orders-card my-orders-state">Loading orders...</div> : error ? <div className="my-orders-card my-orders-state my-orders-state--error">{error}</div> : orders.length === 0 ? <div className="my-orders-card my-orders-empty"><h2>No orders yet</h2><p>Your Sweet Bakes orders will appear here once you submit a request.</p></div> : <div className="my-orders-list">{orders.map((order) => <button type="button" className="my-orders-card my-orders-item" key={order.id} onClick={() => handleSelectOrder(order)}><span className="my-orders-item-header"><span><span className="my-orders-number">{order.order_number || 'Order'}</span><strong>{getItemSummary(order.order_items)}</strong></span><span className="my-orders-status">{formatStatus(order.order_status)}</span></span><dl className="my-orders-details"><div><dt>Order Date</dt><dd>{formatDate(order.created_at)}</dd></div><div><dt>Preferred Date</dt><dd>{formatDate(order.preferred_date)}</dd></div><div><dt>Method</dt><dd>{formatStatus(order.order_method)}</dd></div><div><dt>Total</dt><dd>{formatCurrency(order.total)}</dd></div></dl><span className="my-orders-view-details">View Details <span aria-hidden="true">→</span></span></button>)}</div>}</section></main><SiteFooter />{selectedOrder ? <OrderDetails order={selectedOrder} paymentReturn={paymentReturn} breakdownError={breakdownError} onClose={() => setSelectedOrder(null)} onImageOpen={setPreviewImage} /> : null}{previewImage ? <div className="my-orders-image-backdrop" role="presentation" onClick={() => setPreviewImage('')}><img src={previewImage} alt="Larger order reference" /></div> : null}</div>
 }
 export default MyOrdersPage

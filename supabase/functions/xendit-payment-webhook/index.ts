@@ -20,6 +20,7 @@ type Order = {
   id: string;
   order_number: string | null;
   required_down_payment: number | string | null;
+  total: number | string | null;
   payment_status: string | null;
   order_status: string | null;
 };
@@ -38,6 +39,10 @@ function alphanumeric(value: string, fallback: string) {
 
 function referenceForOrder(order: Pick<Order, "id" | "order_number">) {
   return `SB${alphanumeric(order.order_number ?? order.id, order.id.replace(/[^a-zA-Z0-9]/g, ""))}DP`.slice(0, 64);
+}
+
+function regularReferenceForOrder(order: Pick<Order, "id" | "order_number">) {
+  return `SB${alphanumeric(order.order_number ?? order.id, order.id.replace(/[^a-zA-Z0-9]/g, ""))}FULL`.slice(0, 64);
 }
 
 function getNamedSecretKey() {
@@ -157,7 +162,7 @@ export default {
 
     const { data: orders, error: orderLookupError } = await supabaseAdmin
       .from("orders")
-      .select("id, order_number, required_down_payment, payment_status, order_status") as {
+      .select("id, order_number, required_down_payment, total, payment_status, order_status") as {
         data: Order[] | null;
         error: { code?: string; message?: string; details?: string; hint?: string } | null;
       };
@@ -172,13 +177,16 @@ export default {
       return jsonResponse({ error: "Unable to load the order." }, 500);
     }
 
-    const order = (orders ?? []).find((candidate) => referenceForOrder(candidate) === referenceId) ?? null;
+    const customOrder = (orders ?? []).find((candidate) => referenceForOrder(candidate) === referenceId) ?? null;
+    const regularOrder = (orders ?? []).find((candidate) => regularReferenceForOrder(candidate) === referenceId) ?? null;
+    const order = customOrder ?? regularOrder;
+    const isRegularPayment = Boolean(regularOrder);
     if (!order) {
       return jsonResponse({ received: true, result: "ignored_unknown_reference" });
     }
 
-    const requiredDownPayment = Number(order.required_down_payment);
-    if (!Number.isFinite(requiredDownPayment) || Math.round(requiredDownPayment * 100) !== Math.round(amount * 100)) {
+    const expectedAmount = Number(isRegularPayment ? order.total : order.required_down_payment);
+    if (!Number.isFinite(expectedAmount) || Math.round(expectedAmount * 100) !== Math.round(amount * 100)) {
       console.error("[XENDIT WEBHOOK] amount mismatch", {
         event,
         referenceId,
@@ -191,16 +199,21 @@ export default {
     if (order.payment_status === "paid") {
       return jsonResponse({ received: true, result: "already_processed", orderId: order.id });
     }
-    if (order.order_status !== "confirmed" || order.payment_status !== "pending") {
+    const validOrderState = isRegularPayment
+      ? order.order_status === "pending" && ["unpaid", "pending"].includes(order.payment_status ?? "")
+      : order.order_status === "confirmed" && order.payment_status === "pending";
+    if (!validOrderState) {
       return jsonResponse({ received: true, result: "ignored_order_state", orderId: order.id });
     }
 
-    const { error: updateError } = await supabaseAdmin
+    let updateQuery = supabaseAdmin
       .from("orders")
       .update({ payment_status: "paid", updated_at: new Date().toISOString() })
-      .eq("id", order.id)
-      .eq("order_status", "confirmed")
-      .eq("payment_status", "pending");
+      .eq("id", order.id);
+    updateQuery = isRegularPayment
+      ? updateQuery.eq("order_status", "pending").in("payment_status", ["unpaid", "pending"])
+      : updateQuery.eq("order_status", "confirmed").eq("payment_status", "pending");
+    const { error: updateError } = await updateQuery;
 
     if (updateError) {
       console.error("[XENDIT WEBHOOK] order update failed", {

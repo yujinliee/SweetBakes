@@ -621,6 +621,49 @@
   pointer-events: none;
 }
 
+.topbar-cart-visual {
+  transform-origin: center;
+  animation: topbarCartAttention 620ms ease both;
+}
+
+.topbar-cart-badge--pop {
+  transform-origin: center;
+  animation: topbarCartBadgePop 620ms ease both;
+}
+
+@keyframes topbarCartAttention {
+  0% {
+    transform: scale(1) rotate(0deg);
+  }
+
+  28% {
+    transform: scale(1.1) rotate(-4deg);
+  }
+
+  52% {
+    transform: scale(1.07) rotate(4deg);
+  }
+
+  72% {
+    transform: scale(1.04) rotate(-2deg);
+  }
+
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes topbarCartBadgePop {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  38% {
+    transform: scale(1.22);
+  }
+}
+
 main {
   width: 100%;
   margin: 0 auto;
@@ -1500,6 +1543,52 @@ main {
   overflow: hidden;
 }
 
+/* The spacious two-column layout is intentionally limited to Regular Cakes. */
+.treats-catalog--regular-cakes {
+  width: min(1240px, 100%);
+}
+
+.treats-list--regular-cakes {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 1160px;
+  padding: 12px 16px;
+}
+
+.treats-item--regular-cake {
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: 32px;
+  padding: 30px 32px;
+}
+
+.treats-item--regular-cake .treats-item-desc,
+.treats-item--regular-cake .treats-add-to-cart {
+  max-width: none;
+}
+
+.treats-item:not(.treats-item--regular-cake) .treats-item-desc {
+  max-width: none;
+}
+
+.treats-item--regular-cake .treats-item-image {
+  width: 100%;
+  max-width: 200px;
+  aspect-ratio: 1;
+  height: auto;
+  justify-self: end;
+}
+
+.treats-item--cheesecake {
+  align-items: start;
+}
+
+.treats-item--cheesecake .treats-item-image {
+  width: 170px;
+  height: 170px;
+  aspect-ratio: 1 / 1;
+  align-self: start;
+  flex-shrink: 0;
+}
+
 .treats-item-image img {
   display: block;
   width: 100%;
@@ -1525,6 +1614,22 @@ main {
   .treats-item-image {
     width: 150px;
     height: 120px;
+  }
+
+  .treats-list--regular-cakes {
+    column-gap: 0;
+  }
+
+  .treats-item--regular-cake .treats-item-image {
+    width: 150px;
+    max-width: 150px;
+    height: 120px;
+    aspect-ratio: auto;
+  }
+
+  .treats-item--cheesecake .treats-item-image {
+    width: 150px;
+    height: 150px;
   }
 }
 
@@ -1572,6 +1677,17 @@ main {
   .treats-item-image {
     width: 120px;
     height: 100px;
+  }
+
+  .treats-item--regular-cake .treats-item-image {
+    width: 120px;
+    max-width: 120px;
+    height: 100px;
+  }
+
+  .treats-item--cheesecake .treats-item-image {
+    width: 120px;
+    height: 120px;
   }
 }
 

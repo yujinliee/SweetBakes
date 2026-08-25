@@ -1,4 +1,5 @@
 const listeners = new Set()
+const activityListeners = new Set()
 const cartStorageKey = 'sweetbakes_cart'
 
 const isBrowser = () => typeof window !== 'undefined' && Boolean(window.localStorage)
@@ -106,6 +107,7 @@ const persistCart = () => {
 const initialCart = readStoredCart()
 let cartItems = initialCart.items
 let cartItemMetadata = initialCart.metadata
+let cartActivityVersion = 0
 
 const notifyListeners = () => {
   listeners.forEach((listener) => listener())
@@ -134,6 +136,17 @@ export function subscribeCart(listener) {
   return () => {
     listeners.delete(listener)
   }
+}
+
+export function subscribeCartActivity(listener) {
+  activityListeners.add(listener)
+  return () => {
+    activityListeners.delete(listener)
+  }
+}
+
+export function getCartActivityVersion() {
+  return cartActivityVersion
 }
 
 export function getCartItems() {
@@ -173,6 +186,9 @@ export function addToCart(productName, quantity = 1, metadata = null) {
 
   cartItemMetadata = sanitizeMetadataMap(cartItemMetadata, cartItems)
   commitCartChange()
+  cartActivityVersion += 1
+  activityListeners.forEach((listener) => listener())
+  return true
 }
 
 export function setCartQuantity(productName, quantity) {
@@ -186,6 +202,29 @@ export function setCartQuantity(productName, quantity) {
   cartItems = {
     ...cartItems,
     [safeProductName]: Math.max(1, Math.floor(safeQuantity)),
+  }
+  commitCartChange()
+}
+
+export function removeCartQuantity(productName, quantity = 1) {
+  const safeProductName = String(productName || '').trim()
+  const safeQuantity = Number(quantity)
+
+  if (!safeProductName || !Number.isFinite(safeQuantity) || safeQuantity <= 0) {
+    return
+  }
+
+  const currentQuantity = cartItems[safeProductName]
+  if (!currentQuantity) return
+
+  const nextQuantity = currentQuantity - Math.floor(safeQuantity)
+  cartItems = { ...cartItems }
+  if (nextQuantity > 0) {
+    cartItems[safeProductName] = nextQuantity
+  } else {
+    delete cartItems[safeProductName]
+    cartItemMetadata = { ...cartItemMetadata }
+    delete cartItemMetadata[safeProductName]
   }
   commitCartChange()
 }

@@ -40,7 +40,13 @@ import {
   getActiveSweetTreatsCategories,
   getActiveSweetTreatsProducts,
 } from '../admin/services/sweetTreatsProductsService.js'
-import { subscribeCart, getCartCount, addToCart } from '../cartStore.js'
+import {
+  subscribeCart,
+  getCartCount,
+  subscribeCartActivity,
+  getCartActivityVersion,
+  addToCart,
+} from '../cartStore.js'
 import './LandingPage.css'
 
 const masonryModules = import.meta.glob('../assets/landingpage/masonry/*.png', { eager: true })
@@ -154,6 +160,12 @@ export function SiteTopbar({
   const topbarMotionTimeoutRef = useRef(null)
   const topbarIsScrolled = forceScrolled || isScrolled
   const cartCount = useSyncExternalStore(subscribeCart, getCartCount)
+  const cartActivityVersion = useSyncExternalStore(
+    subscribeCartActivity,
+    getCartActivityVersion,
+  )
+  const [initialCartActivityVersion] = useState(getCartActivityVersion)
+  const shouldAnimateCart = cartActivityVersion > initialCartActivityVersion
   const currentPathname = window.location.pathname
   const isCartActive = currentPathname === '/cart'
   const isAccountMenuEnabled = Boolean(isCustomerAuthenticated)
@@ -505,7 +517,11 @@ export function SiteTopbar({
             aria-label="Cart"
             onClick={handleCartNavigation}
           >
-            <span className="topbar-icon-stack" aria-hidden="true">
+            <span
+              className={`topbar-icon-stack${shouldAnimateCart ? ' topbar-cart-visual' : ''}`}
+              key={`cart-icon-${cartActivityVersion}`}
+              aria-hidden="true"
+            >
               <img
                 className="topbar-icon topbar-cart-icon topbar-icon--light"
                 src={cartIcon}
@@ -517,7 +533,14 @@ export function SiteTopbar({
                 alt=""
               />
             </span>
-            {cartCount > 0 ? <span className="topbar-cart-badge">{cartCount}</span> : null}
+            {cartCount > 0 ? (
+              <span
+                className={`topbar-cart-badge${shouldAnimateCart ? ' topbar-cart-badge--pop' : ''}`}
+                key={`cart-badge-${cartActivityVersion}`}
+              >
+                {cartCount}
+              </span>
+            ) : null}
           </a>
         </div>
       </div>
@@ -1272,7 +1295,9 @@ function MoreTreatsSection() {
         <h2 id="treats-title">More Sweet Treats</h2>
       </div>
 
-      <div className="treats-catalog">
+      <div
+        className={`treats-catalog${activeCategory === 'regular_cake' ? ' treats-catalog--regular-cakes' : ''}`}
+      >
         <div className="treats-tabs" role="tablist" aria-label="Sweet treat categories">
           {treatCategories.map((category) => {
             const isActive = activeCategory === category.id
@@ -1300,7 +1325,9 @@ function MoreTreatsSection() {
           aria-labelledby={`treats-tab-${activeCategory}`}
           key={activeCategory}
         >
-          <div className="treats-list">
+          <div
+            className={`treats-list${activeCategory === 'regular_cake' ? ' treats-list--regular-cakes' : ''}`}
+          >
             {productsLoading ? (
               <p className="treats-item-desc">Loading Sweet Treats...</p>
             ) : productsError ? (
@@ -1309,7 +1336,10 @@ function MoreTreatsSection() {
               <CheesecakeTreatCard product={cheesecakeProduct} />
             ) : (
               products.map((product) => (
-                <article className="treats-item" key={product.name}>
+                <article
+                  className={`treats-item${activeCategory === 'regular_cake' ? ' treats-item--regular-cake' : ''}`}
+                  key={product.name}
+                >
                   <div className="treats-item-copy">
                     <h3>{product.name}</h3>
                     <div className="treats-price-row">

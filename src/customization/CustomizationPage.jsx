@@ -134,6 +134,7 @@ function CustomizationPage({
         >
           <CakePage
             embedded
+            onNavigate={onNavigate}
           />
         </div>
 
@@ -145,6 +146,7 @@ function CustomizationPage({
         >
           <CupcakePage
             embedded
+            onNavigate={onNavigate}
           />
         </div>
 
@@ -156,6 +158,7 @@ function CustomizationPage({
         >
           <PackagePage
             embedded
+            onNavigate={onNavigate}
           />
         </div>
       </main>
