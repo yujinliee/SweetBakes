@@ -7,6 +7,7 @@ import {
   setCartQuantity,
   removeCartQuantity,
   removeFromCart,
+  clearCart,
 } from '../cartStore.js'
 import CakeAvailabilityCalendar from '../cakepage/components/CakeAvailabilityCalendar.jsx'
 import AutocompleteTextInput from './components/AutocompleteTextInput.jsx'
@@ -231,8 +232,7 @@ function CartPage({
       if (!isMounted) return
       if (!error && ['paid', 'verified', 'payment_verified'].includes(String(data?.paymentStatus || '').toLowerCase())) {
         setGuestOrderNumber(data.orderNumber || null)
-        const purchasedItems = Array.isArray(receipt.items) ? receipt.items : []
-        purchasedItems.forEach((item) => removeCartQuantity(item.name, item.quantity))
+        clearCart()
         window.localStorage.removeItem(CART_PAYMENT_RETURN_STORAGE_KEY)
         setGuestPaymentVerified(true)
         return
@@ -665,10 +665,6 @@ function CartPage({
           JSON.stringify({
             orderId,
             guestEmail: customerInfo.email.trim(),
-            items: cartProducts.map((product) => ({
-              name: product.name,
-              quantity: product.quantity,
-            })),
           }),
         )
       }
