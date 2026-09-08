@@ -6,10 +6,8 @@ const errorMessages = {
   packageCakeFlavor: 'Please select a cake flavor.',
   packageCakeSize: 'Please select a cake size.',
   packageCakeLayers: 'Please select the number of layers.',
-  packageCakeTheme: 'Please select a cake theme.',
-  packageCakeOtherTheme: 'Please enter your cake theme.',
-  packageCupcakeTheme: 'Please select a cupcake theme.',
-  packageCupcakeOtherTheme: 'Please enter your cupcake theme.',
+  packageCakeTheme: 'Please select a package theme/design.',
+  packageCakeOtherTheme: 'Please enter your package theme/design.',
 }
 
 function PackageCustomizeForm({
@@ -18,6 +16,7 @@ function PackageCustomizeForm({
   previewImage,
   validationTouched = {},
   onDetailsChange,
+  onReferenceImagesChange,
   onValidationTouchedChange,
   onBack,
   onContinue,
@@ -57,12 +56,6 @@ function PackageCustomizeForm({
     ...(details.packageCakeTheme === 'Other' && !details.packageCakeOtherTheme.trim()
       ? { packageCakeOtherTheme: errorMessages.packageCakeOtherTheme }
       : {}),
-    ...(!details.packageCupcakeTheme
-      ? { packageCupcakeTheme: errorMessages.packageCupcakeTheme }
-      : {}),
-    ...(details.packageCupcakeTheme === 'Other' && !details.packageCupcakeOtherTheme.trim()
-      ? { packageCupcakeOtherTheme: errorMessages.packageCupcakeOtherTheme }
-      : {}),
   }
 
   const hasError = (field) => validationTouched[field] && errors[field]
@@ -99,8 +92,6 @@ function PackageCustomizeForm({
       'packageCakeLayers',
       'packageCakeTheme',
       ...(details.packageCakeTheme === 'Other' ? ['packageCakeOtherTheme'] : []),
-      'packageCupcakeTheme',
-      ...(details.packageCupcakeTheme === 'Other' ? ['packageCupcakeOtherTheme'] : []),
     ]
     const firstInvalidField = validationOrder.find((field) => errors[field])
 
@@ -136,7 +127,9 @@ function PackageCustomizeForm({
           <PackageReferenceUpload
             referenceImages={details.packageReferenceImages}
             onReferenceImagesChange={(files) =>
-              updateReferenceImages('packageReferenceImages', files)
+              onReferenceImagesChange
+                ? onReferenceImagesChange(files)
+                : updateReferenceImages('packageReferenceImages', files)
             }
           />
         </div>
@@ -182,7 +175,7 @@ function PackageCustomizeForm({
                 <legend>Design &amp; Details</legend>
               </fieldset>
               <fieldset className="cake-option-group">
-                <legend>Theme *</legend>
+                <legend>Theme / Design *</legend>
                 <select
                   className="cake-select"
                   data-validation-field="packageCakeTheme"
@@ -190,7 +183,7 @@ function PackageCustomizeForm({
                   value={details.packageCakeTheme}
                   onChange={(event) => updateDetail('packageCakeTheme', event.target.value)}
                 >
-                  <option value="">Select a theme</option>
+                  <option value="">Select a package theme/design</option>
                   {packageThemes.map((theme) => (
                     <option value={theme} key={theme}>{theme}</option>
                   ))}
@@ -253,40 +246,6 @@ function PackageCustomizeForm({
                 <p className="package-included-quantity">
                   {cupcakeQuantity ? `${cupcakeQuantity} Cupcakes` : 'Select a package first'}
                 </p>
-              </fieldset>
-
-              <fieldset className="cake-option-group">
-                <legend>Design &amp; Details</legend>
-              </fieldset>
-              <fieldset className="cake-option-group">
-                <legend>Theme *</legend>
-                <select
-                  className="cake-select"
-                  data-validation-field="packageCupcakeTheme"
-                  aria-invalid={hasError('packageCupcakeTheme') ? 'true' : undefined}
-                  value={details.packageCupcakeTheme}
-                  onChange={(event) => updateDetail('packageCupcakeTheme', event.target.value)}
-                >
-                  <option value="">Select a theme</option>
-                  {packageThemes.map((theme) => (
-                    <option value={theme} key={theme}>{theme}</option>
-                  ))}
-                </select>
-                {showError('packageCupcakeTheme')}
-                {details.packageCupcakeTheme === 'Other' ? (
-                  <input
-                    className="cake-text-input"
-                    data-validation-field="packageCupcakeOtherTheme"
-                    aria-invalid={hasError('packageCupcakeOtherTheme') ? 'true' : undefined}
-                    type="text"
-                    placeholder="Enter your theme"
-                    value={details.packageCupcakeOtherTheme}
-                    onChange={(event) =>
-                      updateDetail('packageCupcakeOtherTheme', event.target.value)
-                    }
-                  />
-                ) : null}
-                {showError('packageCupcakeOtherTheme')}
               </fieldset>
 
               <fieldset className="cake-option-group">

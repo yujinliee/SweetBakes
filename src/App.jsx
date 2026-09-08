@@ -11,8 +11,10 @@ import {
 import { getCustomerAuthStatus } from './auth/customerAuth.js'
 import CartPage from './cartpage/CartPage.jsx'
 import CustomizationPage from './customization/CustomizationPage.jsx'
+import ForgotPasswordPage from './loginpage/ForgotPasswordPage.jsx'
 import LandingPage from './landingpage/LandingPage.jsx'
 import LoginPage from './loginpage/LoginPage.jsx'
+import ResetPasswordPage from './loginpage/ResetPasswordPage.jsx'
 import MyOrdersPage from './myorders/MyOrdersPage.jsx'
 import ProfilePage from './profilepage/ProfilePage.jsx'
 import RegisterPage from './registerpage/RegisterPage.jsx'
@@ -175,40 +177,45 @@ function App() {
 
   const currentPathname = getPathnameFromLocationKey(locationKey)
 
-  if (isCustomerCustomizationRoute(locationKey) && customerRouteCheckedKey !== locationKey) {
+  if (
+    isCustomerCustomizationRoute(locationKey)
+    && !isCustomerAuthenticated
+    && customerRouteCheckedKey !== locationKey
+  ) {
     return null
   }
 
   const page =
     currentPathname.startsWith('/admin') ? (
       <AdminRoutes currentPath={currentPathname} onNavigate={navigate} />
-    ) : currentPathname === '/cakes' || currentPathname === '/cake' ? (
+    ) : currentPathname === '/cakes'
+      || currentPathname === '/cake'
+      || currentPathname === '/cupcakes'
+      || currentPathname === '/customize' ? (
       <CustomizationPage
-        initialProduct="cakes"
+        locationKey={locationKey}
         onNavigate={navigate}
         onCustomerLogout={handleCustomerLogout}
         isCustomerAuthenticated={isCustomerAuthenticated}
-        key={locationKey}
-      />
-    ) : currentPathname === '/cupcakes' ? (
-      <CustomizationPage
-        initialProduct="cupcakes"
-        onNavigate={navigate}
-        onCustomerLogout={handleCustomerLogout}
-        isCustomerAuthenticated={isCustomerAuthenticated}
-        key={locationKey}
-      />
-    ) : currentPathname === '/customize' ? (
-      <CustomizationPage
-        onNavigate={navigate}
-        onCustomerLogout={handleCustomerLogout}
-        isCustomerAuthenticated={isCustomerAuthenticated}
-        key={locationKey}
       />
     ) : currentPathname === '/login' ? (
       <LoginPage
         onNavigate={navigate}
         onCustomerLogin={handleCustomerLogin}
+        onCustomerLogout={handleCustomerLogout}
+        isCustomerAuthenticated={isCustomerAuthenticated}
+        key={locationKey}
+      />
+    ) : currentPathname === '/forgot-password' ? (
+      <ForgotPasswordPage
+        onNavigate={navigate}
+        onCustomerLogout={handleCustomerLogout}
+        isCustomerAuthenticated={isCustomerAuthenticated}
+        key={locationKey}
+      />
+    ) : currentPathname === '/reset-password' ? (
+      <ResetPasswordPage
+        onNavigate={navigate}
         onCustomerLogout={handleCustomerLogout}
         isCustomerAuthenticated={isCustomerAuthenticated}
         key={locationKey}

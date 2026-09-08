@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 
 function CupcakeReferenceImage({ preview }) {
-  const [status, setStatus] = useState(preview.url ? 'loading' : 'error')
+  const [status, setStatus] = useState(
+    preview.url
+      ? 'loading'
+      : preview.reference?.path && !preview.reference?.restoreError
+        ? 'loading'
+        : 'error',
+  )
 
   return (
     <div className={`cake-reference-thumbnail cake-reference-thumbnail--${status}`}>

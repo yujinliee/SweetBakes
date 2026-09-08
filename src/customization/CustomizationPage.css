@@ -1,7 +1,20 @@
 @import '../cupcakepage/CupcakePage.css';
 
-.customization-product-panel[hidden] {
-  display: none;
+.customization-product-content {
+  position: relative;
+}
+
+.customization-product-panel {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.customization-product-panel--active {
+  position: relative;
+  visibility: visible;
+  pointer-events: auto;
 }
 
 .customization-main:has(.step3-content) {

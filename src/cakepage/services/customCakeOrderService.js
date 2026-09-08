@@ -1,14 +1,15 @@
 import { supabase } from '../../lib/supabase.js'
+import {
+  createReferenceDraftId,
+  removeDraftReferenceImage,
+  resolveReferenceDraftId,
+  restoreDraftReferenceImages,
+  uploadDraftReferenceImages,
+} from '../../services/referenceImageStorageService.js'
 
-const referenceBucket = 'custom-order-references'
-const acceptedReferenceTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
-const maxReferenceFileSize = 5 * 1024 * 1024
 const draftTable = 'custom_cake_drafts'
 
-export const createRequestUploadId = () =>
-  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+export const createRequestUploadId = createReferenceDraftId
 
 const getCustomerSession = async () => {
   const { data, error } = await supabase.auth.getSession()
@@ -25,22 +26,10 @@ const toStoredReference = ({ name, type, size, path, position }) => ({
   position,
 })
 
-const withPreviewUrls = async (references = []) => {
-  const paths = references.map((reference) => reference.path).filter(Boolean)
-  if (!paths.length) return references
-  const { data, error } = await supabase.storage
-    .from(referenceBucket)
-    .createSignedUrls(paths, 60 * 60)
-  if (error) throw error
-  const urls = (data || []).reduce((result, item, index) => {
-    result[paths[index]] = item.signedUrl || ''
-    return result
-  }, {})
-  return references.map((reference) => ({
-    ...reference,
-    previewUrl: urls[reference.path] || '',
-  }))
-}
+const withPreviewUrls = (references = []) => restoreDraftReferenceImages(
+  references,
+  { productType: 'cake' },
+)
 
 export async function fetchCustomCakeDraft() {
   const user = await getCustomerSession()
@@ -53,6 +42,11 @@ export async function fetchCustomCakeDraft() {
   if (error) throw error
   if (!data) return null
   const references = await withPreviewUrls(data.reference_images || [])
+  console.log('[REFERENCE DRAFT RESTORED]', {
+    productType: 'cake',
+    draftId: data.id || null,
+    storedReferences: references.map(({ previewUrl, ...reference }) => reference),
+  })
   return { ...data, reference_images: references }
 }
 
@@ -63,33 +57,106 @@ export async function saveCustomCakeDraft({
   designDetails,
   customerInfo,
   referenceImages = [],
+  source = 'saveCustomCakeDraft',
 }) {
   const user = await getCustomerSession()
-  const id = draftId || createRequestUploadId()
+  const id = resolveReferenceDraftId(referenceImages, draftId)
   const storedReferences = referenceImages
     .filter((reference) => reference?.path)
     .map(toStoredReference)
+  const payload = {
+    id,
+    customer_id: user.id,
+    current_step: currentStep,
+    selections,
+    design_details: {
+      theme: designDetails?.theme || '',
+      otherTheme: designDetails?.otherTheme || '',
+      message: designDetails?.message || '',
+      instructions: designDetails?.instructions || '',
+    },
+    customer_info: customerInfo,
+    reference_images: storedReferences,
+    status: 'active',
+    updated_at: new Date().toISOString(),
+  }
+
+  console.log('[CAKE DB WRITE]', {
+    source,
+    draftId: payload.id,
+    referenceImages: payload.reference_images,
+    timestamp: Date.now(),
+  })
+  console.log('[CAKE DRAFT FINAL PAYLOAD]', {
+    draftId: payload.id,
+    customerId: payload.customer_id,
+    referenceImages: payload.reference_images,
+  })
+
   const { data, error } = await supabase
     .from(draftTable)
-    .upsert({
-      id,
-      customer_id: user.id,
-      current_step: currentStep,
-      selections,
-      design_details: {
-        theme: designDetails?.theme || '',
-        otherTheme: designDetails?.otherTheme || '',
-        message: designDetails?.message || '',
-        instructions: designDetails?.instructions || '',
-      },
-      customer_info: customerInfo,
-      reference_images: storedReferences,
-      status: 'active',
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'id' })
+    .upsert(payload, { onConflict: 'customer_id' })
     .select('*')
     .single()
   if (error) throw error
+  console.log('[REFERENCE DRAFT SAVED]', {
+    productType: 'cake',
+    draftId: data.id || id,
+    referencePaths: storedReferences.map((reference) => reference.path),
+  })
+
+  const { data: roundtrip, error: roundtripError } = await supabase
+    .from(draftTable)
+    .select('id, reference_images')
+    .eq('id', data.id || id)
+    .maybeSingle()
+  if (roundtripError) {
+    console.error('[CAKE DB AFTER WRITE]', {
+      source,
+      draftId: data.id || id,
+      remoteReferenceImages: null,
+      updatedAt: null,
+      errorCode: roundtripError.code ?? null,
+      errorMessage: roundtripError.message ?? null,
+    })
+    console.error('[CAKE DRAFT ROUNDTRIP]', {
+      draftId: data.id || id,
+      errorCode: roundtripError.code ?? null,
+      errorMessage: roundtripError.message ?? null,
+    })
+  } else {
+    console.log('[CAKE DB AFTER WRITE]', {
+      source,
+      draftId: roundtrip?.id || data.id || id,
+      remoteReferenceImages: roundtrip?.reference_images ?? null,
+      updatedAt: roundtrip?.updated_at ?? null,
+    })
+    const savedReferencePaths = (roundtrip?.reference_images || [])
+      .map((reference) => reference?.path)
+      .filter(Boolean)
+    const expectedPaths = storedReferences.map((reference) => reference.path).filter(Boolean)
+    const matches = expectedPaths.length === savedReferencePaths.length &&
+      expectedPaths.every((path) => savedReferencePaths.includes(path))
+
+    console.log('[CAKE DRAFT ROUNDTRIP]', {
+      draftId: roundtrip?.id || data.id || id,
+      savedReferencePaths,
+    })
+    console.log('[CAKE REFERENCE DB VERIFY]', {
+      draftId: roundtrip?.id || data.id || id,
+      expectedPaths,
+      remoteReferenceImages: savedReferencePaths,
+      matches,
+    })
+    console.log('[CAKE DRAFT DB VERIFY]', {
+      draftId: roundtrip?.id || data.id || id,
+      remoteReferenceImages: roundtrip?.reference_images ?? null,
+    })
+
+    if (!matches) {
+      throw new Error('CAKE_REFERENCE_DB_VERIFY_FAILED')
+    }
+  }
   return { ...data, reference_images: await withPreviewUrls(storedReferences) }
 }
 
@@ -99,52 +166,36 @@ export async function uploadCustomCakeDraftReferences(
   existingReferences = [],
   draftData = {},
 ) {
-  const user = await getCustomerSession()
-  if (files.length + existingReferences.length > 3) {
-    throw new Error('REFERENCE_IMAGE_INVALID:Maximum 3 reference images allowed.')
-  }
-  const id = draftId || createRequestUploadId()
-  const usedPositions = new Set(existingReferences.map((reference) => reference.position))
-  const nextReferences = [...existingReferences]
-  const uploadedPaths = []
-
+  const id = resolveReferenceDraftId(existingReferences, draftId)
   try {
-    for (const file of files) {
-      if (!(file instanceof File) || !acceptedReferenceTypes.has(file.type) || file.size > maxReferenceFileSize) {
-        throw new Error(`REFERENCE_IMAGE_INVALID:${file?.name || 'reference image'}`)
-      }
-      let position = 1
-      while (usedPositions.has(position)) position += 1
-      usedPositions.add(position)
-      const extension = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
-      const path = `drafts/${user.id}/${id}/reference-${position}.${extension}`
-      const { error } = await supabase.storage.from(referenceBucket).upload(path, file, {
-        cacheControl: '31536000',
-        contentType: file.type,
-        upsert: false,
-      })
-      if (error) throw new Error(`REFERENCE_IMAGE_UPLOAD_FAILED:${file.name}`)
-      uploadedPaths.push(path)
-      nextReferences.push(toStoredReference({ name: file.name, type: file.type, size: file.size, path, position }))
-    }
+    const result = await uploadDraftReferenceImages({
+      productType: 'cake',
+      files,
+      existingReferences,
+      draftId: id,
+    })
     const saved = await saveCustomCakeDraft({
       draftId: id,
       currentStep: draftData.currentStep || 2,
       selections: draftData.selections || {},
       designDetails: draftData.designDetails || {},
       customerInfo: draftData.customerInfo || {},
-      referenceImages: nextReferences,
+      referenceImages: result.references,
+      source: 'uploadCustomCakeDraftReferences',
     })
     return { draftId: id, referenceImages: await withPreviewUrls(saved.reference_images) }
   } catch (error) {
-    if (uploadedPaths.length) await supabase.storage.from(referenceBucket).remove(uploadedPaths)
     throw error
   }
 }
 
 export async function removeCustomCakeDraftReference(path, draftId, references = [], draftData = {}) {
   const remaining = references.filter((reference) => reference.path !== path)
-  if (path) await supabase.storage.from(referenceBucket).remove([path])
+  const restored = await removeDraftReferenceImage({
+    productType: 'cake',
+    storagePath: path,
+    remainingReferences: remaining,
+  })
   await saveCustomCakeDraft({
     draftId,
     currentStep: draftData.currentStep || 2,
@@ -152,18 +203,34 @@ export async function removeCustomCakeDraftReference(path, draftId, references =
     designDetails: draftData.designDetails || {},
     customerInfo: draftData.customerInfo || {},
     referenceImages: remaining,
+    source: 'removeCustomCakeDraftReference',
   })
-  return withPreviewUrls(remaining)
+  return restored
 }
 
 export async function completeCustomCakeDraft(draftId) {
   if (!draftId) return
   await getCustomerSession()
-  const { error } = await supabase
+  const payload = { status: 'completed', completed_at: new Date().toISOString() }
+  console.log('[CAKE DB WRITE]', {
+    source: 'completeCustomCakeDraft',
+    draftId,
+    referenceImages: undefined,
+    timestamp: Date.now(),
+  })
+  const { data, error } = await supabase
     .from(draftTable)
-    .update({ status: 'completed', completed_at: new Date().toISOString() })
+    .update(payload)
     .eq('id', draftId)
+    .select('id, reference_images, updated_at')
+    .single()
   if (error) throw error
+  console.log('[CAKE DB AFTER WRITE]', {
+    source: 'completeCustomCakeDraft',
+    draftId: data?.id || draftId,
+    remoteReferenceImages: data?.reference_images ?? null,
+    updatedAt: data?.updated_at ?? null,
+  })
 }
 
 export const mapCustomCakeSubmitError = (message = '') => {

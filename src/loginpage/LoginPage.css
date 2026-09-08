@@ -238,6 +238,109 @@
   text-underline-offset: 3px;
 }
 
+.forgot-password-card {
+  width: min(calc(100% - 32px), 620px);
+  box-sizing: border-box;
+  padding-right: 32px;
+  padding-left: 32px;
+  padding-top: 28px;
+  padding-bottom: 26px;
+}
+
+.forgot-password-heading-group {
+  width: 100%;
+  margin: 20px 0 22px;
+  text-align: center;
+}
+
+.forgot-password-heading {
+  margin: 0;
+  color: #3b2b28;
+  font-family: 'Playfair Display', serif;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 34px;
+}
+
+.forgot-password-success-content {
+  margin: 16px 0 0;
+}
+
+.forgot-password-description {
+  margin: 10px auto 0;
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+  color: #756b68;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 21px;
+  text-align: center;
+  white-space: normal;
+}
+
+.forgot-password-card .login-fields {
+  gap: 16px;
+}
+
+.forgot-password-card .login-submit {
+  margin-top: 18px;
+  font-weight: 600;
+}
+
+.forgot-password-card .forgot-password-form-error {
+  display: block;
+  align-self: stretch;
+  box-sizing: border-box;
+  margin-top: 8px;
+  margin-right: 0;
+  margin-left: 0;
+  width: 100%;
+  max-width: none;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.reset-password-error {
+  width: 100%;
+  margin-top: 8px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.forgot-password-back {
+  display: block;
+  width: 100%;
+  margin: 14px auto 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #8d5fba;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.forgot-password-back:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 600px) {
+  .forgot-password-description {
+    white-space: normal;
+  }
+}
+
+@media (min-width: 700px) {
+  .forgot-password-description {
+    white-space: nowrap;
+  }
+}
+
 .login-error {
   margin: 12px 0 0;
   color: #b43b4a;

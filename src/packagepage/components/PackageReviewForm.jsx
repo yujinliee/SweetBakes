@@ -91,10 +91,6 @@ function PackageReviewForm({
     packageCustomization.packageCakeTheme === 'Other'
       ? packageCustomization.packageCakeOtherTheme || 'Other'
       : packageCustomization.packageCakeTheme || emptyCustomerText
-  const cupcakeTheme =
-    packageCustomization.packageCupcakeTheme === 'Other'
-      ? packageCustomization.packageCupcakeOtherTheme || 'Other'
-      : packageCustomization.packageCupcakeTheme || emptyCustomerText
   const fulfillmentLabel =
     customerInfo.fulfillment === 'pickup'
       ? 'Pickup'
@@ -216,7 +212,6 @@ function PackageReviewForm({
                 ? `${packageSelection.cupcakeQuantity} Cupcakes`
                 : emptyCustomerText,
             },
-            { label: 'Theme', value: cupcakeTheme },
             {
               label: 'Special Instructions',
               value: packageCustomization.packageCupcakeSpecialInstructions || fallbackText,

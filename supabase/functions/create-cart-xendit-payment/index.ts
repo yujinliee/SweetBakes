@@ -127,7 +127,7 @@ export default {
     const paymentStatus = (order.payment_status ?? "").toLowerCase();
     const orderStatus = (order.order_status ?? "").toLowerCase();
     if (request.statusOnly === true) {
-      return respond({ orderId: order.id, paymentStatus });
+      return respond({ orderId: order.id, orderNumber: order.order_number, customerId: order.customer_id, paymentStatus });
     }
     if (["paid", "verified", "payment_verified"].includes(paymentStatus)) return respond({ error: "This order is already paid." }, 400);
     if (["cancelled", "canceled", "rejected", "declined", "void", "refunded"].includes(orderStatus)) return respond({ error: "This order cannot be paid." }, 400);

@@ -1,6 +1,6 @@
 import { supabase } from '../../lib/supabase.js'
 
-const MESSAGE_SELECT = 'id, conversation_id, sender_type, message, created_at'
+const MESSAGE_SELECT = 'id, conversation_id, sender_type, message, created_at, attachment_path, attachment_name, attachment_mime_type, attachment_size'
 
 const formatCustomerName = (profile) => {
   const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim()
@@ -13,7 +13,26 @@ const mapMessageRow = (row) => ({
   senderType: row.sender_type,
   message: row.message || '',
   createdAt: row.created_at,
+  attachment: row.attachment_path
+    ? {
+        path: row.attachment_path,
+        name: row.attachment_name || 'Attachment',
+        mimeType: row.attachment_mime_type || '',
+        size: row.attachment_size || null,
+      }
+    : null,
 })
+
+const hydrateAttachment = async (message) => {
+  if (!message.attachment?.path) return message
+
+  const { data, error } = await supabase.storage
+    .from('chat-attachments')
+    .createSignedUrl(message.attachment.path, 3600)
+
+  if (error) throw error
+  return { ...message, attachment: { ...message.attachment, url: data.signedUrl } }
+}
 
 const logAdminChat = (...values) => {
   if (import.meta.env.DEV) {
@@ -70,7 +89,9 @@ export async function fetchAdminChatConversations() {
   }
 
   const customerConversations = (conversations || []).filter(
-    (conversation) => profilesById[conversation.customer_id]?.role === 'customer',
+    (conversation) => conversation.customer_id
+      ? profilesById[conversation.customer_id]?.role === 'customer'
+      : Boolean(conversation.guest_token),
   )
   const conversationIds = customerConversations.map((row) => row.id).filter(Boolean)
 
@@ -101,8 +122,8 @@ export async function fetchAdminChatConversations() {
         status: conversation.status || 'open',
         createdAt: conversation.created_at,
         updatedAt: conversation.updated_at,
-        customerName: formatCustomerName(profile),
-        customerEmail: profile?.email || 'No email available',
+        customerName: profile ? formatCustomerName(profile) : 'Guest Customer',
+        customerEmail: profile?.email || 'Guest visitor',
         latestMessage,
       }
     })
@@ -123,10 +144,10 @@ export async function fetchAdminChatMessages(conversationId) {
     .order('created_at', { ascending: true })
 
   if (error) throw error
-  return (data || []).map(mapMessageRow)
+  return Promise.all((data || []).map(mapMessageRow).map(hydrateAttachment))
 }
 
-export async function sendAdminChatMessage(conversationId, message) {
+export async function sendAdminChatMessage(conversationId, message, attachment = null) {
   const trimmedMessage = String(message || '').trim()
 
   if (!conversationId || !trimmedMessage) {
@@ -139,12 +160,16 @@ export async function sendAdminChatMessage(conversationId, message) {
       conversation_id: conversationId,
       sender_type: 'admin',
       message: trimmedMessage,
+      attachment_path: attachment?.path || null,
+      attachment_name: attachment?.name || null,
+      attachment_mime_type: attachment?.mimeType || null,
+      attachment_size: attachment?.size || null,
     })
     .select(MESSAGE_SELECT)
     .single()
 
   if (error) throw error
-  return mapMessageRow(data)
+  return hydrateAttachment(mapMessageRow(data))
 }
 
 export async function updateAdminChatConversationStatus(conversationId, status) {

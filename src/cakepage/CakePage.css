@@ -64,7 +64,7 @@
   font-size: 17px;
   font-weight: 600;
   cursor: pointer;
-  transition: color 280ms ease;
+  transition: none;
 }
 
 .cake-tab::after {
@@ -77,6 +77,13 @@
   background: currentColor;
   transform: scaleX(0);
   transform-origin: left center;
+}
+
+.cake-tabs--animated .cake-tab {
+  transition: color 280ms ease;
+}
+
+.cake-tabs--animated .cake-tab::after {
   transition: transform 280ms ease;
 }
 

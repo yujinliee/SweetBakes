@@ -11,16 +11,24 @@ function PackageReferenceUpload({ referenceImages, onReferenceImagesChange }) {
 
   const previews = useMemo(
     () =>
-      referenceImages.map((file) => ({
-        file,
-        url: URL.createObjectURL(file),
-      })),
+      referenceImages.map((reference) => {
+        const file = reference?.file || reference
+        const objectUrl = file instanceof File ? URL.createObjectURL(file) : ''
+        return {
+          reference,
+          file,
+          url: reference?.previewUrl || objectUrl,
+          objectUrl,
+        }
+      }),
     [referenceImages],
   )
 
   useEffect(
     () => () => {
-      previews.forEach((preview) => URL.revokeObjectURL(preview.url))
+      previews.forEach((preview) => {
+        if (preview.objectUrl) URL.revokeObjectURL(preview.objectUrl)
+      })
     },
     [previews],
   )
@@ -115,12 +123,17 @@ function PackageReferenceUpload({ referenceImages, onReferenceImagesChange }) {
       {previews.length ? (
         <div className="cake-reference-thumbnails" aria-label="Uploaded reference images">
           {previews.map((preview) => (
-            <div className="cake-reference-thumbnail" key={`${preview.file.name}-${preview.url}`}>
-              <img src={preview.url} alt={preview.file.name} />
+            <div
+              className="cake-reference-thumbnail-wrapper"
+              key={`${preview.reference.path || preview.file.name}-${preview.url}`}
+            >
+              <div className="cake-reference-thumbnail">
+                <img src={preview.url} alt={preview.file.name} />
+              </div>
               <button
                 type="button"
                 aria-label={`Remove ${preview.file.name}`}
-                onClick={() => removeFile(preview.file)}
+                onClick={() => removeFile(preview.reference)}
               >
                 X
               </button>

@@ -6,7 +6,9 @@ const acceptedTypes = ['image/jpeg', 'image/png', 'image/webp']
 
 function CakeReferenceImage({ reference }) {
   const source = reference.previewUrl || ''
-  const [status, setStatus] = useState(source ? 'loading' : 'error')
+  const [status, setStatus] = useState(
+    source ? 'loading' : reference.path && !reference.restoreError ? 'loading' : 'error',
+  )
 
   return (
     <div className={`cake-reference-thumbnail cake-reference-thumbnail--${status}`}>

@@ -16,6 +16,7 @@ import { resolveSweetTreatsPrice } from '../sweettreats/sweetTreatsData.js'
 import { useAvailability } from '../hooks/useAvailability.js'
 import { assertCanAcceptOrderForDate } from '../admin/services/availabilityService.js'
 import { supabase } from '../lib/supabase.js'
+import { getCheckoutSession, reusableCartOrder, getCartOrderReference, assertCartOrderReference } from './cartOrderOwnership.js'
 import { fetchAuthenticatedCustomerProfile } from '../services/customerProfileService.js'
 import OrderRequestSuccessModal from '../components/OrderRequestSuccessModal.jsx'
 import chocolateCakeImage from '../assets/othersweettreats/regular_chocolate.jpg'
@@ -191,6 +192,7 @@ function CartPage({
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false)
   const [orderSubmissionError, setOrderSubmissionError] = useState('')
   const [guestPaymentVerified, setGuestPaymentVerified] = useState(false)
+  const [guestOrderNumber, setGuestOrderNumber] = useState(null)
   const [guestPaymentTimedOut, setGuestPaymentTimedOut] = useState(false)
   const guestPaymentStatus = new URLSearchParams(window.location.search).get('payment')
   const pendingOrderIdRef = useRef(null)
@@ -228,6 +230,7 @@ function CartPage({
 
       if (!isMounted) return
       if (!error && ['paid', 'verified', 'payment_verified'].includes(String(data?.paymentStatus || '').toLowerCase())) {
+        setGuestOrderNumber(data.orderNumber || null)
         const purchasedItems = Array.isArray(receipt.items) ? receipt.items : []
         purchasedItems.forEach((item) => removeCartQuantity(item.name, item.quantity))
         window.localStorage.removeItem(CART_PAYMENT_RETURN_STORAGE_KEY)
@@ -550,13 +553,15 @@ function CartPage({
       const recipientName = customerInfo.deliverDifferentRecipient
         ? `${customerInfo.recipientFirstName} ${customerInfo.recipientLastName}`.trim()
         : null
-      const { data: sessionData } = await supabase.auth.getSession()
-      const session = sessionData?.session || null
+      const session = await getCheckoutSession(supabase)
+      const customerId = session?.user.id || null
+      if (session) window.localStorage.removeItem(CART_PAYMENT_RETURN_STORAGE_KEY)
 
-      let orderId = pendingOrderIdRef.current
+      let orderId = reusableCartOrder(pendingOrderIdRef.current, customerId)
+      if (!orderId) pendingOrderIdRef.current = null
       if (!orderId) {
         const rpcPayload = {
-          p_customer_id: session?.user?.id || null,
+          p_customer_id: customerId,
           p_first_name: customerInfo.customerFirstName.trim(),
           p_last_name: customerInfo.customerLastName.trim(),
           p_contact_number: customerInfo.contactNumber,
@@ -607,8 +612,25 @@ function CartPage({
           setOrderSubmissionError(mapCreateOrderErrorMessage())
           return
         }
-        pendingOrderIdRef.current = orderId
+        pendingOrderIdRef.current = { orderId, customerId }
       }
+
+      const orderReference = await getCartOrderReference(supabase, orderId, session, customerInfo.email.trim())
+      console.info('[CART ORDER OWNERSHIP]', {
+        isAuthenticated: Boolean(session),
+        customerId: orderReference.customerId ?? null,
+        orderId,
+        orderNumber: orderReference.orderNumber ?? null,
+      })
+      console.log('[CART OWNERSHIP VERIFY INPUT]', {
+        hasSession: Boolean(session),
+        sessionUserId: session?.user?.id ?? null,
+        orderId: orderReference.orderId ?? null,
+        orderNumber: orderReference.orderNumber ?? null,
+        orderCustomerId: orderReference.customerId ?? null,
+        guestEmailPresent: Boolean(orderReference.guestEmail),
+      })
+      assertCartOrderReference(orderReference, orderId, customerId)
 
       const { data: paymentData, error: paymentError } = await supabase.functions.invoke(
         'create-cart-xendit-payment',
@@ -699,6 +721,36 @@ function CartPage({
 
   const changeQuantity = (productName, delta) => {
     setCartQuantity(productName, (items[productName] ?? 1) + delta)
+  }
+
+  if (cartProducts.length === 0) {
+    return (
+      <div className="page-shell cart-page-shell">
+        <SiteTopbar
+          forceScrolled
+          homeHref="/"
+          locationHref="/#location"
+          contactHref="#contact"
+          onNavigate={onNavigate}
+          onCustomerLogout={onCustomerLogout}
+          isCustomerAuthenticated={isCustomerAuthenticated}
+        />
+
+        <main className="cart-empty-main">
+          <div className="cart-empty-state">
+            <h1>Your cart is empty.</h1>
+            <p>Browse our treats and add something sweet to your cart.</p>
+            <button
+              type="button"
+              className="cart-summary-browse-button"
+              onClick={() => onNavigate?.('/', { scrollTo: 'sweet-treats' })}
+            >
+              Browse Sweet Treats
+            </button>
+          </div>
+        </main>
+      </div>
+    )
   }
 
   return (
@@ -796,7 +848,12 @@ function CartPage({
                   <p className="cake-option-description">
                     Choose how you&apos;d like to receive your order.
                   </p>
-                  <div className="cake-order-method-toggle">
+                  <div
+                    className={`cake-order-method-toggle cart-order-method-toggle${
+                      orderMethod === 'pickup' ? ' cart-order-method-toggle--pickup' : ''
+                    }`}
+                  >
+                    <span className="cart-order-method-active" aria-hidden="true" />
                     {ORDER_METHODS.map((method) => (
                       <label
                         key={method.value}
@@ -843,7 +900,8 @@ function CartPage({
                   </div>
                 </fieldset>
 
-                {orderMethod === 'pickup' ? (
+                <div className={`cart-order-method-details cart-order-method-details--${orderMethod}`}>
+                  {orderMethod === 'pickup' ? (
 <fieldset className="cake-option-group cake-customer-section cart-section">
                   <legend>Pickup Details</legend>
                     <label className="cake-field">
@@ -862,9 +920,9 @@ function CartPage({
                       {showError('preferredPickupTime')}
                     </label>
                   </fieldset>
-                ) : null}
+                  ) : null}
 
-                {orderMethod === 'delivery' ? (
+                  {orderMethod === 'delivery' ? (
 <fieldset className="cake-option-group cake-customer-section cart-section">
                   <legend>Delivery Details</legend>
                     <label className="cake-field">
@@ -1029,7 +1087,8 @@ function CartPage({
                       </div>
                     ) : null}
                   </fieldset>
-                ) : null}
+                  ) : null}
+                </div>
 
                 <div className="cart-checkout-actions">
                   {!isCustomerAuthenticated && guestPaymentStatus === 'success' && !guestPaymentVerified && !guestPaymentTimedOut ? (
@@ -1076,10 +1135,7 @@ function CartPage({
                 <h2>Order Summary</h2>
 
                 <div className="cart-summary-items">
-                {cartProducts.length === 0 ? (
-                  <p className="cart-summary-empty">Your cart is empty.</p>
-                ) : (
-                  cartProducts.map((product) => (
+                  {cartProducts.map((product) => (
                     <div className="cart-summary-item" key={product.name}>
                       <CartSummaryThumb product={product} />
                       <div className="cart-summary-info">
@@ -1136,9 +1192,8 @@ function CartPage({
                         {formatPrice(product.lineTotal)}
                       </span>
                     </div>
-                  ))
-                )}
-              </div>
+                  ))}
+                </div>
 
               <div className="cart-price-summary">
                 <div className="cart-price-row">
@@ -1163,7 +1218,7 @@ function CartPage({
         <OrderRequestSuccessModal
           request={{}}
           title="Payment Successful"
-          description="Your payment has been received successfully. Your order has been placed and is now being processed."
+          description={`Your payment has been received successfully. Your order has been placed and is now being processed.${guestOrderNumber ? ` Order ID: ${guestOrderNumber}` : ''}`}
           primaryLabel="Continue Shopping"
           onClose={() => setGuestPaymentVerified(false)}
           onPrimary={() => {

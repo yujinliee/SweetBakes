@@ -3,16 +3,24 @@ import { useEffect, useMemo } from 'react'
 function PackageReferenceReview({ referenceImages }) {
   const previews = useMemo(
     () =>
-      referenceImages.slice(0, 3).map((file) => ({
-        file,
-        url: URL.createObjectURL(file),
-      })),
+      referenceImages.slice(0, 3).map((reference) => {
+        const file = reference?.file || reference
+        const objectUrl = file instanceof File ? URL.createObjectURL(file) : ''
+        return {
+          reference,
+          file,
+          url: reference?.previewUrl || objectUrl,
+          objectUrl,
+        }
+      }),
     [referenceImages],
   )
 
   useEffect(
     () => () => {
-      previews.forEach((preview) => URL.revokeObjectURL(preview.url))
+      previews.forEach((preview) => {
+        if (preview.objectUrl) URL.revokeObjectURL(preview.objectUrl)
+      })
     },
     [previews],
   )
@@ -23,7 +31,7 @@ function PackageReferenceReview({ referenceImages }) {
       {previews.length ? (
         <div className="cake-reference-thumbnails" aria-label="Uploaded reference images">
           {previews.map((preview) => (
-            <div className="cake-reference-thumbnail" key={`${preview.file.name}-${preview.url}`}>
+            <div className="cake-reference-thumbnail" key={`${preview.reference.path || preview.file.name}-${preview.url}`}>
               <img src={preview.url} alt={preview.file.name} />
             </div>
           ))}

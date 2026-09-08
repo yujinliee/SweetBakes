@@ -5,7 +5,13 @@ const maxFileSize = 10 * 1024 * 1024
 const acceptedTypes = ['image/jpeg', 'image/png']
 
 function CupcakeReferenceImage({ preview }) {
-  const [status, setStatus] = useState(preview.url ? 'loading' : 'error')
+  const [status, setStatus] = useState(
+    preview.url
+      ? 'loading'
+      : preview.reference?.path && !preview.reference?.restoreError
+        ? 'loading'
+        : 'error',
+  )
 
   return (
     <div className={`cake-reference-thumbnail cake-reference-thumbnail--${status}`}>

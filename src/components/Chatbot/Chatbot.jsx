@@ -3,14 +3,20 @@ import logo from '../../assets/landingpage/sweetbakes_logo.svg'
 import { isCustomerCustomizationRoute, setAuthReturnTo } from '../../auth/authReturnTo.js'
 import { supabase } from '../../lib/supabase.js'
 import './Chatbot.css'
+import './ChatbotAttachments.css'
 
 const pendingChatMessageKey = 'sweetbakes_pending_chat_message'
 const returnToChatAfterLoginKey = 'sweetbakes_return_to_chat_after_login'
 const chatbotMessagesKey = 'sweetbakes_chatbot_messages'
 const chatbotWaitingForAdminKey = 'sweetbakes_chatbot_waiting_for_admin'
 const chatbotAdminHandoffKey = 'sweetbakes_chatbot_admin_handoff'
+const guestChatTokenKey = 'sweetbakes_guest_chat_token'
+const guestChatConversationKey = 'sweetbakes_guest_chat_conversation'
 const customerAuthStorageKey = 'sweetbakes_customer_authenticated'
-const CHAT_MESSAGE_SELECT = 'id, conversation_id, sender_type, message, created_at'
+const CHAT_MESSAGE_SELECT = 'id, conversation_id, sender_type, message, created_at, attachment_path, attachment_name, attachment_mime_type, attachment_size'
+const CHAT_ATTACHMENT_BUCKET = 'chat-attachments'
+const CHAT_ATTACHMENT_MAX_SIZE = 10 * 1024 * 1024
+const CHAT_ATTACHMENT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
 
 const quickActions = [
   {
@@ -43,12 +49,41 @@ const quickActions = [
       'Sweet Bakes offers pickup and delivery options. You can choose your preferred order method when completing your order details.',
   },
   {
+    id: 'sweetTreats',
+    label: 'Sweet Treats',
+    response:
+      'Explore our ready-to-order Sweet Treats, including regular cakes, cheesecakes, and other favorites.',
+    cta: 'View Sweet Treats',
+    href: '/',
+    scrollTo: 'sweet-treats',
+  },
+  {
     id: 'contact',
     label: 'Contact Sweet Bakes',
     response:
       'Need more help? You can contact Sweet Bakes directly through our Contact section.',
-    cta: 'Contact Us',
-    href: '#contact',
+  },
+  {
+    id: 'orders',
+    label: 'View My Orders',
+    response: 'You can view your order history and payment status from My Orders after signing in.',
+    cta: 'Sign in to view orders',
+    href: '/my-orders',
+    requiresAuth: true,
+  },
+  {
+    id: 'payment',
+    label: 'Payment Help',
+    response:
+      'For payment help, include your order number and the payment issue you are seeing. Sweet Bakes can help with Xendit payment status and next steps.',
+  },
+  {
+    id: 'dates',
+    label: 'Available Dates',
+    response:
+      'Available dates are shown in the calendar during checkout. Choose Cakes, Cupcakes, or Party Packages to check the current date availability.',
+    cta: 'Check Available Dates',
+    href: '/cart',
   },
 ]
 
@@ -82,21 +117,164 @@ const mapDbMessage = (row) => ({
   text: row.message || '',
   timestamp: formatMessageTime(row.created_at),
   createdAt: row.created_at,
+  attachment: row.attachment_path
+    ? {
+        path: row.attachment_path,
+        name: row.attachment_name || 'Attachment',
+        mimeType: row.attachment_mime_type || '',
+        size: row.attachment_size || null,
+      }
+    : null,
 })
 
+const hydrateChatAttachment = async (message) => {
+  if (!message.attachment?.path) return message
+
+  const { data, error } = await supabase.storage
+    .from(CHAT_ATTACHMENT_BUCKET)
+    .createSignedUrl(message.attachment.path, 60 * 60)
+
+  if (error || !data?.signedUrl) return message
+  return { ...message, attachment: { ...message.attachment, url: data.signedUrl } }
+}
+
 const insertChatMessage = async (conversationId, senderType, message, extra = {}) => {
-  const { data, error } = await supabase
-    .from('chat_messages')
-    .insert({
-      conversation_id: conversationId,
-      sender_type: senderType,
-      message,
+  const attachment = extra.attachment || null
+  const payload = {
+    conversation_id: conversationId,
+    sender_type: senderType,
+    message,
+  }
+
+  if (attachment?.path) {
+    payload.attachment_path = attachment.path
+    payload.attachment_name = attachment.name
+    payload.attachment_mime_type = attachment.mimeType
+    payload.attachment_size = attachment.size
+  }
+
+  console.log('[CHAT MESSAGE INSERT]', {
+    hasAttachment: Boolean(attachment?.path),
+    attachmentPath: attachment?.path ?? null,
+  })
+
+  let data
+  let error
+  try {
+    ({ data, error } = await supabase
+      .from('chat_messages')
+      .insert(payload)
+      .select(CHAT_MESSAGE_SELECT)
+      .single())
+  } catch (insertError) {
+    console.error('[CHAT MESSAGE INSERT ERROR]', {
+      code: insertError?.code ?? null,
+      message: insertError?.message ?? null,
+      details: insertError?.details ?? null,
+      hint: insertError?.hint ?? null,
     })
-    .select(CHAT_MESSAGE_SELECT)
-    .single()
+    throw insertError
+  }
+
+  if (error) {
+    console.error('[CHAT MESSAGE INSERT ERROR]', {
+      code: error?.code ?? null,
+      message: error?.message ?? null,
+      details: error?.details ?? null,
+      hint: error?.hint ?? null,
+    })
+  }
 
   if (error) throw error
+  console.log('[CHAT MESSAGE INSERT SUCCESS]', {
+    messageId: data?.id ?? null,
+    hasAttachment: Boolean(attachment?.path),
+  })
   return { ...mapDbMessage(data), ...extra }
+}
+
+const getGuestChatToken = () => {
+  let token = window.sessionStorage.getItem(guestChatTokenKey)
+
+  if (!token) {
+    token = window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    window.sessionStorage.setItem(guestChatTokenKey, token)
+  }
+
+  return token
+}
+
+const getOrCreateGuestConversation = async () => {
+  const guestToken = getGuestChatToken()
+  const storedConversationId = window.sessionStorage.getItem(guestChatConversationKey)
+
+  if (storedConversationId) {
+    return { conversationId: storedConversationId, guestToken }
+  }
+
+  const { data, error } = await supabase.rpc('create_guest_chat_conversation', {
+    p_guest_token: guestToken,
+  })
+
+  if (error) throw error
+
+  const conversationId = typeof data === 'string' ? data : data?.[0]?.create_guest_chat_conversation
+  if (!conversationId) throw new Error('Guest conversation was not created.')
+
+  window.sessionStorage.setItem(guestChatConversationKey, conversationId)
+  return { conversationId, guestToken }
+}
+
+const uploadChatAttachment = async (file, folder) => {
+  console.log('[CHAT ATTACHMENT SEND START]', {
+    hasAttachment: Boolean(file),
+    fileName: file?.name ?? null,
+    fileSize: file?.size ?? null,
+    fileType: file?.type ?? null,
+  })
+
+  if (!CHAT_ATTACHMENT_TYPES.includes(file.type)) {
+    throw new Error('Choose a JPG, PNG, WebP, or PDF file.')
+  }
+
+  if (file.size > CHAT_ATTACHMENT_MAX_SIZE) {
+    throw new Error('Attachments must be 10 MB or smaller.')
+  }
+
+  const extension = file.name.split('.').pop()?.toLowerCase() || 'bin'
+  const path = `${folder}/${window.crypto?.randomUUID?.() || Date.now()}.${extension}`
+  let error
+  try {
+    ({ error } = await supabase.storage.from(CHAT_ATTACHMENT_BUCKET).upload(path, file, {
+      contentType: file.type,
+      upsert: false,
+    }))
+  } catch (uploadError) {
+    console.error('[CHAT ATTACHMENT UPLOAD ERROR]', {
+      code: uploadError?.code ?? null,
+      message: uploadError?.message ?? null,
+    })
+    throw uploadError
+  }
+
+  if (error) {
+    console.error('[CHAT ATTACHMENT UPLOAD ERROR]', {
+      code: error?.code ?? null,
+      message: error?.message ?? null,
+    })
+    throw error
+  }
+
+  console.log('[CHAT ATTACHMENT UPLOAD SUCCESS]', {
+    storagePath: path,
+  })
+
+  return {
+    path,
+    name: file.name,
+    mimeType: file.type,
+    size: file.size,
+  }
 }
 
 const getUnreadAdminReplyCount = async (conversationId) => {
@@ -189,6 +367,22 @@ const prepareAdminHandoff = (messages) => {
 const getMatchedAction = (text) => {
   const normalizedText = text.toLowerCase()
 
+  if (normalizedText.includes('order history') || normalizedText.includes('my order') || normalizedText.includes('track')) {
+    return quickActions.find((action) => action.id === 'orders')
+  }
+
+  if (normalizedText.includes('payment') || normalizedText.includes('xendit')) {
+    return quickActions.find((action) => action.id === 'payment')
+  }
+
+  if (normalizedText.includes('available date') || normalizedText.includes('availability') || normalizedText.includes('calendar')) {
+    return quickActions.find((action) => action.id === 'dates')
+  }
+
+  if (normalizedText.includes('sweet treat') || normalizedText.includes('dessert')) {
+    return quickActions.find((action) => action.id === 'sweetTreats')
+  }
+
   if (normalizedText.includes('cupcake') || normalizedText.includes('cupcakes')) {
     return quickActions.find((action) => action.id === 'cupcakes')
   }
@@ -249,6 +443,7 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
   const [messages, setMessages] = useState(getStoredMessages)
   const [quickActionsState, setQuickActionsState] = useState('visible')
   const [input, setInput] = useState('')
+  const [attachment, setAttachment] = useState(null)
   const [authUser, setAuthUser] = useState(null)
   const [authRole, setAuthRole] = useState(null)
   const [conversationId, setConversationId] = useState(null)
@@ -259,6 +454,7 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
     () => window.sessionStorage.getItem(chatbotWaitingForAdminKey) === 'true',
   )
   const chatbotRef = useRef(null)
+  const fileInputRef = useRef(null)
   const nextMessageId = useRef(messages.length + 1)
   const messagesEndRef = useRef(null)
   const replyTimeoutsRef = useRef([])
@@ -268,6 +464,11 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
   const isOpenRef = useRef(false)
   const loadingConversationForUserRef = useRef(null)
   const loadedConversationUserIdRef = useRef(null)
+  const sendInProgressRef = useRef(false)
+
+  const releaseSendLock = () => {
+    sendInProgressRef.current = false
+  }
 
   const labelledQuickActions = useMemo(
     () => quickActions.map(({ id, label }) => ({ id, label })),
@@ -315,6 +516,26 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
       const target = document.querySelector(action.href)
       window.history.pushState({}, '', action.href)
       target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      setIsOpen(false)
+      setIsMaximized(false)
+      return
+    }
+
+    if (action.requiresAuth && !customerIsAuthenticated) {
+      setAuthReturnTo(action.href)
+      const loginTarget = `/login?redirect=${encodeURIComponent(action.href)}`
+
+      if (onNavigate) {
+        onNavigate(loginTarget)
+        setIsOpen(false)
+        setIsMaximized(false)
+        return
+      }
+
+      window.history.pushState({}, '', loginTarget)
+      window.dispatchEvent(new PopStateEvent('popstate'))
+      setIsOpen(false)
+      setIsMaximized(false)
       return
     }
 
@@ -324,21 +545,29 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
 
       if (onNavigate) {
         onNavigate(loginTarget)
+        setIsOpen(false)
+        setIsMaximized(false)
         return
       }
 
       window.history.pushState({}, '', loginTarget)
       window.dispatchEvent(new PopStateEvent('popstate'))
+      setIsOpen(false)
+      setIsMaximized(false)
       return
     }
 
     if (onNavigate) {
-      onNavigate(action.href)
+      onNavigate(action.href, action.scrollTo ? { scrollTo: action.scrollTo } : undefined)
+      setIsOpen(false)
+      setIsMaximized(false)
       return
     }
 
     window.history.pushState({}, '', action.href)
     window.dispatchEvent(new PopStateEvent('popstate'))
+    setIsOpen(false)
+    setIsMaximized(false)
   }
 
   const refreshUnreadCount = useCallback(async (targetConversationId = conversationIdRef.current) => {
@@ -401,13 +630,21 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
         .from('chat_conversations')
         .select('id, customer_id, status, created_at')
         .eq('customer_id', user.id)
-        .eq('status', 'open')
         .order('created_at', { ascending: false })
-        .limit(1)
+        .limit(20)
+
+      console.log('[CUSTOMER CHAT CONVERSATION]', {
+        conversationId: existingConversations?.[0]?.id ?? null,
+        errorCode: conversationLoadError?.code ?? null,
+        errorMessage: conversationLoadError?.message ?? null,
+      })
 
       if (conversationLoadError) throw conversationLoadError
 
-      let conversation = existingConversations?.[0] || null
+      let conversation =
+        existingConversations?.find((item) => item.status === 'open') ||
+        existingConversations?.[0] ||
+        null
       let createdNewConversation = false
 
       if (!conversation) {
@@ -428,13 +665,7 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
       let nextMessages = []
 
       if (createdNewConversation) {
-        const welcome = createWelcomeMessage()
-        const savedWelcome = await insertChatMessage(
-          conversation.id,
-          'assistant',
-          welcome.text,
-        )
-        nextMessages = [savedWelcome]
+        nextMessages = [createWelcomeMessage()]
       } else {
         const { data: messageRows, error: messagesLoadError } = await supabase
           .from('chat_messages')
@@ -442,24 +673,25 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
           .eq('conversation_id', conversation.id)
           .order('created_at', { ascending: true })
 
-        if (messagesLoadError) throw messagesLoadError
-        nextMessages = (messageRows || []).map(mapDbMessage)
+        console.log('[CUSTOMER CHAT MESSAGES]', {
+          conversationId: conversation?.id ?? null,
+          count: messageRows?.length ?? 0,
+          errorCode: messagesLoadError?.code ?? null,
+          errorMessage: messagesLoadError?.message ?? null,
+        })
 
-        if (nextMessages.length === 0) {
-          const welcome = createWelcomeMessage()
-          const savedWelcome = await insertChatMessage(
-            conversation.id,
-            'assistant',
-            welcome.text,
-          )
-          nextMessages = [savedWelcome]
-        }
+        if (messagesLoadError) throw messagesLoadError
+        nextMessages = await Promise.all(
+          (messageRows || []).map((row) => hydrateChatAttachment(mapDbMessage(row))),
+        )
+
+        if (nextMessages.length === 0) nextMessages = [createWelcomeMessage()]
       }
 
       setConversationId(conversation.id)
       loadedConversationUserIdRef.current = user.id
       setMessages(nextMessages)
-      setQuickActionsState(nextMessages.length > 1 ? 'hidden' : 'visible')
+      setQuickActionsState('visible')
       setWaitingForAdmin(nextMessages.some((message) => message.id?.toString().startsWith('bot-admin-wait-')))
       if (isOpenRef.current) {
         await markCurrentConversationRead(conversation.id)
@@ -467,8 +699,27 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
         await refreshUnreadCount(conversation.id)
       }
     } catch (error) {
-      console.error('[CHATBOT] load authenticated conversation:', error)
-      setChatError('Unable to load your saved conversation. Please try again.')
+      console.error('[CUSTOMER CHAT LOAD]', {
+        code: error?.code ?? null,
+        message: error?.message ?? null,
+        details: error?.details ?? null,
+      })
+
+      const errorCode = String(error?.code || '')
+      const isAuthPersistenceError =
+        ['42501', '401', '403', 'PGRST301'].includes(errorCode) ||
+        [401, 403].includes(Number(error?.status))
+
+      if (isAuthPersistenceError) {
+        loadedConversationUserIdRef.current = null
+        setConversationId(null)
+        setMessages(getStoredMessages())
+        setQuickActionsState('visible')
+        setWaitingForAdmin(false)
+        setChatError('')
+      } else {
+        setChatError('Unable to load your saved conversation. Please try again.')
+      }
     } finally {
       loadingConversationForUserRef.current = null
       setChatLoading(false)
@@ -507,6 +758,10 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
 
       setAuthRole(null)
       setAuthUser(data?.session?.user || null)
+      console.log('[CUSTOMER CHAT AUTH]', {
+        hasSession: Boolean(data?.session),
+        userId: data?.session?.user?.id ?? null,
+      })
     }
 
     loadSession()
@@ -563,8 +818,8 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
           table: 'chat_messages',
           filter: `conversation_id=eq.${conversationId}`,
         },
-        (payload) => {
-          const nextMessage = mapDbMessage(payload.new)
+        async (payload) => {
+          const nextMessage = await hydrateChatAttachment(mapDbMessage(payload.new))
           setMessages((currentMessages) => {
             if (currentMessages.some((message) => message.id === nextMessage.id)) {
               return currentMessages
@@ -605,15 +860,87 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
     replyTimeoutsRef.current.push(quickActionsTimeout)
   }
 
-  const addConversationMessages = async (customerText, action) => {
+  const sendGuestChatMessage = async (customerText, selectedAttachment = null) => {
+    const { conversationId: guestConversationId, guestToken } = await getOrCreateGuestConversation()
+    const uploadedAttachment = selectedAttachment
+      ? await uploadChatAttachment(selectedAttachment.file, `guest/${guestConversationId}/${guestToken}`)
+      : null
+    console.log('[CHAT MESSAGE INSERT]', {
+      hasAttachment: Boolean(uploadedAttachment?.path),
+      attachmentPath: uploadedAttachment?.path ?? null,
+    })
+
+    let data
+    let error
+    try {
+      ({ data, error } = await supabase.rpc('send_guest_chat_message', {
+        p_conversation_id: guestConversationId,
+        p_guest_token: guestToken,
+        p_message: customerText,
+        p_attachment_path: uploadedAttachment?.path || null,
+        p_attachment_name: uploadedAttachment?.name || null,
+        p_attachment_mime_type: uploadedAttachment?.mimeType || null,
+        p_attachment_size: uploadedAttachment?.size || null,
+      }))
+    } catch (insertError) {
+      console.error('[CHAT MESSAGE INSERT ERROR]', {
+        code: insertError?.code ?? null,
+        message: insertError?.message ?? null,
+        details: insertError?.details ?? null,
+        hint: insertError?.hint ?? null,
+      })
+      throw insertError
+    }
+
+    if (error) {
+      console.error('[CHAT MESSAGE INSERT ERROR]', {
+        code: error?.code ?? null,
+        message: error?.message ?? null,
+        details: error?.details ?? null,
+        hint: error?.hint ?? null,
+      })
+    }
+
+    if (error) throw error
+
+    const row = Array.isArray(data) ? data[0] : data
+    console.log('[CHAT MESSAGE INSERT SUCCESS]', {
+      messageId: row?.id ?? null,
+      hasAttachment: Boolean(uploadedAttachment?.path),
+    })
+    const savedMessage = mapDbMessage(row)
+    if (selectedAttachment?.previewUrl) {
+      savedMessage.attachment = {
+        ...(savedMessage.attachment || {}),
+        previewUrl: selectedAttachment.previewUrl,
+      }
+    }
+    return savedMessage
+  }
+
+  const addConversationMessages = async (customerText, action, selectedAttachment = null) => {
     if (isAuthenticatedChat && conversationIdRef.current) {
       try {
+        const uploadedAttachment = selectedAttachment
+          ? await uploadChatAttachment(selectedAttachment.file, `customer/${authUser.id}`)
+          : null
         const savedCustomerMessage = await insertChatMessage(
           conversationIdRef.current,
           'customer',
           customerText,
+          { attachment: uploadedAttachment },
         )
 
+        if (selectedAttachment?.previewUrl) {
+          savedCustomerMessage.attachment = {
+            ...(savedCustomerMessage.attachment || {}),
+            previewUrl: selectedAttachment.previewUrl,
+          }
+        }
+
+        setInput('')
+        setAttachment(null)
+        releaseSendLock()
         updateMessages((currentMessages) => [...currentMessages, savedCustomerMessage])
 
         const replyTimeout = window.setTimeout(async () => {
@@ -638,6 +965,7 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
 
         replyTimeoutsRef.current.push(replyTimeout)
       } catch (error) {
+        releaseSendLock()
         console.error('[CHATBOT] save customer message:', error)
         setChatError('Unable to send your message. Please try again.')
       }
@@ -645,64 +973,61 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
       return
     }
 
-    const customerMessageId = nextMessageId.current
-    const botMessageId = nextMessageId.current + 1
+    try {
+      const savedCustomerMessage = await sendGuestChatMessage(customerText, selectedAttachment)
+      setInput('')
+      setAttachment(null)
+      releaseSendLock()
+      updateMessages((currentMessages) => [...currentMessages, savedCustomerMessage])
 
-    updateMessages((currentMessages) => [
-      ...currentMessages,
-      {
-        id: `customer-${customerMessageId}`,
-        sender: 'customer',
-        text: customerText,
-        timestamp: getMessageTime(),
-      },
-    ])
-    nextMessageId.current += 2
+      const botMessageId = nextMessageId.current
+      nextMessageId.current += 1
 
-    const replyTimeout = window.setTimeout(() => {
-      const botMessage = {
-        id: `bot-${botMessageId}`,
-        sender: 'bot',
-        text: action.response,
-        actionId: action.href || action.action ? action.id : null,
-        timestamp: getMessageTime(),
-      }
+      const replyTimeout = window.setTimeout(() => {
+        const botMessage = {
+          id: `bot-${botMessageId}`,
+          sender: 'bot',
+          text: action.response,
+          actionId: action.href || action.action ? action.id : null,
+          timestamp: getMessageTime(),
+        }
 
-      addReplyWithQuickActions(botMessage)
-      replyTimeoutsRef.current = replyTimeoutsRef.current.filter(
-        (timeoutId) => timeoutId !== replyTimeout,
-      )
-    }, 350)
+        addReplyWithQuickActions(botMessage)
+        replyTimeoutsRef.current = replyTimeoutsRef.current.filter(
+          (timeoutId) => timeoutId !== replyTimeout,
+        )
+      }, 350)
 
-    replyTimeoutsRef.current.push(replyTimeout)
+      replyTimeoutsRef.current.push(replyTimeout)
+    } catch (error) {
+      releaseSendLock()
+      console.error('[CHATBOT] save guest message:', error)
+      setChatError('Unable to send your message. Please try again.')
+    }
   }
 
-  const createLoginRequiredMessage = () => ({
-    id: `bot-login-required-${Date.now()}`,
-    sender: 'bot',
-    text:
-      'To continue this conversation with Sweet Bakes, please sign in first. Your message will be saved so you can continue after logging in.',
-    timestamp: getMessageTime(),
-    cta: {
-      label: 'Login to Continue',
-      href: '/login',
-    },
-  })
-
-  const savePendingChatState = (customerText, nextMessages) => {
-    window.sessionStorage.setItem(pendingChatMessageKey, customerText)
-    window.sessionStorage.setItem(returnToChatAfterLoginKey, 'true')
-    persistMessages(nextMessages)
-  }
-
-  const startAdminHandoff = async (customerText) => {
+  const startAdminHandoff = async (customerText, selectedAttachment = null) => {
     if (isAuthenticatedChat && conversationIdRef.current) {
       try {
+        const uploadedAttachment = selectedAttachment
+          ? await uploadChatAttachment(selectedAttachment.file, `customer/${authUser.id}`)
+          : null
         const savedCustomerMessage = await insertChatMessage(
           conversationIdRef.current,
           'customer',
           customerText,
+          { attachment: uploadedAttachment },
         )
+
+        if (selectedAttachment?.previewUrl) {
+          savedCustomerMessage.attachment = {
+            ...(savedCustomerMessage.attachment || {}),
+            previewUrl: selectedAttachment.previewUrl,
+          }
+        }
+        setInput('')
+        setAttachment(null)
+        releaseSendLock()
         const nextMessages = [...messages, savedCustomerMessage]
 
         if (waitingForAdmin) {
@@ -721,6 +1046,7 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
         setMessages([...nextMessages, savedAcknowledgement])
         setQuickActionsState('hidden')
       } catch (error) {
+        releaseSendLock()
         console.error('[CHATBOT] save admin handoff:', error)
         setChatError('Unable to send your message. Please try again.')
       }
@@ -728,53 +1054,27 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
       return
     }
 
-    const customerMessageId = nextMessageId.current
-    nextMessageId.current += 1
+    try {
+      const customerMessage = await sendGuestChatMessage(customerText, selectedAttachment)
+      setInput('')
+      setAttachment(null)
+      releaseSendLock()
+      updateMessages((currentMessages) => {
+        const nextMessages = [...currentMessages, customerMessage]
 
-    updateMessages((currentMessages) => {
-      const customerMessage = {
-        id: `customer-${customerMessageId}`,
-        sender: 'customer',
-        text: customerText,
-        timestamp: getMessageTime(),
-      }
+        if (waitingForAdmin) {
+          return nextMessages
+        }
 
-      const nextMessages = [...currentMessages, customerMessage]
-
-      if (waitingForAdmin) {
-        prepareAdminHandoff(nextMessages)
-        return nextMessages
-      }
-
-      window.sessionStorage.setItem(chatbotWaitingForAdminKey, 'true')
-      setWaitingForAdmin(true)
-
-      const handoffMessages = [...nextMessages, createAdminAcknowledgementMessage()]
-      prepareAdminHandoff(handoffMessages)
-
-      return handoffMessages
-    })
-  }
-
-  const requireLoginForAdminHandoff = (customerText) => {
-    const customerMessageId = nextMessageId.current
-    nextMessageId.current += 1
-
-    updateMessages((currentMessages) => {
-      const nextMessages = [
-        ...currentMessages,
-        {
-          id: `customer-${customerMessageId}`,
-          sender: 'customer',
-          text: customerText,
-          timestamp: getMessageTime(),
-        },
-        createLoginRequiredMessage(),
-      ]
-
-      savePendingChatState(customerText, nextMessages)
-      return nextMessages
-    })
+        window.sessionStorage.setItem(chatbotWaitingForAdminKey, 'true')
+        setWaitingForAdmin(true)
+        return [...nextMessages, createAdminAcknowledgementMessage()]
+      })
+    } catch (error) {
+      releaseSendLock()
+      console.error('[CHATBOT] save guest handoff:', error)
+      setChatError('Unable to send your message. Please try again.')
+    }
   }
 
   const addUnknownConversationTurn = (customerText) => {
@@ -787,7 +1087,7 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
         return
       }
 
-      requireLoginForAdminHandoff(customerText)
+      startAdminHandoff(customerText)
     }
 
     if (shouldShowQuickActions) {
@@ -808,7 +1108,12 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
     addUnknownMessage()
   }
 
-  const addConversationTurn = (customerText, action) => {
+  const addConversationTurn = (
+    customerText,
+    action,
+    selectedAttachment = null,
+    preserveQuickActions = false,
+  ) => {
     if (!action) {
       addUnknownConversationTurn(customerText)
       return
@@ -817,12 +1122,12 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
     replyTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId))
     replyTimeoutsRef.current = []
 
-    if (shouldShowQuickActions) {
+    if (shouldShowQuickActions && !preserveQuickActions) {
       setQuickActionsState('hiding')
 
       const hideTimeout = window.setTimeout(() => {
         setQuickActionsState('hidden')
-        addConversationMessages(customerText, action)
+        addConversationMessages(customerText, action, selectedAttachment)
         replyTimeoutsRef.current = replyTimeoutsRef.current.filter(
           (timeoutId) => timeoutId !== hideTimeout,
         )
@@ -832,24 +1137,55 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
       return
     }
 
-    addConversationMessages(customerText, action)
+    addConversationMessages(customerText, action, selectedAttachment)
   }
 
   const handleQuickAction = (action) => {
-    addConversationTurn(action.label, action)
+    if (action.href && !(action.requiresAuth && !customerIsAuthenticated)) {
+      navigateTo(action)
+      return
+    }
+
+    addConversationTurn(action.label, action, null, true)
   }
 
   const handleSubmit = (event) => {
     event.preventDefault()
 
-    const messageText = input.trim()
-
-    if (!messageText) {
+    if (sendInProgressRef.current) {
       return
     }
 
-    addConversationTurn(messageText, getMatchedAction(messageText))
-    setInput('')
+    const messageText = input.trim()
+
+    if (!messageText && !attachment) {
+      return
+    }
+
+    const action = getMatchedAction(messageText) || {
+      id: 'support',
+      response: 'Thanks for reaching out. A Sweet Bakes team member will review your message and help you shortly.',
+    }
+    sendInProgressRef.current = true
+    addConversationTurn(messageText, action, attachment)
+  }
+
+  const handleAttachment = (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    if (!CHAT_ATTACHMENT_TYPES.includes(file.type) || file.size > CHAT_ATTACHMENT_MAX_SIZE) {
+      setChatError('Choose a JPG, PNG, WebP, or PDF file up to 10 MB.')
+      event.target.value = ''
+      return
+    }
+
+    setChatError('')
+    setAttachment({
+      file,
+      previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
+    })
+    event.target.value = ''
   }
 
   const handleMessageCta = (cta) => {
@@ -1171,6 +1507,24 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
               >
                 <div className="chatbot-message">
                   <p>{message.text}</p>
+                  {message.attachment ? (
+                    <a
+                      className="chatbot-message-attachment"
+                      href={message.attachment.url || message.attachment.previewUrl || undefined}
+                      target={message.attachment.url ? '_blank' : undefined}
+                      rel={message.attachment.url ? 'noreferrer' : undefined}
+                      download={message.attachment.url ? message.attachment.name : undefined}
+                    >
+                      {message.attachment.previewUrl || message.attachment.url ? (
+                        <img
+                          src={message.attachment.previewUrl || message.attachment.url}
+                          alt={message.attachment.name}
+                        />
+                      ) : (
+                        <span className="chatbot-message-file">{message.attachment.name}</span>
+                      )}
+                    </a>
+                  ) : null}
                   {messageAction?.cta ? (
                     <button
                       className="chatbot-message-cta"
@@ -1215,7 +1569,44 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
 
         <div className="chatbot-bottom">
           <form className="chatbot-input-form" onSubmit={handleSubmit}>
+            {attachment ? (
+              <div className="chatbot-attachment-section">
+                <div className="chatbot-attachment-preview">
+                  {attachment.previewUrl ? (
+                    <img src={attachment.previewUrl} alt="Selected attachment preview" />
+                  ) : (
+                    <span className="chatbot-attachment-file">PDF</span>
+                  )}
+                  <button type="button" aria-label="Remove attachment" onClick={() => setAttachment(null)}>
+                    &times;
+                  </button>
+                </div>
+              </div>
+            ) : null}
             <div className="chatbot-input-wrapper">
+              <input
+                ref={fileInputRef}
+                className="chatbot-file-input"
+                type="file"
+                accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf"
+                onChange={handleAttachment}
+              />
+              <button
+                type="button"
+                className="chatbot-attach-button"
+                aria-label="Attach an image or PDF"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="m8.5 12.5 5.9-5.9a3.2 3.2 0 0 1 4.5 4.5l-7.6 7.6a4.7 4.7 0 0 1-6.7-6.7l7.2-7.2"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
               <input
                 type="text"
                 value={input}

@@ -213,7 +213,7 @@ function LoginPage({
               <input type="checkbox" name="remember" />
               <span>Remember me</span>
             </label>
-            <button className="forgot-password-link" type="button">
+            <button className="forgot-password-link" type="button" onClick={() => onNavigate?.('/forgot-password')}>
               Forgot Password?
             </button>
           </div>

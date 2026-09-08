@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { googleOAuthErrorMessage, startGoogleOAuth } from '../auth/googleOAuth.js'
+import { passwordPattern, passwordValidationMessage } from '../auth/passwordReset.js'
 import { SiteTopbar } from '../landingpage/LandingPage.jsx'
 import { supabase } from '../lib/supabase.js'
 import LegalModal from './components/LegalModal.jsx'
@@ -163,7 +164,6 @@ function PasswordEyeIcon() {
 
 const namePattern = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/
 
 const defaultFormValues = {
   firstName: '',
@@ -207,8 +207,7 @@ function validateForm(values) {
   }
 
   if (!passwordPattern.test(values.password)) {
-    nextErrors.password =
-      'Password must be at least 8 characters and include an uppercase letter, lowercase letter, and number.'
+    nextErrors.password = passwordValidationMessage
   }
 
   if (!values.terms) {

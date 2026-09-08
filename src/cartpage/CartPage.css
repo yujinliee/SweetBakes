@@ -4,6 +4,7 @@
   --topbar-height: 64px;
   --summary-cream: #faf6f1;
   --checkout-max-width: 1440px;
+  background: #ffffff;
   overflow-x: clip;
 }
 
@@ -13,6 +14,38 @@
   margin: 0 auto;
   background: #fff;
   padding: var(--topbar-height) 0 44px;
+}
+
+.cart-empty-main {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: calc(100svh - var(--topbar-height));
+  padding: 32px 24px;
+  background: #ffffff;
+  text-align: center;
+}
+
+.cart-empty-state h1 {
+  margin: 0;
+  color: #3a2e2e;
+  font-family: 'Poppins', sans-serif;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.cart-empty-state p {
+  margin: 10px 0 0;
+  color: #8a7b78;
+  font-family: 'Poppins', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.cart-empty-state .cart-summary-browse-button {
+  margin-top: 20px;
 }
 
 .cart-container {
@@ -85,6 +118,71 @@
 
 .cart-section .cake-order-method-toggle {
   margin-bottom: 0;
+}
+
+.cart-form .cart-order-method-toggle {
+  position: relative;
+  isolation: isolate;
+}
+
+.cart-form .cart-order-method-active {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  z-index: 0;
+  width: calc(50% - 4px);
+  border-radius: 10px;
+  background: #e9ddf3;
+  pointer-events: none;
+  transition: transform 240ms ease-in-out;
+}
+
+.cart-form .cart-order-method-toggle--pickup .cart-order-method-active {
+  transform: translateX(100%);
+}
+
+.cart-form .cake-order-method-option {
+  z-index: 1;
+  background: transparent;
+  transition: color 220ms ease;
+}
+
+.cart-form .cake-order-method-option--selected {
+  background: transparent;
+  color: #3a2e2e;
+}
+
+.cart-form .cake-order-method-option + .cake-order-method-option::before,
+.cart-form .cake-order-method-option--selected + .cake-order-method-option::before,
+.cart-form .cake-order-method-option--selected::before {
+  opacity: 0;
+}
+
+.cart-order-method-details {
+  animation: cartOrderMethodDetailsIn 220ms ease-out;
+}
+
+@keyframes cartOrderMethodDetailsIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cart-form .cart-order-method-active {
+    transition: none;
+  }
+
+  .cart-order-method-details {
+    animation: none;
+  }
 }
 
 .cart-section .cake-field:last-child {
@@ -215,7 +313,49 @@
 }
 
 .cart-form .cake-field-row {
-  gap: 18px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 18px;
+  row-gap: 18px;
+}
+
+.cart-form .cake-field {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  gap: 8px;
+  margin: 0 0 18px;
+  line-height: 18px;
+}
+
+.cart-form .cake-field > span {
+  display: block;
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+}
+
+.cart-form .cake-field .cake-text-input,
+.cart-form .cake-field .cart-autocomplete-field,
+.cart-form .cake-field .cake-select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+
+.cart-form .cake-field .cake-text-input,
+.cart-form .cake-field .cake-select,
+.cart-form .cake-field .cart-autocomplete-field .cake-text-input {
+  height: 54px;
+  padding: 0 14px;
+  line-height: normal;
+}
+
+.cart-form .cake-field .cart-autocomplete-field {
+  position: relative;
 }
 
 @media (max-width: 760px) {
@@ -383,6 +523,38 @@
   font-family: 'Poppins', sans-serif;
   font-size: 14px;
   text-align: center;
+}
+
+.cart-summary-empty p {
+  margin: 0;
+}
+
+.cart-summary-empty-supporting {
+  margin-top: 8px !important;
+  color: #a29692;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.cart-summary-browse-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 18px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 0;
+  background: #9d62d9;
+  color: #fff;
+  font-family: 'Poppins', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 200ms ease;
+}
+
+.cart-summary-browse-button:hover {
+  background: #8b50ca;
 }
 
 .cart-summary-item {

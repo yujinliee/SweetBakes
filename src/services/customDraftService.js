@@ -58,7 +58,8 @@ const deleteStoredFiles = async (key) => {
 }
 
 const getDraftFiles = (flow, draft) => {
-  if (flow === 'party-package') return draft.packageCustomization?.packageReferenceImages || []
+  // Reference images are persisted in Supabase Storage. Do not maintain a
+  // second IndexedDB copy that can contain stale signed/blob preview URLs.
   return []
 }
 
@@ -78,7 +79,12 @@ const withoutDraftFiles = (flow, draft) => {
   if (flow === 'party-package') {
     return {
       ...draft,
-      packageCustomization: { ...draft.packageCustomization, packageReferenceImages: [] },
+      packageCustomization: {
+        ...draft.packageCustomization,
+        packageReferenceImages: (draft.packageCustomization?.packageReferenceImages || [])
+          .filter((reference) => reference?.path)
+          .map(({ name, type, size, path, position }) => ({ name, type, size, path, position })),
+      },
     }
   }
 
@@ -114,9 +120,9 @@ export async function loadCustomDraft(flow, scope) {
 
   try {
     const files = await readStoredFiles(getStorageKey(flow, scope))
-    if (files.length && flow === 'party-package') {
-      draft.packageCustomization.packageReferenceImages = files
-    }
+    // Legacy IndexedDB entries are intentionally ignored. The authoritative
+    // reference records are the stable Storage paths in the draft itself.
+    void files
   } catch (error) {
     console.error('[CUSTOM DRAFT] reference restore failed:', error)
   }

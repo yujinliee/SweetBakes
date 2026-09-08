@@ -30,6 +30,12 @@ import OrderRequestSuccessModal from '../components/OrderRequestSuccessModal.jsx
 import StepProgress from './components/StepProgress.jsx'
 import { useAvailability } from '../hooks/useAvailability.js'
 import { assertCanAcceptOrderForDate } from '../admin/services/availabilityService.js'
+import { createCustomCustomerOrder } from '../services/customCustomerOrderService.js'
+import {
+  refreshReferenceImageUrls,
+  removeReferenceImage,
+  uploadReferenceImages,
+} from '../services/referenceImageStorageService.js'
 import {
   clearCustomDraft,
   getCustomDraftScope,
@@ -82,9 +88,18 @@ const defaultPackageCustomization = {
   packageCakeMessage: '',
   packageCakeSpecialInstructions: '',
   packageReferenceImages: [],
-  packageCupcakeTheme: '',
-  packageCupcakeOtherTheme: '',
+  packageReferenceDraftId: '',
   packageCupcakeSpecialInstructions: '',
+}
+
+const stripLegacyPackageCupcakeTheme = (customization = {}) => {
+  const {
+    packageCupcakeTheme: _legacyCupcakeTheme,
+    packageCupcakeOtherTheme: _legacyCupcakeOtherTheme,
+    ...currentCustomization
+  } = customization
+
+  return currentCustomization
 }
 
 const defaultPackageCustomerInfo = {
@@ -154,8 +169,10 @@ function PackagePage({
   const [submissionError, setSubmissionError] = useState('')
   const [submittedRequest, setSubmittedRequest] = useState(null)
   const [isDraftLoaded, setIsDraftLoaded] = useState(false)
+  const [isUploadingReferences, setIsUploadingReferences] = useState(false)
   const draftScopeRef = useRef(null)
   const draftLoadVersionRef = useRef(0)
+  const referenceDraftIdRef = useRef('')
   const availability = useAvailability({ active: currentStep === 3 })
 
   useEffect(() => {
@@ -170,9 +187,23 @@ function PackagePage({
         setPackageSelection(defaultPackageSelection)
         setPackageCustomization(defaultPackageCustomization)
         setPackageCustomerInfo(defaultPackageCustomerInfo)
+        referenceDraftIdRef.current = ''
       }
 
       const draft = await loadCustomDraft('party-package', scope)
+      let referenceImages = draft?.packageCustomization?.packageReferenceImages || []
+      const savedDraftId = draft?.packageCustomization?.packageReferenceDraftId || ''
+      const storedPath = referenceImages.find((reference) => reference?.path)?.path || ''
+      const pathParts = storedPath.split('/')
+      referenceDraftIdRef.current = savedDraftId || (
+        pathParts[0] === 'drafts' && pathParts[2] ? pathParts[2] : ''
+      )
+
+      if (referenceImages.length) {
+        referenceImages = await refreshReferenceImageUrls(referenceImages, {
+          productType: 'party-package',
+        })
+      }
 
       if (!isMounted || loadVersion !== draftLoadVersionRef.current) return
 
@@ -180,7 +211,12 @@ function PackagePage({
       if (draft) {
         setCurrentStep(draft.currentStep || 1)
         setPackageSelection((current) => ({ ...current, ...(draft.packageSelection || {}) }))
-        setPackageCustomization((current) => ({ ...current, ...(draft.packageCustomization || {}) }))
+        setPackageCustomization((current) => ({
+          ...current,
+          ...stripLegacyPackageCupcakeTheme(draft.packageCustomization || {}),
+          packageReferenceImages: referenceImages,
+          packageReferenceDraftId: referenceDraftIdRef.current,
+        }))
         setPackageCustomerInfo((current) => ({ ...current, ...(draft.customerInfo || {}) }))
       }
       setIsDraftLoaded(true)
@@ -206,7 +242,7 @@ function PackagePage({
   }, [])
 
   useEffect(() => {
-    if (!isDraftLoaded || !draftScopeRef.current) return undefined
+    if (!isDraftLoaded || !draftScopeRef.current || isUploadingReferences) return undefined
 
     saveCustomDraft('party-package', draftScopeRef.current, {
       currentStep,
@@ -216,7 +252,76 @@ function PackagePage({
     })
 
     return undefined
-  }, [isDraftLoaded, currentStep, packageSelection, packageCustomization, packageCustomerInfo])
+  }, [isDraftLoaded, isUploadingReferences, currentStep, packageSelection, packageCustomization, packageCustomerInfo])
+
+  const handlePackageReferenceImagesChange = async (nextImages) => {
+    const existingReferences = packageCustomization.packageReferenceImages.filter((reference) => reference?.path)
+    const files = nextImages.filter((reference) => reference instanceof File)
+
+    if (files.length) {
+      setIsUploadingReferences(true)
+      const optimisticReferences = [
+        ...existingReferences,
+        ...files.map((file) => ({
+          file,
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          previewUrl: URL.createObjectURL(file),
+          status: 'uploading',
+        })),
+      ]
+      setPackageCustomization((current) => ({
+        ...current,
+        packageReferenceImages: optimisticReferences,
+      }))
+
+      try {
+        const uploadedReferences = await uploadReferenceImages(files, existingReferences, {
+          productType: 'party-package',
+          draftId: referenceDraftIdRef.current,
+        })
+        const uploadedPath = uploadedReferences.find((reference) => reference?.path)?.path || ''
+        const uploadedPathParts = uploadedPath.split('/')
+        if (!referenceDraftIdRef.current && uploadedPathParts[0] === 'drafts' && uploadedPathParts[2]) {
+          referenceDraftIdRef.current = uploadedPathParts[2]
+        }
+        setPackageCustomization((current) => ({
+          ...current,
+          packageReferenceImages: uploadedReferences,
+          packageReferenceDraftId: referenceDraftIdRef.current,
+        }))
+      } catch (error) {
+        console.error('[PACKAGE REFERENCES] upload failed:', error)
+        setPackageCustomization((current) => ({
+          ...current,
+          packageReferenceImages: existingReferences,
+        }))
+      } finally {
+        setIsUploadingReferences(false)
+      }
+      return
+    }
+
+    const nextPaths = new Set(nextImages.map((reference) => reference?.path).filter(Boolean))
+    const removedReferences = existingReferences.filter((reference) => !nextPaths.has(reference.path))
+    const remainingReferences = existingReferences.filter((reference) => nextPaths.has(reference.path))
+
+    setPackageCustomization((current) => ({
+      ...current,
+      packageReferenceImages: remainingReferences,
+    }))
+
+    try {
+      for (const reference of removedReferences) {
+        await removeReferenceImage(reference, remainingReferences, {
+          productType: 'party-package',
+        })
+      }
+    } catch (error) {
+      console.error('[PACKAGE REFERENCES] remove failed:', error)
+    }
+  }
 
   const previewImage = useMemo(() => {
     const selectedBase = packageCustomization.packageCakeFlavor
@@ -282,11 +387,6 @@ function PackagePage({
     ...(packageCustomization.packageCakeTheme === 'Other' &&
     !packageCustomization.packageCakeOtherTheme.trim()
       ? { packageCakeOtherTheme: true }
-      : {}),
-    ...(!packageCustomization.packageCupcakeTheme ? { packageCupcakeTheme: true } : {}),
-    ...(packageCustomization.packageCupcakeTheme === 'Other' &&
-    !packageCustomization.packageCupcakeOtherTheme.trim()
-      ? { packageCupcakeOtherTheme: true }
       : {}),
   })
 
@@ -365,10 +465,6 @@ function PackagePage({
       'packageCakeLayers',
       'packageCakeTheme',
       ...(packageCustomization.packageCakeTheme === 'Other' ? ['packageCakeOtherTheme'] : []),
-      'packageCupcakeTheme',
-      ...(packageCustomization.packageCupcakeTheme === 'Other'
-        ? ['packageCupcakeOtherTheme']
-        : []),
     ]
     const step3Order = [
       'fullName',
@@ -432,8 +528,36 @@ function PackagePage({
         return
       }
 
-      const submittedAt = new Date().toISOString()
+      const referenceImages = packageCustomization.packageReferenceImages
+        .filter((reference) => reference?.path)
+        .map(({ name, type, size, path, position }) => ({
+          name,
+          type,
+          size,
+          path,
+          position,
+        }))
+      const order = await createCustomCustomerOrder({
+        productType: 'custom_party_package',
+        productName: 'Party Package',
+        quantity: 1,
+        customerInfo: packageCustomerInfo,
+        preferredDate: packageCustomerInfo.preferredDate,
+        preferredTime: packageCustomerInfo.fulfillment === 'pickup'
+          ? packageCustomerInfo.preferredPickupTime
+          : packageCustomerInfo.preferredDeliveryTime,
+        customizationData: {
+          package_selection: packageSelection,
+          package_customization: {
+            ...packageCustomization,
+            packageReferenceImages: referenceImages,
+          },
+        },
+      })
+      const submittedAt = order?.created_at || new Date().toISOString()
       const request = {
+        orderId: order?.id,
+        requestNumber: order?.order_number,
         requestNumber: generateRequestNumber(submittedAt),
         submittedAt,
         status: 'Pending Review',
@@ -441,12 +565,7 @@ function PackagePage({
         packageSelection,
         packageCustomization: {
           ...packageCustomization,
-          packageReferenceImages: packageCustomization.packageReferenceImages.map((file) => ({
-            name: file.name,
-            type: file.type,
-            size: file.size,
-            lastModified: file.lastModified,
-          })),
+          packageReferenceImages: referenceImages,
         },
         customerInfo: packageCustomerInfo,
       }
@@ -497,6 +616,7 @@ function PackagePage({
             cupcakeQuantity={packageSelection.cupcakeQuantity}
             previewImage={previewImage}
             validationTouched={step2Touched}
+            onReferenceImagesChange={handlePackageReferenceImagesChange}
           onDetailsChange={setPackageCustomization}
           onValidationTouchedChange={setStep2Touched}
           onBack={() => goToStep(1)}

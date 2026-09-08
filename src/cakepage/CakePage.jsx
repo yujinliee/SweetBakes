@@ -20,7 +20,6 @@ import StepProgress from './components/StepProgress.jsx'
 import { useAvailability } from '../hooks/useAvailability.js'
 import { assertCanAcceptOrderForDate } from '../admin/services/availabilityService.js'
 import {
-  createRequestUploadId,
   completeCustomCakeDraft,
   createCustomCakeOrderRequest,
   fetchCustomCakeDraft,
@@ -108,9 +107,9 @@ function CakePage({
   const [currentStep, setCurrentStep] = useState(1)
   const visitedStepsRef = useRef(new Set([1]))
   const stepScrollPositionsRef = useRef({ 1: 0 })
-  const requestUploadIdRef = useRef(createRequestUploadId())
   const draftIdRef = useRef(null)
   const draftSaveQueueRef = useRef(Promise.resolve())
+  const latestReferenceImagesRef = useRef([])
   const draftScopeRef = useRef(null)
   const draftLoadVersionRef = useRef(0)
   const localReferenceUrlsRef = useRef(new Set())
@@ -125,6 +124,20 @@ function CakePage({
   const [isUploadingReferences, setIsUploadingReferences] = useState(false)
   const [submissionError, setSubmissionError] = useState('')
   const availability = useAvailability({ active: currentStep === 3 })
+
+  useEffect(() => {
+    const references = designDetails.referenceImages || []
+    console.log('[CAKE REFERENCE STATE]', {
+      count: references.length,
+      references: references.map((item) => ({
+        path: item.path ?? item.storagePath ?? null,
+        hasDisplayUrl: Boolean(item.displayUrl ?? item.previewUrl ?? item.url),
+      })),
+    })
+    console.log('[CAKE REFERENCE COMPONENT DATA]', {
+      count: references.length,
+    })
+  }, [designDetails.referenceImages])
 
   useEffect(() => () => {
     localReferenceUrlsRef.current.forEach((url) => URL.revokeObjectURL(url))
@@ -145,6 +158,7 @@ function CakePage({
         setDesignDetails(defaultDesignDetails)
         setCustomerInfo(defaultCustomerInfo)
         draftIdRef.current = null
+        latestReferenceImagesRef.current = []
       }
 
       const [localResult, remoteResult] = await Promise.allSettled([
@@ -156,7 +170,7 @@ function CakePage({
 
       const localDraft = localResult.status === 'fulfilled' ? localResult.value : null
       const remoteDraft = remoteResult.status === 'fulfilled' ? remoteResult.value : null
-      const draft = localDraft || remoteDraft
+      const draft = remoteDraft || localDraft
 
       if (localResult.status === 'rejected') {
         console.error('[CAKE DRAFT] local restore failed:', localResult.reason)
@@ -166,9 +180,35 @@ function CakePage({
       }
 
       draftScopeRef.current = scope
+      const restoredReferences = remoteDraft?.reference_images ||
+        (draft?.designDetails?.referenceImages || draft?.design_details?.reference_images || [])
+          .filter((reference) => reference?.path)
+      const cakeReferencesForUi = restoredReferences.map((reference) => ({
+        ...reference,
+        previewUrl: reference.previewUrl || reference.displayUrl || reference.url || '',
+      }))
+      const restoredPath = cakeReferencesForUi.find((reference) => reference?.path)?.path || ''
+      const restoredPathParts = restoredPath.split('/')
+      const restoredDraftId = remoteDraft?.id || (
+        restoredPathParts[0] === 'drafts' && restoredPathParts[2] ? restoredPathParts[2] : null
+      )
+      latestReferenceImagesRef.current = cakeReferencesForUi
+
+      console.log('[REFERENCE DRAFT RESTORED]', {
+        productType: 'cake',
+        draftId: restoredDraftId,
+        storedReferences: cakeReferencesForUi.map(({ previewUrl, ...reference }) => reference),
+      })
+      console.log('[CAKE RESTORE RESULT]', {
+        count: cakeReferencesForUi.length,
+        references: cakeReferencesForUi.map((item) => ({
+          path: item.path ?? item.storagePath ?? null,
+          hasDisplayUrl: Boolean(item.displayUrl ?? item.previewUrl ?? item.url),
+        })),
+      })
 
       if (draft) {
-        draftIdRef.current = remoteDraft?.id || null
+        draftIdRef.current = restoredDraftId
         if (!shouldStartAtStepOne()) {
           setCurrentStep(draft.currentStep || draft.current_step || 1)
         }
@@ -176,13 +216,17 @@ function CakePage({
         setDesignDetails((current) => ({
           ...current,
           ...(draft.designDetails || draft.design_details || {}),
-          referenceImages: remoteDraft?.reference_images || [],
+          referenceImages: cakeReferencesForUi,
         }))
         setCustomerInfo((current) => ({
           ...current,
           ...(draft.customerInfo || draft.customer_info || {}),
         }))
       }
+
+      console.log('[CAKE SET RESTORED REFERENCES]', {
+        count: cakeReferencesForUi.length,
+      })
 
       if (import.meta.env.DEV) {
         console.log('[CAKE DRAFT] auth resolved', scope)
@@ -456,7 +500,6 @@ function CakePage({
         console.error('[CUSTOM CAKE DRAFT] complete failed:', draftError)
       }
       await clearCustomDraft('cake', draftScopeRef.current)
-      requestUploadIdRef.current = createRequestUploadId()
     } catch (error) {
       console.error('[CUSTOM CAKE REQUEST]', error)
       const message = mapCustomCakeSubmitError(error?.message)
@@ -472,7 +515,7 @@ function CakePage({
   }
 
   useEffect(() => {
-    if (!isDraftLoaded || !draftScopeRef.current) return undefined
+    if (!isDraftLoaded || !draftScopeRef.current || isUploadingReferences) return undefined
 
     saveCustomDraft('cake', draftScopeRef.current, {
       currentStep,
@@ -499,26 +542,42 @@ function CakePage({
           selections,
           designDetails,
           customerInfo,
-          referenceImages: designDetails.referenceImages,
+          referenceImages: latestReferenceImagesRef.current,
+          source: 'CakePage.autosaveEffect',
         })
         draftIdRef.current = saved.id
       })
       .catch((error) => {
-        console.error('[CUSTOM CAKE DRAFT] save failed:', error)
+        console.error('[CUSTOM CAKE DRAFT] save failed', {
+          code: error?.code ?? null,
+          message: error?.message ?? null,
+        })
       })
 
     return undefined
-  }, [isDraftLoaded, currentStep, selections, designDetails, customerInfo])
+  }, [isDraftLoaded, isUploadingReferences, currentStep, selections, designDetails, customerInfo])
 
   const handleReferenceImagesChange = async (nextImages) => {
+    if (!isDraftLoaded || !draftScopeRef.current) {
+      setSubmissionError('Please wait for your saved draft to finish loading.')
+      return
+    }
+
     const files = nextImages.filter((item) => item instanceof File)
-    const currentReferences = designDetails.referenceImages || []
+    const currentReferences = latestReferenceImagesRef.current.length
+      ? latestReferenceImagesRef.current
+      : (designDetails.referenceImages || [])
     const remoteReferences = currentReferences.filter((item) => item?.path)
     let optimisticReferences = []
 
     try {
       setIsUploadingReferences(true)
       if (files.length) {
+        await draftSaveQueueRef.current
+        console.log('[CAKE REFERENCE UPLOAD]', {
+          draftId: draftIdRef.current,
+          currentStep,
+        })
         optimisticReferences = files.map((file) => {
           const previewUrl = URL.createObjectURL(file)
           localReferenceUrlsRef.current.add(previewUrl)
@@ -567,6 +626,7 @@ function CakePage({
             ...uploadedReferences,
           ],
         }))
+        latestReferenceImagesRef.current = uploadedReferences
         return
       }
 
@@ -605,6 +665,7 @@ function CakePage({
         ...current,
         referenceImages: [...remaining, ...remainingTransient],
       }))
+      latestReferenceImagesRef.current = remaining
     } catch (error) {
       console.error('[CUSTOM CAKE DRAFT] reference update failed:', error)
       const errorReferences = optimisticReferences.map((reference) => ({
