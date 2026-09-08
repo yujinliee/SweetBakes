@@ -2926,3 +2926,19 @@ main {
     --hero-image-y: 55%;
   }
 }
+/* Keep the shared navigation centered with five links and separate icon space. */
+.topbar .nav > a { white-space:nowrap; }
+@media (min-width:901px) and (max-width:1200px) {
+  .topbar-inner { width:90%; }
+  .topbar .nav { gap:20px; }
+}
+@media (max-width:900px) {
+  .topbar { box-sizing:border-box; }
+  .topbar-inner { width:100%; flex-wrap:wrap; row-gap:8px; }
+  .topbar .topbar-actions { width:auto; justify-content:flex-end; }
+  .topbar .nav { position:static; transform:none; order:3; width:100%; flex-wrap:wrap; justify-content:center; gap:10px 18px; }
+}
+@media (max-width:400px) {
+  .topbar .nav { column-gap:12px; }
+  .topbar .nav > a,.topbar .nav-dropdown-toggle { font-size:12px; }
+}

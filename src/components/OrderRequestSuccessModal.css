@@ -142,3 +142,5 @@
     font-size: 26px;
   }
 }
+.order-success-secondary { margin-top:10px; padding:10px 16px; border:1px solid #d8c9e6; border-radius:6px; background:transparent; color:#75645e; font:inherit; font-size:13px; cursor:pointer; }
+.order-success-secondary:hover { background:#f4edfb; }

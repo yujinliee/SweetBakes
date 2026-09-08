@@ -1,0 +1,32 @@
+.track-drawer-root { position:fixed; inset:0; width:100%; max-width:none; height:100dvh; max-height:none; margin:0; padding:0; border:0; background:transparent; overflow:hidden; }
+.track-drawer-root::backdrop { background:transparent; }
+.track-drawer-panel { animation:trackDrawerIn .2s ease-out; }
+.track-drawer-panel--form .my-orders-detail-header h2 { font-size:24px; font-weight:600; }
+.track-drawer-panel--form { width:min(720px,92vw); }
+.track-drawer-form { width:100%; box-sizing:border-box; padding:24px; margin:0; border:1px solid #e5e7eb; border-radius:18px; background:#fff; box-shadow:0 3px 14px rgb(23 23 23 / 4%); text-align:left; }
+.track-drawer-form-title { margin:0; color:#171717; font-size:22px; font-weight:600; line-height:1.2; text-align:left; }
+.track-drawer-form .track-order-intro { margin:6px 0 24px; color:#6b7280; font-size:14px; font-weight:400; line-height:1.5; text-align:left; }
+.track-drawer-form form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:22px; max-width:none; margin:0; }
+.track-drawer-field { display:grid; gap:8px; min-width:0; }
+.track-drawer-form label { margin:0; color:#262626; font-size:14px; font-weight:600; text-align:left; }
+.track-drawer-form input { height:52px; min-width:0; border:1px solid #d9dee8; border-radius:10px; background:#eef3fb; padding:0 16px; color:#262626; font-size:15px; }
+.track-drawer-form input::placeholder { color:#727c8e; opacity:1; }
+.track-drawer-form input:focus-visible { outline:none; border-color:#8d5fba; box-shadow:0 0 0 3px rgb(141 95 186 / 12%); }
+.track-drawer-form .track-order-error { grid-column:1/-1; margin:0; text-align:left; }
+.track-drawer-form .track-order-primary-button { grid-column:1/-1; display:flex; align-items:center; justify-content:center; gap:10px; width:100%; height:52px; margin:0; border:1px solid #171717; border-radius:10px; background:#171717; color:#fff; font-size:15px; font-weight:600; }
+.track-drawer-form .track-order-primary-button:hover:not(:disabled) { background:#303030; border-color:#303030; }
+.track-drawer-form .track-order-primary-button:focus-visible { outline:2px solid #8d5fba; outline-offset:3px; }
+.track-drawer-form .track-order-primary-button svg { flex-shrink:0; }
+@media(max-width:600px) {
+  .track-drawer-panel--form { width:100%; }
+  .track-drawer-form { padding:20px; }
+  .track-drawer-form form { grid-template-columns:minmax(0,1fr); }
+  .track-drawer-form-title { font-size:20px; }
+  .track-drawer-panel--form .my-orders-detail-header h2 { font-size:22px; }
+}
+.track-drawer-back { justify-self:start; }
+.track-drawer-payment { margin:14px 0 0; color:#806f67; font-size:12px; text-align:left; }
+.track-drawer-panel .my-orders-detail-product>.my-orders-detail-price { grid-column:auto; }
+@keyframes trackDrawerIn { from { transform:translateX(100%); } to { transform:translateX(0); } }
+@media(max-width:540px) { .track-drawer-panel .my-orders-detail-product>.my-orders-detail-price { grid-column:2; } }
+@media(prefers-reduced-motion:reduce) { .track-drawer-panel { animation:none; } }

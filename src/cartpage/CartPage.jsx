@@ -1,3 +1,4 @@
+import { useTrackOrder } from '../trackorder/trackOrderContext.js'
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { SiteTopbar } from '../landingpage/LandingPage.jsx'
 import {
@@ -184,6 +185,7 @@ function CartPage({
   onCustomerLogout,
   isCustomerAuthenticated = false,
 }) {
+  const openTrackOrderDrawer = useTrackOrder()
   const [orderMethod, setOrderMethod] = useState('delivery')
   const [preferredDate, setPreferredDate] = useState('')
   const [customerInfo, setCustomerInfo] = useState(EMPTY_CUSTOMER_INFO)
@@ -194,6 +196,7 @@ function CartPage({
   const [orderSubmissionError, setOrderSubmissionError] = useState('')
   const [guestPaymentVerified, setGuestPaymentVerified] = useState(false)
   const [guestOrderNumber, setGuestOrderNumber] = useState(null)
+  const [guestTrackingEmail, setGuestTrackingEmail] = useState('')
   const [guestPaymentTimedOut, setGuestPaymentTimedOut] = useState(false)
   const guestPaymentStatus = new URLSearchParams(window.location.search).get('payment')
   const pendingOrderIdRef = useRef(null)
@@ -232,6 +235,7 @@ function CartPage({
       if (!isMounted) return
       if (!error && ['paid', 'verified', 'payment_verified'].includes(String(data?.paymentStatus || '').toLowerCase())) {
         setGuestOrderNumber(data.orderNumber || null)
+        setGuestTrackingEmail(receipt.guestEmail)
         clearCart()
         window.localStorage.removeItem(CART_PAYMENT_RETURN_STORAGE_KEY)
         setGuestPaymentVerified(true)
@@ -1213,19 +1217,24 @@ function CartPage({
       {guestPaymentVerified ? (
         <OrderRequestSuccessModal
           request={{}}
-          title="Payment Successful"
+          title="Order Confirmed!"
           description={(
             <>
               Your payment has been received successfully. Your order has been placed and is now being processed.
-              {guestOrderNumber ? <strong className="cart-guest-order-id">Order ID: {guestOrderNumber}</strong> : null}
-              <span className="cart-guest-order-note">Save your Order ID. You&apos;ll need it together with your email to check your order status.</span>
+              {guestOrderNumber ? <strong className="cart-guest-order-id"><span>Order ID</span>{guestOrderNumber}</strong> : null}
+              <span className="cart-guest-order-note">Save your Order ID. You&apos;ll need it together with your email address to track your order.</span>
             </>
           )}
           primaryLabel="Track Order"
+          secondaryLabel="Continue Shopping"
+          onSecondary={() => {
+            setGuestPaymentVerified(false)
+            onNavigate?.('/#sweet-treats')
+          }}
           onClose={() => setGuestPaymentVerified(false)}
           onPrimary={() => {
             setGuestPaymentVerified(false)
-            onNavigate?.('/track-order', { state: { orderNumber: guestOrderNumber || '' } })
+            openTrackOrderDrawer({ orderNumber: guestOrderNumber || '', email: guestTrackingEmail })
           }}
         />
       ) : null}

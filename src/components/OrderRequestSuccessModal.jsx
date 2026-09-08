@@ -24,6 +24,8 @@ function OrderRequestSuccessModal({
   description,
   primaryLabel = 'View Order',
   onPrimary,
+  secondaryLabel,
+  onSecondary,
 }) {
   const viewOrder = () => {
     if (onPrimary) {
@@ -97,6 +99,7 @@ function OrderRequestSuccessModal({
           <button className="order-success-button" type="button" onClick={viewOrder}>
             {primaryLabel}
           </button>
+          {secondaryLabel && onSecondary ? <button className="order-success-secondary" type="button" onClick={onSecondary}>{secondaryLabel}</button> : null}
         </div>
       </section>
     </div>

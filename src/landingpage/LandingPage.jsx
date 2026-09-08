@@ -1,3 +1,4 @@
+import { useTrackOrder } from '../trackorder/trackOrderContext.js'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import logo from '../assets/landingpage/sweetbakes_logo.svg'
 import loginIcon from '../assets/landingpage/login.svg'
@@ -150,6 +151,7 @@ export function SiteTopbar({
   isCustomerAuthenticated = false,
   onCustomerLogout,
 }) {
+  const openTrackOrderDrawer = useTrackOrder()
   const [isScrolled, setIsScrolled] = useState(getIsTopbarScrolled)
   const [topbarMotion, setTopbarMotion] = useState('')
   const [isShopOpen, setIsShopOpen] = useState(false)
@@ -443,6 +445,9 @@ export function SiteTopbar({
           <a href={contactHref} onClick={(event) => handleSectionScroll(event, 'contact')}>
             <span className="nav-link-text">Contact</span>
           </a>
+          <a href="/track-order" onClick={(event) => { event.preventDefault(); openTrackOrderDrawer() }}>
+            <span className="nav-link-text">Track Order</span>
+          </a>
         </nav>
 
         <div className="topbar-actions" aria-label="Quick actions">
@@ -549,6 +554,7 @@ export function SiteTopbar({
 }
 
 export function SiteFooter() {
+  const openTrackOrderDrawer = useTrackOrder()
   return (
     <>
       <div
@@ -573,7 +579,7 @@ export function SiteFooter() {
             <div className="footer-contact-column animate-up" style={{ '--delay': '90ms' }}>
               <h3>Hey, Bestie!</h3>
               <p>Follow us on Facebook for exclusive updates.</p>
-              <a className="footer-track-order-link" href="/track-order">Track Your Order</a>
+              <a className="footer-track-order-link" href="/track-order" onClick={(event) => { event.preventDefault(); openTrackOrderDrawer() }}>Track Your Order</a>
               <div className="footer-contact-list">
                 <a
                   className="footer-contact-row footer-facebook-link"
