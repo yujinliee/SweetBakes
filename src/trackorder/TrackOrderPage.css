@@ -1,0 +1,32 @@
+html:has(.track-order-page), body:has(.track-order-page) { background: #fffaf7; }
+.track-order-page { min-height: 100vh; color: #362a26; background: #fffaf7; }
+.track-order-content { width: min(100%, 900px); min-height: 620px; margin: 0 auto; padding: 142px 24px 72px; box-sizing: border-box; }
+.track-order-form-panel, .track-order-result { width: min(100%, 720px); margin: 0 auto; padding: 42px; border: 1px solid #eadfd8; border-radius: 12px; background: #fff; box-shadow: 0 18px 45px rgba(92, 62, 48, .08); }
+.track-order-form-panel { text-align: center; }
+.track-order-eyebrow { margin: 0 0 10px; color: #8d5fba; font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.track-order-form-panel h1, .track-order-result h1 { margin: 0; color: #362a26; font-family: var(--heading); font-size: clamp(30px, 5vw, 44px); font-weight: 500; line-height: 1.1; }
+.track-order-intro { margin: 14px auto 30px; color: #806f67; font-size: 14px; }
+.track-order-form-panel form { display: grid; max-width: 480px; margin: 0 auto; gap: 9px; text-align: left; }
+.track-order-form-panel label { margin-top: 10px; color: #49352d; font-size: 13px; font-weight: 700; }
+.track-order-form-panel input { width: 100%; min-height: 46px; box-sizing: border-box; padding: 11px 13px; border: 1px solid #d9ccc5; border-radius: 6px; background: #fffdfb; color: #362a26; font: inherit; font-size: 14px; outline-color: #8d5fba; }
+.track-order-primary-button, .track-order-secondary-button { min-height: 44px; border-radius: 6px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.track-order-primary-button { margin-top: 16px; border: 1px solid #8d5fba; background: #8d5fba; color: #fff; }
+.track-order-primary-button:disabled { cursor: wait; opacity: .65; }
+.track-order-error { margin: 13px 0 0; color: #a24e59; font-size: 13px; }
+.track-order-result-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding-bottom: 24px; border-bottom: 1px solid #eee5e0; }
+.track-order-secondary-button { padding: 8px 12px; border: 1px solid #d9ccc5; background: #fff; color: #6f5b52; white-space: nowrap; }
+.track-order-status-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 24px 0; }
+.track-order-status-row div { display: grid; gap: 5px; padding: 14px; border-radius: 8px; background: #fffaf6; }
+.track-order-status-row span, .track-order-details dt { color: #8b7a73; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.track-order-status-row strong { color: #362a26; font-size: 16px; }
+.track-order-progress { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; margin: 28px 0; }
+.track-order-progress-step { position: relative; display: grid; justify-items: center; gap: 7px; color: #b0a29a; font-size: 10px; text-align: center; }
+.track-order-progress-step:not(:last-child)::after { position: absolute; top: 12px; left: 58%; width: 84%; height: 2px; background: #eee8e3; content: ''; }
+.track-order-progress-step span { position: relative; z-index: 1; display: grid; width: 24px; height: 24px; place-items: center; border-radius: 50%; background: #f0ebe8; color: #9e918a; font-size: 11px; font-weight: 800; }
+.track-order-progress-step.is-complete { color: #6f5b52; }.track-order-progress-step.is-complete span { background: #eadcf7; color: #8052a9; }.track-order-progress-step.is-complete:not(:last-child)::after { background: #d8c6e5; }.track-order-progress-step.is-current strong { color: #8052a9; }
+.track-order-terminal { margin: 28px 0; padding: 14px; border-radius: 8px; background: #fcf0f2; color: #a24e59; font-weight: 700; text-align: center; }
+.track-order-items { padding-top: 22px; border-top: 1px solid #eee5e0; }.track-order-items h2 { margin: 0 0 12px; color: #362a26; font-size: 18px; }
+.track-order-item { display: flex; justify-content: space-between; gap: 18px; padding: 13px 0; border-bottom: 1px solid #f3eeeb; font-size: 14px; }.track-order-item div { display: grid; gap: 3px; }.track-order-item span { color: #806f67; font-size: 12px; }
+.track-order-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin: 24px 0 0; padding-top: 22px; border-top: 1px solid #eee5e0; }.track-order-details div { display: grid; gap: 5px; }.track-order-details dd { margin: 0; color: #362a26; font-size: 14px; font-weight: 700; }
+@media (max-width: 700px) { .track-order-content { padding: 116px 18px 48px; }.track-order-form-panel, .track-order-result { padding: 26px 18px; }.track-order-result-heading { display: grid; }.track-order-secondary-button { justify-self: start; }.track-order-progress { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 18px; }.track-order-progress-step:nth-child(3)::after { display: none; } }
+@media (max-width: 480px) { .track-order-status-row, .track-order-details { grid-template-columns: 1fr; } }

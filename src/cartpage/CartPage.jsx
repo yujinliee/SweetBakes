@@ -1218,12 +1218,18 @@ function CartPage({
         <OrderRequestSuccessModal
           request={{}}
           title="Payment Successful"
-          description={`Your payment has been received successfully. Your order has been placed and is now being processed.${guestOrderNumber ? ` Order ID: ${guestOrderNumber}` : ''}`}
-          primaryLabel="Continue Shopping"
+          description={(
+            <>
+              Your payment has been received successfully. Your order has been placed and is now being processed.
+              {guestOrderNumber ? <strong className="cart-guest-order-id">Order ID: {guestOrderNumber}</strong> : null}
+              <span className="cart-guest-order-note">Save your Order ID. You&apos;ll need it together with your email to check your order status.</span>
+            </>
+          )}
+          primaryLabel="Track Order"
           onClose={() => setGuestPaymentVerified(false)}
           onPrimary={() => {
             setGuestPaymentVerified(false)
-            onNavigate?.('/')
+            onNavigate?.('/track-order', { state: { orderNumber: guestOrderNumber || '' } })
           }}
         />
       ) : null}

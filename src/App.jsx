@@ -18,6 +18,7 @@ import ResetPasswordPage from './loginpage/ResetPasswordPage.jsx'
 import MyOrdersPage from './myorders/MyOrdersPage.jsx'
 import ProfilePage from './profilepage/ProfilePage.jsx'
 import RegisterPage from './registerpage/RegisterPage.jsx'
+import TrackOrderPage from './trackorder/TrackOrderPage.jsx'
 import { supabase } from './lib/supabase.js'
 
 const customerAuthStorageKey = 'sweetbakes_customer_authenticated'
@@ -89,7 +90,10 @@ function App() {
       return
     }
 
-    const nextHistoryState = options.scrollTo ? { scrollTo: options.scrollTo } : {}
+    const nextHistoryState = {
+      ...(options.scrollTo ? { scrollTo: options.scrollTo } : {}),
+      ...(options.state || {}),
+    }
 
     if (!isSamePage && options.replace) {
       window.history.replaceState(nextHistoryState, '', nextLocationKey)
@@ -243,6 +247,13 @@ function App() {
       />
     ) : currentPathname === '/my-orders' ? (
       <MyOrdersPage
+        onNavigate={navigate}
+        onCustomerLogout={handleCustomerLogout}
+        isCustomerAuthenticated={isCustomerAuthenticated}
+        key={locationKey}
+      />
+    ) : currentPathname === '/track-order' ? (
+      <TrackOrderPage
         onNavigate={navigate}
         onCustomerLogout={handleCustomerLogout}
         isCustomerAuthenticated={isCustomerAuthenticated}

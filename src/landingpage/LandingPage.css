@@ -2403,6 +2403,24 @@ main {
   margin-bottom: 16px;
 }
 
+.footer-track-order-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 16px;
+  color: rgba(255, 255, 255, 0.82);
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 200ms ease;
+}
+
+.footer-track-order-link:hover {
+  color: #fff;
+}
+
 .footer-contact-list {
   display: flex;
   flex-direction: column;

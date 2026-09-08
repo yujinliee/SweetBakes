@@ -445,6 +445,31 @@
   color: #5f7a5f;
 }
 
+.cart-guest-order-id {
+  display: block;
+  margin: 14px auto 0;
+  padding: 10px 16px;
+  border: 1px solid #d8c9e6;
+  border-radius: 6px;
+  background: #f4edfb;
+  color: #3a2e2e;
+  font-family: 'Poppins', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-align: center;
+}
+
+.cart-guest-order-note {
+  display: block;
+  margin: 10px auto 0;
+  color: #75645e;
+  font-family: 'Poppins', sans-serif;
+  font-size: 12px;
+  line-height: 1.55;
+  text-align: center;
+}
+
 .cart-pay-button {
   display: inline-flex;
   align-items: center;

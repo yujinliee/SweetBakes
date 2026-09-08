@@ -573,6 +573,7 @@ export function SiteFooter() {
             <div className="footer-contact-column animate-up" style={{ '--delay': '90ms' }}>
               <h3>Hey, Bestie!</h3>
               <p>Follow us on Facebook for exclusive updates.</p>
+              <a className="footer-track-order-link" href="/track-order">Track Your Order</a>
               <div className="footer-contact-list">
                 <a
                   className="footer-contact-row footer-facebook-link"
