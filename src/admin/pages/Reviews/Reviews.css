@@ -1,0 +1,13 @@
+.admin-reviews-page { min-width:0; display:grid; gap:16px; color:#2f2420; }
+.admin-reviews-toolbar { display:flex; flex-wrap:wrap; gap:12px; }
+.admin-reviews-toolbar input,.admin-reviews-toolbar select { padding:10px 12px; border:1px solid #e5e7eb; border-radius:6px; font:inherit; background:#fff; min-width:0; }
+.admin-reviews-toolbar input { flex:1; }
+.admin-reviews-table-wrap { overflow:auto; border:1px solid #e5e7eb; border-radius:8px; background:#fff; }
+.admin-reviews-page table { width:100%; border-collapse:collapse; text-align:left; font-size:13px; }
+.admin-reviews-page th,.admin-reviews-page td { padding:14px; border-bottom:1px solid #e5e7eb; vertical-align:top; }
+.admin-reviews-page th { font-size:11px; text-transform:uppercase; color:#756b77; }
+.admin-reviews-page small { display:block; margin-top:4px; color:#756b77; }
+.admin-reviews-stars { color:#8d5fba; white-space:nowrap; }
+.admin-reviews-comment { min-width:180px; max-width:340px; white-space:pre-wrap; overflow-wrap:anywhere; }
+.admin-reviews-page button { background:#fff; border:1px solid #8d5fba; color:#8d5fba; padding:7px 10px; border-radius:4px; cursor:pointer; white-space:nowrap; }
+.admin-reviews-page button:hover { background:#8d5fba; color:#fff; }

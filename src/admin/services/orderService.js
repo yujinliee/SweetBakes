@@ -148,6 +148,23 @@ export async function fetchAdminOrders() {
     throw priceItemsError
   }
 
+  // Batch-fetch product images for all product_ids present in order items.
+  // One query for all orders — no N+1.
+  const productIds = [...new Set(
+    itemsWithSignedUrls.map((item) => item.product_id).filter(Boolean)
+  )]
+
+  let productImageByProductId = {}
+  if (productIds.length > 0) {
+    const { data: productRows } = await supabase
+      .from('products')
+      .select('id, image_url')
+      .in('id', productIds)
+    ;(productRows || []).forEach((row) => {
+      if (row.image_url) productImageByProductId[row.id] = row.image_url
+    })
+  }
+
   const itemsByOrderId = itemsWithSignedUrls.reduce((groups, item) => {
     const orderId = item.order_id
 
@@ -170,11 +187,20 @@ export async function fetchAdminOrders() {
     return groups
   }, {})
 
-  return (orders || []).map((order) => ({
-    ...order,
-    order_items: itemsByOrderId[order.id] || [],
-    price_items: priceItemsByOrderId[order.id] || [],
-  }))
+  return (orders || []).map((order) => {
+    const orderItems = itemsByOrderId[order.id] || []
+    // Resolve thumbnail from the first item's product_id → DB image, no signed URL needed.
+    const firstItem = orderItems[0] || null
+    const thumbnailUrl = (firstItem?.product_id && productImageByProductId[firstItem.product_id])
+      ? productImageByProductId[firstItem.product_id]
+      : null
+    return {
+      ...order,
+      order_items: orderItems,
+      price_items: priceItemsByOrderId[order.id] || [],
+      thumbnailUrl,
+    }
+  })
 }
 
 export async function updateAdminOrderStatus(orderId, newStatus) {

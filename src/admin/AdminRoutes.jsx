@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard/Dashboard.jsx'
 import Inventory from './pages/Inventory/Inventory.jsx'
 import Messages from './pages/Messages/Messages.jsx'
 import Orders from './pages/Orders/Orders.jsx'
+import Reviews from './pages/Reviews/Reviews.jsx'
 import Products from './pages/Products/Products.jsx'
 import Settings from './pages/Settings/Settings.jsx'
 import { ADMIN_DASHBOARD_ROUTE } from './adminRouteConstants.js'
@@ -22,6 +23,7 @@ const adminPageMap = {
   '/admin': Dashboard,
   [ADMIN_DASHBOARD_ROUTE]: Dashboard,
   '/admin/orders': Orders,
+  '/admin/reviews': Reviews,
   '/admin/messages': Messages,
   '/admin/products': Products,
   '/admin/inventory': Inventory,
@@ -77,7 +79,7 @@ function AdminRoutes({ currentPath, onNavigate }) {
     <ProtectedAdminRoute onNavigate={onNavigate}>
       <AdminLayout currentPath={currentPath} onNavigate={onNavigate}>
         <AdminPageErrorBoundary currentPath={currentPath}>
-          <Page key={pageProps.category || undefined} {...pageProps} />
+          <Page key={pageProps.category || undefined} {...pageProps} onNavigate={onNavigate} />
         </AdminPageErrorBoundary>
       </AdminLayout>
     </ProtectedAdminRoute>

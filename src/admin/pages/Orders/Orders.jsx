@@ -4,7 +4,14 @@ import {
   reviewCustomOrderRequest,
   updateAdminOrderStatus,
 } from '../../services/orderService.js'
-import { ORDER_PROGRESS_STAGES, getOrderProgressStage } from '../../../services/orderStatusDisplay.js'
+import { getOrderProgressStages, getOrderProgressStage, isRegularProgressOrder } from '../../../services/orderStatusDisplay.js'
+import chocolateCakeImage from '../../../assets/othersweettreats/regular_chocolate.jpg'
+import redVelvetCakeImage from '../../../assets/othersweettreats/regular_redvelvet.png'
+import cheesecakeImage from '../../../assets/othersweettreats/halfordozen_cheesecake.png'
+import ubeImage from '../../../assets/othersweettreats/ube.png'
+import grahamImage from '../../../assets/othersweettreats/graham de leche.png'
+import lecheFlanImage from '../../../assets/othersweettreats/leche_flan.png'
+import putoImage from '../../../assets/othersweettreats/puto.jpg'
 import './Orders.css'
 
 const TAB_OPTIONS = ['All Orders', 'Pending', 'Confirmed', 'Completed', 'Cancelled']
@@ -38,6 +45,33 @@ const ORDER_STATUS_OPTIONS = [
   'cancelled',
   'rejected',
 ]
+
+const STATIC_FALLBACK_IMAGES = {
+  'chocolate cake': chocolateCakeImage,
+  'red velvet cake': redVelvetCakeImage,
+  'cheesecake': cheesecakeImage,
+  'blueberry cheesecake': cheesecakeImage,
+  'mango cheesecake': cheesecakeImage,
+  'strawberry cheesecake': cheesecakeImage,
+  'oreo cheesecake': cheesecakeImage,
+  'ube': ubeImage,
+  'graham de leche': grahamImage,
+  'leche flan': lecheFlanImage,
+  'puto': putoImage,
+}
+
+function resolveOrderThumbnail(order) {
+  // 1. DB product image (public URL, already resolved in orderService)
+  if (order.thumbnailUrl) return order.thumbnailUrl
+  // 2. Static bundled fallback keyed by first item product_name
+  const firstName = normalizeText((order.order_items?.[0]?.product_name) || '')
+  if (firstName) {
+    for (const [key, img] of Object.entries(STATIC_FALLBACK_IMAGES)) {
+      if (firstName.includes(key)) return img
+    }
+  }
+  return null
+}
 
 const PRODUCT_TYPE_LABELS = {
   cake: 'Cakes',
@@ -325,6 +359,21 @@ function OrderDetailIcon({ type }) {
   return <svg className="admin-order-detail-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d={paths[type] || paths.item} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
 }
 
+function OrderThumbnail({ order }) {
+  const [errored, setErrored] = useState(false)
+  const src = resolveOrderThumbnail(order)
+
+  if (!src || errored) {
+    return <span className="admin-orders-thumb admin-orders-thumb--placeholder" aria-hidden="true" />
+  }
+
+  return (
+    <span className="admin-orders-thumb" aria-hidden="true">
+      <img src={src} alt="" onError={() => setErrored(true)} />
+    </span>
+  )
+}
+
 function FilterDropdown({
   id,
   value,
@@ -479,6 +528,12 @@ function Orders() {
 
         if (isMounted) {
           setOrders(nextOrders)
+          const requestedId = new URLSearchParams(window.location.search).get('order')
+          const requestedOrder = nextOrders.find((order) => order.id === requestedId)
+          if (requestedOrder) {
+            setActiveOrderId(requestedOrder.id)
+            setCustomPriceItems((requestedOrder.price_items || []).map((item) => ({ ...item, amount: String(item.amount ?? '') })))
+          }
         }
       } catch (error) {
         console.error('[ADMIN ORDERS] load error:', error)
@@ -901,11 +956,10 @@ function Orders() {
                 </th>
                 <th>Order ID</th>
                 <th>Customer</th>
-                <th>Category</th>
+                <th className="admin-orders-category-col">Category</th>
                 <th>Order Method</th>
-                <th>Order Date</th>
                 <th>Requested Date</th>
-                <th>Status</th>
+                <th title="Bakery acceptance and fulfillment; payment is tracked separately">Fulfillment Status</th>
                 <th>Payment</th>
                 <th>Total</th>
                 <th>Actions</th>
@@ -914,19 +968,19 @@ function Orders() {
             <tbody>
               {isLoadingOrders ? (
                 <tr>
-                  <td className="admin-orders-empty" colSpan={11}>
+                  <td className="admin-orders-empty" colSpan={10}>
                     Loading orders...
                   </td>
                 </tr>
               ) : ordersError ? (
                 <tr>
-                  <td className="admin-orders-empty admin-orders-empty--error" colSpan={11}>
+                  <td className="admin-orders-empty admin-orders-empty--error" colSpan={10}>
                     {ordersError}
                   </td>
                 </tr>
               ) : paginatedOrders.length === 0 ? (
                 <tr>
-                  <td className="admin-orders-empty" colSpan={11}>
+                  <td className="admin-orders-empty" colSpan={10}>
                     No orders found.
                   </td>
                 </tr>
@@ -949,9 +1003,11 @@ function Orders() {
                         {order.email ? <span className="admin-customer-email">{order.email}</span> : null}
                       </div>
                     </td>
-                    <td>{order.category}</td>
+                    <td className="admin-orders-category-cell">
+                      <OrderThumbnail order={order} />
+                      <span>{order.category}</span>
+                    </td>
                     <td>{order.orderMethod}</td>
-                    <td>{order.orderDate}</td>
                     <td>{order.requestedDate}</td>
                     <td>
                       <span className={getStatusClassName(order.status)}>{order.status}</span>
@@ -1045,10 +1101,10 @@ function Orders() {
             <div className="admin-orders-progress" aria-label={`Order status: ${activeOrder.status}`}>
               {normalizeText(activeOrder.order_status) === 'cancelled' || normalizeText(activeOrder.order_status) === 'rejected' ? (
                 <span className={`admin-orders-progress-terminal admin-orders-progress-terminal--${normalizeText(activeOrder.order_status)}`}>{activeOrder.status}</span>
-              ) : ORDER_PROGRESS_STAGES.map((stage, index) => {
-                const currentIndex = getOrderProgressStage({ orderStatus: activeOrder.order_status, paymentStatus: activeOrder.payment_status })
+              ) : getOrderProgressStages(activeOrder).map((stage, index) => {
+                const currentIndex = getOrderProgressStage({ orderStatus: activeOrder.order_status, paymentStatus: activeOrder.payment_status, isRegularOrder: isRegularProgressOrder(activeOrder) })
                 const state = index < currentIndex ? 'complete' : index === currentIndex ? 'current' : 'future'
-                return <div className={`admin-orders-progress-step is-${state}`} key={stage}><span className="admin-orders-progress-dot">{state === 'complete' ? '✓' : ''}</span><span>{stage}</span>{index < ORDER_PROGRESS_STAGES.length - 1 ? <i /> : null}</div>
+                return <div className={`admin-orders-progress-step is-${state}`} key={stage}><span className="admin-orders-progress-dot">{state === 'complete' ? '✓' : ''}</span><span>{stage}</span>{index < getOrderProgressStages(activeOrder).length - 1 ? <i /> : null}</div>
               })}
             </div>
 

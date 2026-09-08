@@ -6,6 +6,7 @@ import footerLogo from '../../../assets/landingpage/sweetbakes_footer.svg'
 const adminNavItems = [
   { key: 'dashboard', label: 'Dashboard', href: '/admin/dashboard', icon: 'dashboard' },
   { key: 'orders', label: 'Orders', href: '/admin/orders', icon: 'orders' },
+  { key: 'reviews', label: 'Reviews', href: '/admin/reviews', icon: 'reviews' },
   { key: 'messages', label: 'Messages', href: '/admin/messages', icon: 'messages' },
   {
     key: 'products',
@@ -32,6 +33,7 @@ const productsFlyoutItems = [
 ]
 
 const iconPaths = {
+  reviews: 'm12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z',
   dashboard: 'M4 4h6v6H4V4Zm10 0h6v6h-6V4ZM4 14h6v6H4v-6Zm10 0h6v6h-6v-6Z',
   orders: 'M8 4h8a2 2 0 0 1 2 2v14l-3-1.5L12 20l-3-1.5L6 20V6a2 2 0 0 1 2-2Zm2 5h4M10 13h6M10 17h3',
   messages: 'M5 5.5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8l-5 3v-3H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Zm3 4h8M8 13h5',

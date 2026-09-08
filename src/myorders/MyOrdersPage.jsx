@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useState } from 'react'
 import { ADMIN_DASHBOARD_ROUTE } from '../admin/adminRouteConstants.js'
 import { SiteFooter, SiteTopbar } from '../landingpage/LandingPage.jsx'
-import { getOrderProgressStage, ORDER_PROGRESS_STAGES } from '../services/orderStatusDisplay.js'
+import { getOrderProgressStage, getOrderProgressStages, getOrderProgressLabel, isRegularProgressOrder } from '../services/orderStatusDisplay.js'
 import { supabase } from '../lib/supabase.js'
 import { removeCartQuantity } from '../cartStore.js'
 import OrderRequestSuccessModal from '../components/OrderRequestSuccessModal.jsx'
-import { ORDER_TABS, EMPTY_MESSAGES, matchesOrderTab, isAwaitingPrice, historyStatus, itemDescription, referenceImages, getHistoryItems } from './orderHistory.js'
+import { fetchCustomerReviews } from '../services/orderReviewService.js'
+import OrderReviewModal from './OrderReviewModal.jsx'
+import { ORDER_TABS, EMPTY_MESSAGES, attachOrderReviews, getOrderTabCounts, matchesOrderTab, isAwaitingPrice, historyStatus, itemDescription, referenceImages, getHistoryItems } from './orderHistory.js'
 import { attachCatalogImages, itemImage, itemFallback } from './orderHistoryImages.js'
 import './MyOrdersPage.css'
 
@@ -20,28 +22,25 @@ const formatStatus = (value) => { const normalized = String(value || '').trim();
 const formatTime = (value) => value ? new Date(`1970-01-01T${value}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'Not specified'
 const isPaymentVerified = (status) => ['paid', 'verified', 'payment_verified'].includes(String(status || '').toLowerCase())
 
-function getItemSummary(items = []) { const first = items[0]; return items.length > 1 ? `${first?.product_name || 'Order'} + ${items.length - 1} more` : first?.product_name || 'Custom order' }
 function isCustomOrder(order) { return (order?.order_items || []).some((item) => item.customization_data?.request_type) }
 function removePurchasedCartItems(order) { (order?.order_items || []).forEach((item) => removeCartQuantity(item.product_name, item.quantity)) }
 function getCustomizationFields(value) {
   if (!value || typeof value !== 'object') return []
   const hidden = new Set(['request_type', 'reference_images', 'is_custom'])
-  return Object.entries(value).filter(([key, entry]) => !hidden.has(key) && entry !== null && entry !== '' && !(Array.isArray(entry) && entry.length === 0)).map(([key, entry]) => ({ label: key.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()), value: Array.isArray(entry) ? entry.filter(Boolean).join(', ') : String(entry) }))
+  return Object.entries(value).filter(([key, entry]) => !hidden.has(key) && entry !== null && entry !== '' && !(Array.isArray(entry) && entry.length === 0) && !/image|url|path/i.test(key)).map(([key, entry]) => ({ label: key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()), value: Array.isArray(entry) ? entry.filter(Boolean).join(', ') : typeof entry === 'object' ? getCustomizationFields(entry).map((field) => field.label + ': ' + field.value).join('; ') : String(entry) })).filter((field) => field.value)
 }
 
 function StatusProgress({ order }) {
-  const stage = getOrderProgressStage({ orderStatus: order.order_status, paymentStatus: order.payment_status })
+  const stage = getOrderProgressStage({ orderStatus: order.order_status, paymentStatus: order.payment_status, isRegularOrder: isRegularProgressOrder(order) })
   const isTerminal = ['cancelled', 'rejected'].includes(String(order.order_status || '').toLowerCase())
-  return <div className="my-orders-progress" aria-label={`Order status: ${formatStatus(order.order_status)}`}>
-    {isTerminal ? <div className="my-orders-terminal-status">{formatStatus(order.order_status)}</div> : ORDER_PROGRESS_STAGES.map((label, index) => <div className={`my-orders-progress-step ${index <= stage ? 'is-complete' : ''} ${index === stage ? 'is-current' : ''}`} key={label}><span>{index < stage ? '✓' : index + 1}</span><strong>{label}</strong></div>)}
+  return <div className="my-orders-progress" aria-label={`Order status: ${getOrderProgressLabel(order)}`}>
+    {isTerminal ? <div className="my-orders-terminal-status">{formatStatus(order.order_status)}</div> : getOrderProgressStages(order).map((label, index) => <div className={`my-orders-progress-step ${index <= stage ? 'is-complete' : ''} ${index === stage ? 'is-current' : ''}`} key={label}><span>{index < stage ? '✓' : index + 1}</span><strong>{label}</strong></div>)}
   </div>
 }
 
 function PaymentPanel({ order, downPayment }) {
   const [isCreatingPayment, setIsCreatingPayment] = useState(false)
   const [paymentError, setPaymentError] = useState('')
-  const pendingReview = String(order.order_status || '').toLowerCase() === 'pending'
-  const verified = isPaymentVerified(order.payment_status)
   const eligible = String(order.order_status || '').toLowerCase() === 'confirmed' && String(order.payment_status || '').toLowerCase() === 'pending' && Number(downPayment) > 0
   const handlePayDownPayment = async () => {
     if (isCreatingPayment || !eligible) return
@@ -82,13 +81,12 @@ function PaymentPanel({ order, downPayment }) {
       setIsCreatingPayment(false)
     }
   }
-  return <section className="my-orders-detail-card my-orders-payment-card"><h3>Payment</h3>{pendingReview ? <><strong>Quotation / Price Review Pending</strong><p>No payment is required until Sweet Bakes reviews your request.</p></> : verified ? <><strong>Down Payment Verified</strong><dl><div><dt>Amount Paid</dt><dd>{formatCurrency(downPayment)}</dd></div><div><dt>Payment Status</dt><dd>{formatStatus(order.payment_status)}</dd></div></dl></> : <><strong>Required Down Payment</strong><div className="my-orders-amount-due">{formatCurrency(downPayment)}</div><span className="my-orders-payment-note">Payment Status: {formatStatus(order.payment_status || 'pending')}</span>{eligible ? <button type="button" className="my-orders-pay-button" onClick={handlePayDownPayment} disabled={isCreatingPayment}>{isCreatingPayment ? 'Creating Payment...' : 'Pay Down Payment'}</button> : null}{paymentError ? <p className="my-orders-payment-error" role="alert">{paymentError}</p> : null}</>}</section>
+  return eligible ? <div className="my-orders-detail-payment-action"><button type="button" className="my-orders-pay-button" onClick={handlePayDownPayment} disabled={isCreatingPayment}>{isCreatingPayment ? 'Creating Payment...' : `Pay Down Payment: ${formatCurrency(downPayment)}`}</button>{paymentError ? <p className="my-orders-payment-error" role="alert">{paymentError}</p> : null}</div> : null
 }
 
 function RegularPaymentPanel({ order }) {
   const [isCreatingPayment, setIsCreatingPayment] = useState(false)
   const [paymentError, setPaymentError] = useState('')
-  const verified = isPaymentVerified(order.payment_status)
   const eligible = String(order.order_status || '').toLowerCase() === 'pending'
     && ['unpaid', 'pending'].includes(String(order.payment_status || '').toLowerCase())
     && Number(order.total) > 0
@@ -115,7 +113,7 @@ function RegularPaymentPanel({ order }) {
     }
   }
 
-  return <section className="my-orders-detail-card my-orders-payment-card"><h3>Payment</h3>{verified ? <><strong>Payment Verified</strong><dl><div><dt>Amount Paid</dt><dd>{formatCurrency(order.total)}</dd></div><div><dt>Payment Status</dt><dd>{formatStatus(order.payment_status)}</dd></div></dl></> : <><strong>Payment Pending</strong><div className="my-orders-amount-due">{formatCurrency(order.total)}</div><span className="my-orders-payment-note">Payment Status: {formatStatus(order.payment_status || 'unpaid')}</span>{eligible ? <button type="button" className="my-orders-pay-button" onClick={handlePayNow} disabled={isCreatingPayment}>{isCreatingPayment ? 'Creating Payment...' : 'Pay Now'}</button> : null}{paymentError ? <p className="my-orders-payment-error" role="alert">{paymentError}</p> : null}</>}</section>
+  return eligible ? <div className="my-orders-detail-payment-action"><button type="button" className="my-orders-pay-button" onClick={handlePayNow} disabled={isCreatingPayment}>{isCreatingPayment ? 'Creating Payment...' : 'Pay Now'}</button>{paymentError ? <p className="my-orders-payment-error" role="alert">{paymentError}</p> : null}</div> : null
 }
 
 function PaymentReturnNotice({ order, paymentReturn }) {
@@ -133,25 +131,68 @@ function PaymentReturnNotice({ order, paymentReturn }) {
   return <section className="my-orders-payment-return" role="status"><strong>Payment received. We're confirming your payment...</strong><p>We’re waiting for payment verification from Xendit.</p></section>
 }
 
-function OrderDetails({ order, onClose, onImageOpen, breakdownError, paymentReturn }) {
+function OrderDetails({ order, onClose, onImageOpen, paymentReturn }) {
+  useLayoutEffect(() => {
+    const root = document.documentElement
+    const body = document.body
+    const { scrollX, scrollY } = window
+    const scrollbarWidth = window.innerWidth - root.clientWidth
+    const previousStyles = []
+    const setStyle = (element, property, value) => {
+      previousStyles.push([element, property, element.style.getPropertyValue(property), element.style.getPropertyPriority(property)])
+      element.style.setProperty(property, value)
+    }
+    const bodyPadding = parseFloat(window.getComputedStyle(body).paddingRight) || 0
+    setStyle(root, 'overflow', 'hidden')
+    setStyle(body, 'overflow', 'hidden')
+    setStyle(body, 'position', 'fixed')
+    setStyle(body, 'top', `-${scrollY}px`)
+    setStyle(body, 'left', `-${scrollX}px`)
+    setStyle(body, 'width', '100%')
+    setStyle(body, 'box-sizing', 'border-box')
+    if (scrollbarWidth > 0) setStyle(body, 'padding-right', `${bodyPadding + scrollbarWidth}px`)
+
+    return () => {
+      previousStyles.reverse().forEach(([element, property, value, priority]) => {
+        if (value) element.style.setProperty(property, value, priority)
+        else element.style.removeProperty(property)
+      })
+      window.scrollTo({ left: scrollX, top: scrollY, behavior: 'instant' })
+    }
+  }, [])
+
   const items = order.order_items || []
   const priceItems = order.price_items || []
   const finalPrice = priceItems.length ? priceItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0) : Number(order.total) || 0
   const downPayment = Number(order.required_down_payment) || finalPrice * 0.5
-  const customizationFields = items.flatMap((item) => getCustomizationFields(item.customization_data).map((field) => ({ ...field, item: item.product_name })))
   const referenceImages = items.flatMap((item) => (Array.isArray(item.customization_data?.reference_images) ? item.customization_data.reference_images : [])).filter((image) => image.signed_url || image.url)
   const isDelivery = String(order.order_method || '').toLowerCase() === 'delivery'
   const address = [order.address, [order.barangay, order.city_municipality].filter(Boolean).join(', '), [order.province, order.postal_code].filter(Boolean).join(' ')].filter(Boolean).join(', ')
   return <div className="my-orders-detail-backdrop" role="presentation" onMouseDown={onClose}><article className="my-orders-detail" role="dialog" aria-modal="true" aria-labelledby="my-orders-detail-title" onMouseDown={(event) => event.stopPropagation()}>
-    <header className="my-orders-detail-header"><div><p>Order Details</p><h2 id="my-orders-detail-title">{order.order_number || 'Order'}</h2><span>{getItemSummary(items)}</span></div><button type="button" onClick={onClose} aria-label="Close order details">×</button></header>
-    <div className="my-orders-detail-scroll"><section className="my-orders-detail-card my-orders-detail-overview"><div><dt>Product</dt><dd>{getItemSummary(items)}</dd></div><div><dt>Preferred Date</dt><dd>{formatDate(order.preferred_date)}</dd></div><div><dt>Method</dt><dd>{formatStatus(order.order_method)}</dd></div><div><dt>Current Status</dt><dd>{formatStatus(order.order_status)}</dd></div></section>
+    <header className="my-orders-detail-header"><div><p>Order ID</p><h2 id="my-orders-detail-title">{order.order_number || 'Order'}</h2></div><button type="button" onClick={onClose} aria-label="Close order details">×</button></header>
+    <div className="my-orders-detail-scroll">
       <section className="my-orders-detail-card"><h3>Order Status</h3><StatusProgress order={order} /></section>
-      <section className="my-orders-detail-card"><h3>Order Details / Customization</h3>{customizationFields.length ? <dl className="my-orders-customization-list">{customizationFields.map((field, index) => <div key={`${field.label}-${index}`}><dt>{field.label}</dt><dd>{field.value}</dd></div>)}</dl> : <p className="my-orders-muted">No additional customization details.</p>}</section>
-      {referenceImages.length ? <section className="my-orders-detail-card"><h3>Reference Images</h3><div className="my-orders-reference-images">{referenceImages.map((image, index) => <button type="button" key={image.path || image.signed_url || index} onClick={() => onImageOpen(image.signed_url || image.url)}><img src={image.signed_url || image.url} alt={image.name || 'Order reference'} /></button>)}</div></section> : null}
-      <section className="my-orders-detail-card"><h3>Price Breakdown</h3>{breakdownError ? <p className="my-orders-muted my-orders-breakdown-error">Unable to load the itemized pricing for this order.</p> : priceItems.length ? <dl className="my-orders-price-list">{priceItems.map((item) => <div key={item.id}><dt>{item.description}</dt><dd>{formatCurrency(item.amount)}</dd></div>)}<div className="is-total"><dt>Final Price</dt><dd>{formatCurrency(finalPrice)}</dd></div><div><dt>Required Down Payment (50%)</dt><dd>{formatCurrency(downPayment)}</dd></div></dl> : <div className="my-orders-price-list"><div className="is-total"><dt>Final Price</dt><dd>{formatCurrency(finalPrice)}</dd></div>{String(order.order_status || '').toLowerCase() === 'pending' ? <p className="my-orders-muted">Itemized pricing will appear after your request is reviewed.</p> : <p className="my-orders-muted">No itemized pricing has been recorded for this order.</p>}</div>}</section>
-      <PaymentReturnNotice order={order} paymentReturn={paymentReturn} />
-      {isCustomOrder(order) ? <PaymentPanel order={order} downPayment={downPayment} /> : <RegularPaymentPanel order={order} />}
-      <section className="my-orders-detail-card"><h3>Fulfillment Details</h3><dl className="my-orders-customization-list"><div><dt>Preferred Date</dt><dd>{formatDate(order.preferred_date)}</dd></div><div><dt>Preferred Time</dt><dd>{formatTime(order.preferred_time)}</dd></div>{isDelivery ? <><div><dt>Delivery Address</dt><dd>{address || 'Not provided'}</dd></div>{order.different_recipient ? <div><dt>Recipient</dt><dd>{order.recipient_name || 'Not provided'}{order.recipient_contact ? ` · ${order.recipient_contact}` : ''}</dd></div> : null}</> : <div><dt>Pickup</dt><dd>Sweet Bakes store pickup</dd></div>}</dl></section>
+      <section className="my-orders-detail-card my-orders-information"><h3>Order Information</h3>
+        <div className="my-orders-detail-products">{items.map((item) => <div className="my-orders-detail-product" key={item.id}>
+          <OrderThumbnail item={item} />
+          <div className="my-orders-detail-product-info">
+            <h4>{item.product_name || 'Custom order'}</h4>
+            <p>{itemDescription(item) || (item.product_type ? formatStatus(item.product_type) : 'Sweet Treats')}</p>
+            <p><strong>Qty:</strong> {item.quantity}</p>
+            <p>{isDelivery ? 'Delivery' : 'Store Pickup'}</p>
+            {getCustomizationFields(item.customization_data).length ? <dl className="my-orders-detail-customization">{getCustomizationFields(item.customization_data).map((field) => <div key={field.label}><dt>{field.label}</dt><dd>{field.value}</dd></div>)}</dl> : null}
+          </div>
+          <div className="my-orders-detail-meta">
+            {order.payment_status ? <span className={`my-orders-detail-paid${isPaymentVerified(order.payment_status) ? '' : ' my-orders-detail-paid--unverified'}`}>{String(order.payment_status).toLowerCase() === 'paid' ? 'Paid' : isPaymentVerified(order.payment_status) && isCustomOrder(order) ? 'Down Payment Verified' : formatStatus(order.payment_status)}</span> : null}
+            <strong className="my-orders-detail-price">{isAwaitingPrice(order) ? 'Awaiting Price' : formatCurrency(items.length === 1 ? finalPrice : item.subtotal ?? Number(item.unit_price) * Number(item.quantity))}</strong>
+          </div>
+        </div>)}</div>
+        {items.length > 1 ? <div className="my-orders-detail-total"><span>Order Total</span><strong className="my-orders-detail-price">{isAwaitingPrice(order) ? 'Awaiting Price' : formatCurrency(finalPrice)}</strong></div> : null}
+        {referenceImages.length ? <div className="my-orders-detail-references"><h4>Reference Images</h4><div className="my-orders-reference-images">{referenceImages.map((image, index) => <button type="button" key={image.path || image.signed_url || index} onClick={() => onImageOpen(image.signed_url || image.url)}><img src={image.signed_url || image.url} alt={image.name || 'Order reference'} /></button>)}</div></div> : null}
+        <PaymentReturnNotice order={order} paymentReturn={paymentReturn} />
+        {isCustomOrder(order) ? <PaymentPanel order={order} downPayment={downPayment} /> : <RegularPaymentPanel order={order} />}
+      </section>
+      <section className="my-orders-detail-card"><h3>Fulfillment Details</h3><dl className="my-orders-detail-fulfillment"><div><dt>Preferred Date</dt><dd>{formatDate(order.preferred_date)}</dd></div><div><dt>Preferred Time</dt><dd>{formatTime(order.preferred_time)}</dd></div><div className="my-orders-detail-wide"><dt>Order Method</dt><dd>{isDelivery ? 'Delivery' : 'Store Pickup'}</dd></div>{isDelivery ? <><div className="my-orders-detail-wide"><dt>Delivery Address</dt><dd>{address || 'Not provided'}</dd></div>{order.different_recipient ? <div className="my-orders-detail-wide"><dt>Recipient</dt><dd>{order.recipient_name || 'Not provided'} {order.recipient_contact || ''}</dd></div> : null}</> : <div className="my-orders-detail-wide"><dt>Pickup Location</dt><dd>Sweet Bakes store pickup</dd></div>}</dl></section>
     </div>
   </article></div>
 }
@@ -162,12 +203,12 @@ function OrderThumbnail({ item }) {
   return <div className="my-orders-thumbnail">{source ? <img src={source} alt="" loading="lazy" onError={() => setFailedSources((current) => [...current, source])} /> : <span aria-hidden="true">SB</span>}</div>
 }
 
-function OrderHistoryCard({ order, onSelect }) {
+function OrderHistoryCard({ order, onSelect, onReview }) {
   const items = getHistoryItems(order)
   return <article className="my-orders-card my-orders-history-card" aria-label={'Order ' + (order.order_number || '')}>
     <header className="my-orders-history-header">
       <span className={'my-orders-status my-orders-status--' + order.order_status}>{historyStatus(order)}</span>
-      <button type="button" className="my-orders-view-details" onClick={() => onSelect(order)} aria-label={'View details for ' + (order.order_number || 'order')}>View Details <span aria-hidden="true">&rarr;</span></button>
+      <div className="my-orders-card-actions">{order.review ? <span className="my-orders-reviewed">Reviewed</span> : null}<button type="button" className="my-orders-view-details" onClick={() => onSelect(order)} aria-label={'View details for ' + (order.order_number || 'order')}>View Details <span aria-hidden="true">&rarr;</span></button></div>
     </header>
     <div className="my-orders-history-body">
       <div className="my-orders-products">{items.length ? items.map((item) => <div className="my-orders-product" key={item.id}>
@@ -181,17 +222,66 @@ function OrderHistoryCard({ order, onSelect }) {
           </div>
         </div>
       </div>) : <div className="my-orders-product-info"><p>Product details unavailable.</p></div>}</div>
-      <strong className="my-orders-product-price" aria-label="Order total">{isAwaitingPrice(order) ? 'Awaiting Price' : formatCurrency(order.total)}</strong>
+      {onReview ? <div className="my-orders-review-column"><strong className="my-orders-product-price" aria-label="Order total">{isAwaitingPrice(order) ? 'Awaiting Price' : formatCurrency(order.total)}</strong><button type="button" className="my-orders-review-button" onClick={() => onReview(order)} aria-label={'Review order ' + (order.order_number || '')}>Review</button></div> : <strong className="my-orders-product-price" aria-label="Order total">{isAwaitingPrice(order) ? 'Awaiting Price' : formatCurrency(order.total)}</strong>}
     </div>
   </article>
 }
 
 function MyOrdersPage({ onNavigate, onCustomerLogout, isCustomerAuthenticated = false }) {
-  const [orders, setOrders] = useState([]); const [selectedOrder, setSelectedOrder] = useState(null); const [breakdownError, setBreakdownError] = useState(''); const [previewImage, setPreviewImage] = useState(''); const [isLoading, setIsLoading] = useState(true); const [error, setError] = useState(''); const [verifiedRegularOrder, setVerifiedRegularOrder] = useState(null); const [paymentReturn, setPaymentReturn] = useState(() => { const params = new URLSearchParams(window.location.search); const payment = params.get('payment'); const orderId = params.get('order'); if (!orderId || !['success', 'cancelled'].includes(payment)) return null; window.history.replaceState(window.history.state, '', '/my-orders'); return { orderId, status: payment === 'success' ? 'checking' : 'cancelled' } })
+  const [orders, setOrders] = useState([]); const [selectedOrder, setSelectedOrder] = useState(null); const [previewImage, setPreviewImage] = useState(''); const [isLoading, setIsLoading] = useState(true); const [error, setError] = useState(''); const [verifiedRegularOrder, setVerifiedRegularOrder] = useState(null); const [paymentReturn, setPaymentReturn] = useState(() => { const params = new URLSearchParams(window.location.search); const payment = params.get('payment'); const orderId = params.get('order'); if (!orderId || !['success', 'cancelled'].includes(payment)) return null; window.history.replaceState(window.history.state, '', '/my-orders'); return { orderId, status: payment === 'success' ? 'checking' : 'cancelled' } })
   const [activeTab, setActiveTab] = useState('All')
+  const [reviewOrder, setReviewOrder] = useState(null)
+  const [reviewMessage, setReviewMessage] = useState('')
+  const handleReviewSubmitted = (review) => {
+    setOrders((current) => current.map((order) => order.id === review.order_id ? { ...order, review } : order))
+    setReviewOrder(null)
+    setReviewMessage('Review submitted.')
+  }
+  const tabCounts = getOrderTabCounts(orders)
   const visibleOrders = orders.filter((order) => matchesOrderTab(order, activeTab))
-  const handleSelectOrder = (order) => { setBreakdownError(''); setSelectedOrder({ ...order, price_items: [] }) }
-  useEffect(() => { let isMounted = true; async function loadOrders() { try { setIsLoading(true); setError(''); const { data: sessionData, error: sessionError } = await supabase.auth.getSession(); const user = sessionData?.session?.user || null; if (sessionError || !user) { onNavigate?.('/login?redirect=/my-orders', { replace: true }); return }; const { data: profile, error: profileError } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle(); if (profileError) throw profileError; if (profile?.role === 'admin') { onNavigate?.(ADMIN_DASHBOARD_ROUTE, { replace: true }); return }; if (profile?.role !== 'customer') { await supabase.auth.signOut(); onNavigate?.('/login', { replace: true }); return }
+  const handleSelectOrder = (order) => { setSelectedOrder({ ...order, price_items: [] }) }
+  useEffect(() => {
+    let isMounted = true
+    let channel = null
+    let customerId = null
+    let refreshTimer = null
+    let loading = false
+    let refreshQueued = false
+    let initialLoad = true
+    const scheduleRefresh = () => {
+      if (!isMounted) return
+      if (loading) { refreshQueued = true; return }
+      window.clearTimeout(refreshTimer)
+      refreshTimer = window.setTimeout(() => { refreshTimer = null; loadOrders() }, 150)
+    }
+    const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (customerId && session?.user?.id !== customerId) {
+        isMounted = false
+        window.clearTimeout(refreshTimer)
+        if (channel) supabase.removeChannel(channel)
+        channel = null
+        setOrders([])
+      }
+    })
+    async function loadOrders() {
+      if (!isMounted) return
+      if (loading) { refreshQueued = true; return }
+      loading = true
+      try { if (initialLoad) setIsLoading(true); setError(''); const { data: sessionData, error: sessionError } = await supabase.auth.getSession(); const user = sessionData?.session?.user || null; if (sessionError || !user) { onNavigate?.('/login?redirect=/my-orders', { replace: true }); return }; const { data: profile, error: profileError } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle(); if (profileError) throw profileError; if (profile?.role === 'admin') { onNavigate?.(ADMIN_DASHBOARD_ROUTE, { replace: true }); return }; if (profile?.role !== 'customer') { await supabase.auth.signOut(); onNavigate?.('/login', { replace: true }); return }
+      if (!isMounted) return
+      if (!channel) {
+        customerId = user.id
+        await supabase.realtime.setAuth(sessionData.session.access_token)
+        if (!isMounted) return
+        channel = supabase.channel('customer-orders:' + user.id, { config: { private: true } })
+          .on('broadcast', { event: 'orders_changed' }, scheduleRefresh)
+          .subscribe((status) => {
+            if (status === 'SUBSCRIBED') scheduleRefresh()
+            if (isMounted && ['CHANNEL_ERROR', 'TIMED_OUT'].includes(status)) {
+              console.error('[MY ORDERS] Realtime connection unavailable:', status)
+            }
+          })
+      }
       const { data: orderRows, error: ordersError } = await supabase.from('orders').select(ORDER_SELECT).eq('customer_id', user.id).order('created_at', { ascending: false }); if (ordersError) throw ordersError; const orderIds = (orderRows || []).map((order) => order.id).filter(Boolean); let items = []
       if (orderIds.length) { const itemsResult = await supabase.from('order_items').select(ORDER_ITEM_SELECT).in('order_id', orderIds); if (itemsResult.error) throw itemsResult.error; items = itemsResult.data || [] }
       items = await attachCatalogImages(items)
@@ -206,8 +296,26 @@ function MyOrdersPage({ onNavigate, onCustomerLogout, isCustomerAuthenticated = 
           customerId: order.customer_id,
         })
       })
-      if (isMounted) setOrders(nextOrders)
-    } catch (loadError) { console.error('[MY ORDERS] load error:', loadError); if (isMounted) setError('Unable to load your orders. Please try again.') } finally { if (isMounted) setIsLoading(false) } } loadOrders(); return () => { isMounted = false } }, [onNavigate])
+      const reviews = await fetchCustomerReviews(user.id)
+      if (isMounted) setOrders((current) => {
+        // A refresh started before submission must not erase a just-saved review.
+        const saved = new Map(current.filter((order) => order.review).map((order) => [order.id, order.review]))
+        return attachOrderReviews(nextOrders, reviews).map((order) => ({ ...order, review: order.review || saved.get(order.id) || null }))
+      })
+    } catch (loadError) { console.error('[MY ORDERS] load error:', loadError); if (isMounted) setError('Unable to load your orders. Please try again.') } finally {
+      loading = false
+      initialLoad = false
+      if (isMounted) setIsLoading(false)
+      if (refreshQueued) { refreshQueued = false; scheduleRefresh() }
+    } }
+    loadOrders()
+    return () => {
+      isMounted = false
+      window.clearTimeout(refreshTimer)
+      authSubscription.unsubscribe()
+      if (channel) supabase.removeChannel(channel)
+    }
+  }, [onNavigate])
   useEffect(() => {
     if (!paymentReturn?.orderId || !orders.length) return undefined
     const returnedOrder = orders.find((order) => order.id === paymentReturn.orderId)
@@ -251,19 +359,18 @@ function MyOrdersPage({ onNavigate, onCustomerLogout, isCustomerAuthenticated = 
       if (!isMounted) return
       if (breakdownErrorResponse) {
         console.error('[MY ORDERS BREAKDOWN] fetch error:', breakdownErrorResponse)
-        setBreakdownError(breakdownErrorResponse.message || 'Unable to load price breakdown.')
         return
       }
       setSelectedOrder((current) => current?.id === selectedOrder.id ? { ...current, price_items: breakdownItems || [] } : current)
     })
     return () => { isMounted = false }
   }, [selectedOrder?.id])
-  return <div className="my-orders-page"><SiteTopbar forceScrolled homeHref="/" locationHref="/#location" contactHref="#contact" onNavigate={onNavigate} onCustomerLogout={onCustomerLogout} isCustomerAuthenticated={isCustomerAuthenticated} /><main className="my-orders-content"><section className="my-orders-shell" aria-labelledby="my-orders-title"><div className="my-orders-heading"><p className="my-orders-eyebrow">Sweet Bakes Account</p><h1 id="my-orders-title">My Orders</h1></div><nav className="my-orders-tabs" aria-label="Filter orders by status">{ORDER_TABS.map((tab) => <button type="button" key={tab} className={activeTab === tab ? 'is-active' : ''} aria-pressed={activeTab === tab} aria-controls="my-orders-results" onClick={() => setActiveTab(tab)}>{tab}</button>)}</nav>
-      <div id="my-orders-results" aria-live="polite" aria-busy={isLoading}>
+  return <div className="my-orders-page"><SiteTopbar forceScrolled homeHref="/" locationHref="/#location" contactHref="#contact" onNavigate={onNavigate} onCustomerLogout={onCustomerLogout} isCustomerAuthenticated={isCustomerAuthenticated} /><main className="my-orders-content"><section className="my-orders-shell" aria-labelledby="my-orders-title"><div className="my-orders-heading"><p className="my-orders-eyebrow">Sweet Bakes Account</p><h1 id="my-orders-title">My Orders</h1></div><nav className="my-orders-tabs" aria-label="Filter orders by status">{ORDER_TABS.map((tab) => <button type="button" key={tab} className={activeTab === tab ? 'is-active' : ''} aria-pressed={activeTab === tab} aria-controls="my-orders-results" onClick={() => setActiveTab(tab)}>{tab}<span className="my-orders-tab-count">{tabCounts[tab]}</span></button>)}</nav>
+      {reviewMessage ? <p role="status" className="my-orders-review-success">{reviewMessage}</p> : null}<div id="my-orders-results" aria-live="polite" aria-busy={isLoading}>
         {isLoading ? <div className="my-orders-card my-orders-state">Loading orders...</div> : error ? <div className="my-orders-card my-orders-state my-orders-state--error" role="alert">{error}</div> : visibleOrders.length === 0 ? <div className="my-orders-card my-orders-empty"><p>{EMPTY_MESSAGES[activeTab]}</p></div> : <>
-          {activeTab === 'To Receive' ? <p className="my-orders-tab-note">Ready for delivery or store pickup.</p> : null}
-          <div className="my-orders-list">{visibleOrders.map((order) => <OrderHistoryCard key={order.id} order={order} onSelect={handleSelectOrder} />)}</div>
+          {activeTab === 'To Receive' ? <p className="my-orders-tab-note">Ready for store pickup.</p> : null}
+          <div className="my-orders-list">{visibleOrders.map((order) => <OrderHistoryCard key={order.id} order={order} onSelect={handleSelectOrder} onReview={activeTab === 'To Review' ? setReviewOrder : undefined} />)}</div>
         </>}
-      </div></section></main><SiteFooter />{selectedOrder ? <OrderDetails order={selectedOrder} paymentReturn={paymentReturn} breakdownError={breakdownError} onClose={() => setSelectedOrder(null)} onImageOpen={setPreviewImage} /> : null}{previewImage ? <div className="my-orders-image-backdrop" role="presentation" onClick={() => setPreviewImage('')}><img src={previewImage} alt="Larger order reference" /></div> : null}{verifiedRegularOrder ? <OrderRequestSuccessModal request={{ orderId: verifiedRegularOrder.id }} title="Payment Successful" description="Your payment has been received successfully. Your order has been placed and is now being processed." primaryLabel="View Order" onClose={() => setVerifiedRegularOrder(null)} onPrimary={() => setVerifiedRegularOrder(null)} /> : null}</div>
+      </div></section></main><SiteFooter />{reviewOrder ? <OrderReviewModal key={reviewOrder.id} order={reviewOrder} onSubmitted={handleReviewSubmitted} onClose={() => setReviewOrder(null)} /> : null}{selectedOrder ? <OrderDetails order={selectedOrder} paymentReturn={paymentReturn} onClose={() => setSelectedOrder(null)} onImageOpen={setPreviewImage} /> : null}{previewImage ? <div className="my-orders-image-backdrop" role="presentation" onClick={() => setPreviewImage('')}><img src={previewImage} alt="Larger order reference" /></div> : null}{verifiedRegularOrder ? <OrderRequestSuccessModal request={{ orderId: verifiedRegularOrder.id }} title="Payment Successful" description="Your payment has been received successfully. Your order has been placed and is now being processed." primaryLabel="View Order" onClose={() => setVerifiedRegularOrder(null)} onPrimary={() => setVerifiedRegularOrder(null)} /> : null}</div>
 }
 export default MyOrdersPage

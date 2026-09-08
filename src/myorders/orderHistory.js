@@ -1,3 +1,5 @@
+import { getOrderProgressLabel } from '../services/orderStatusDisplay.js'
+
 const normalize = (value) => String(value || '').trim().toLowerCase()
 // Bind at render time so payment refreshes also use the latest parent number.
 export function getHistoryItems(order) {
@@ -6,13 +8,14 @@ export function getHistoryItems(order) {
     orderNumber: order.order_number ?? null,
   }))
 }
-export const ORDER_TABS = ['All', 'To Pay', 'To Ship', 'To Receive', 'To Review']
+export const ORDER_TABS = ['All', 'To Pay', 'To Process', 'To Ship', 'To Receive', 'To Review']
 export const EMPTY_MESSAGES = {
   All: 'No orders yet. Your Sweet Bakes orders will appear here.',
   'To Pay': 'No orders requiring payment.',
-  'To Ship': 'No orders awaiting preparation.',
-  'To Receive': 'No orders ready for delivery or store pickup.',
-  'To Review': 'Order reviews are not available yet. Completed orders appear in All.',
+  'To Process': 'No paid orders awaiting processing or being prepared.',
+  'To Ship': 'No orders ready for delivery.',
+  'To Receive': 'No orders ready for store pickup.',
+  'To Review': 'No orders to review yet.',
 }
 
 export const isCustomHistoryOrder = (order) => (order.order_items || []).some((item) =>
@@ -32,14 +35,32 @@ export function matchesOrderTab(order, tab) {
   const status = normalize(order.order_status)
   if (tab === 'All') return true
   if (tab === 'To Pay') return requiresPayment(order)
-  if (tab === 'To Ship') return ['pending', 'confirmed', 'preparing'].includes(status) && !requiresPayment(order)
-  // The canonical schema has only a shared ready state; it cannot prove dispatch.
-  if (tab === 'To Receive') return status === 'ready'
-  // There is no persisted review/eligibility model. Never assume completed means unreviewed.
+  if (tab === 'To Process') {
+    if (requiresPayment(order) || normalize(order.payment_status) === 'refunded') return false
+    return ['confirmed', 'preparing'].includes(status)
+      || (status === 'pending' && normalize(order.payment_status) === 'paid')
+  }
+  // The schema records readiness and method, but has no dispatched status.
+  if (tab === 'To Ship') return status === 'ready' && normalize(order.order_method) === 'delivery'
+  if (tab === 'To Receive') return status === 'ready' && normalize(order.order_method) === 'pickup'
+  if (tab === 'To Review') return status === 'completed' && normalize(order.payment_status) === 'paid'
+    && Boolean(order.customer_id) && !order.review
   return false
 }
 
+export function attachOrderReviews(orders, reviews) {
+  const byOrder = new Map(reviews.map((review) => [review.order_id, review]))
+  return orders.map((order) => ({ ...order, review: byOrder.get(order.id) || null }))
+}
+
+export function getOrderTabCounts(orders) {
+  return Object.fromEntries(ORDER_TABS.map((tab) => [tab,
+    orders.reduce((count, order) => count + Number(matchesOrderTab(order, tab)), 0),
+  ]))
+}
+
 export function historyStatus(order) {
+  if (!isCustomHistoryOrder(order)) return getOrderProgressLabel(order)
   const status = normalize(order.order_status)
   if (status === 'ready') return normalize(order.order_method) === 'delivery' ? 'Ready for Delivery' : 'Ready for Pickup'
   return (status || 'pending').replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())

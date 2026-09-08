@@ -9,6 +9,8 @@ html:has(.my-orders-page), body:has(.my-orders-page) { background:#ffffff; }
 .my-orders-tabs button { flex-shrink:0; padding:14px 2px; border:0; border-bottom:2px solid transparent; background:transparent; color:#756b77; font:inherit; font-size:14px; cursor:pointer; white-space:nowrap; }
 .my-orders-tabs button.is-active { color:#8052a9; border-bottom-color:#8d5fba; font-weight:700; }
 .my-orders-tabs button:hover { color:#8052a9; }
+.my-orders-tab-count { display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; box-sizing:border-box; margin-left:7px; padding:0 5px; border-radius:9px; background:#f0edf1; color:#756b77; font-size:10px; font-weight:600; line-height:1; vertical-align:middle; }
+.my-orders-tabs button.is-active .my-orders-tab-count { background:#eee3f7; color:#8052a9; }
 .my-orders-tabs button:focus-visible,.my-orders-view-details:focus-visible { outline:2px solid #8d5fba; outline-offset:-2px; border-radius:2px; }
 .my-orders-list { display:grid; gap:16px; }
 .my-orders-card { box-sizing:border-box; width:100%; border:1px solid #e7dfe4; border-radius:8px; background:#fff; padding:20px 24px; }
@@ -60,3 +62,64 @@ html:has(.my-orders-page), body:has(.my-orders-page) { background:#ffffff; }
 @media(max-width:700px){.my-orders-content{padding:110px 18px 40px}.my-orders-detail-header{padding:22px 18px 16px}.my-orders-detail-scroll{padding:16px 18px 26px}.my-orders-progress{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:16px}.my-orders-progress-step:nth-child(3)::after{display:none}.my-orders-detail-overview{grid-template-columns:1fr}}
 .my-orders-payment-return{display:flex;align-items:flex-start;gap:12px;padding:16px;border:1px solid #eadfd8;border-radius:12px;background:#fffaf6;color:#49352d}.my-orders-payment-return strong{display:block;font-size:14px}.my-orders-payment-return p{margin:5px 0 0;color:#806f67;font-size:12px;line-height:1.5}.my-orders-payment-return span{display:block;margin-top:5px;color:#806f67;font-size:12px}.my-orders-payment-return small{display:block;margin-top:8px;color:#49352d;font-size:11px;font-weight:800}.my-orders-payment-return--success{border-color:#cfe2d4;background:#f5fbf6}.my-orders-payment-return--success strong{color:#2f6b45}.my-orders-payment-return--success p{margin-top:4px;color:#2f6b45;font-weight:800}.my-orders-payment-return-icon{display:grid!important;place-items:center;width:24px;height:24px;margin:0!important;border-radius:50%;background:#3f8a59;color:#fff!important;font-size:15px!important;font-weight:800}
 .my-orders-pay-button{margin-top:14px;padding:10px 16px;border:0;border-radius:8px;background:#8d5fba;color:#fff;font:inherit;font-size:13px;font-weight:800;cursor:pointer}.my-orders-pay-button:disabled{cursor:wait;opacity:.65}.my-orders-payment-error{margin:10px 0 0;color:#b43b4a;font-size:12px}
+/* Customer details only: keep information left-aligned at every viewport. */
+.my-orders-detail { text-align:left; overflow:hidden; }
+.my-orders-detail-header { flex-shrink:0; }
+.my-orders-detail-header>div { min-width:0; text-align:left; }
+.my-orders-detail-header h2 { overflow-wrap:anywhere; }
+.my-orders-detail-header>button { flex-shrink:0; }
+.my-orders-detail-scroll { align-content:start; min-height:0; flex:1; overscroll-behavior:contain; }
+.my-orders-detail-card,.my-orders-detail-card h3 { text-align:left; }
+.my-orders-detail-products { display:grid; gap:20px; }
+.my-orders-detail-product { display:grid; grid-template-columns:88px minmax(0,1fr) auto; align-items:start; gap:16px; }
+.my-orders-detail-product+.my-orders-detail-product { padding-top:20px; border-top:1px solid #f0e9e5; }
+.my-orders-detail-product .my-orders-thumbnail { width:88px; height:88px; background:#f4f2f0; }
+.my-orders-detail-product .my-orders-thumbnail img { object-fit:cover; }
+.my-orders-detail-product-info { min-width:0; text-align:left; }
+.my-orders-detail-product-info h4 { margin:0 0 5px; color:#2f2420; font-size:17px; font-weight:700; overflow-wrap:anywhere; }
+.my-orders-detail-product-info p { margin:3px 0; color:#827680; font-size:12px; line-height:1.5; overflow-wrap:anywhere; }
+.my-orders-detail-product-info p strong { font-weight:600; }
+.my-orders-detail-price { justify-self:end; max-width:130px; text-align:right; color:#2f2420; font-size:16px; line-height:1.4; }
+.my-orders-detail-customization,.my-orders-detail-fulfillment { display:grid; gap:14px; margin:14px 0 0; text-align:left; }
+.my-orders-detail-customization dt,.my-orders-detail-fulfillment dt { margin:0 0 4px; color:#8b7a73; font-size:11px; font-weight:600; text-align:left; }
+.my-orders-detail-customization dd,.my-orders-detail-fulfillment dd { margin:0; color:#362a26; font-size:13px; font-weight:400; text-align:left; white-space:pre-wrap; overflow-wrap:anywhere; }
+.my-orders-detail-fulfillment { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.my-orders-detail-wide { grid-column:1/-1; }
+.my-orders-detail-total { display:flex; justify-content:space-between; gap:16px; margin-top:18px; padding-top:14px; border-top:1px solid #f0e9e5; font-size:13px; }
+.my-orders-detail-references { margin-top:18px; }
+.my-orders-detail-references h4 { margin:0 0 10px; font-size:12px; }
+.my-orders-detail-meta { display:flex; flex-direction:column; align-items:flex-end; justify-self:end; gap:6px; max-width:130px; text-align:right; }
+.my-orders-detail-paid { display:inline-block; padding:4px 8px; border-radius:4px; background:#eff7f1; color:#48765b; font-size:11px; font-weight:600; }
+.my-orders-detail-paid--unverified { background:#f5effa; color:#8052a9; }
+.my-orders-information .my-orders-payment-return { margin-top:14px; padding:0; border:0; background:transparent; text-align:left; }
+@media(max-width:540px) {
+  .my-orders-detail-product { grid-template-columns:80px minmax(0,1fr); gap:12px; }
+  .my-orders-detail-product .my-orders-thumbnail { width:80px; height:80px; }
+  .my-orders-detail-meta { grid-column:2; }
+  .my-orders-detail-card { padding:14px; }
+}
+.my-orders-card-actions { display:flex; align-items:center; gap:16px; }
+.my-orders-review-column { display:flex; flex-direction:column; align-items:flex-end; gap:12px; min-width:0; }
+.my-orders-review-column .my-orders-product-price { text-align:right; }
+/* Match LandingPage.css .treats-add-to-cart outline and hover styles. */
+.my-orders-review-button { width:auto; height:40px; padding:0 18px; border:1px solid #3a2e2e; border-radius:2px; background:transparent; color:#3a2e2e; font-family:'Poppins',sans-serif; font-size:12px; font-weight:600; letter-spacing:1.2px; text-transform:uppercase; cursor:pointer; transition:background-color .2s ease,color .2s ease; }
+.my-orders-review-button:hover { background:#3a2e2e; color:#fff; }
+.my-orders-review-button:focus-visible { outline:2px solid #3a2e2e; outline-offset:3px; }
+.my-orders-review-modal { overscroll-behavior:contain; }
+.my-orders-review-modal { width:min(440px,calc(100vw - 40px)); box-sizing:border-box; max-height:calc(100dvh - 40px); overflow:auto; padding:26px; border:1px solid #e7dfe4; border-radius:12px; color:#2f2420; background:#fff; text-align:left; box-shadow:0 16px 60px #2f242033; }
+.my-orders-review-modal::backdrop { background:#2f242066; }
+.my-orders-review-modal h2 { margin:0; font-size:22px; }
+.my-orders-review-number,.my-orders-review-note { color:#827680; font-size:12px; line-height:1.5; }
+.my-orders-review-rating { border:0; padding:0; margin:20px 0; }
+.my-orders-review-rating legend,.my-orders-review-comment { display:block; margin-bottom:8px; font-size:13px; font-weight:600; }
+.my-orders-review-rating label { position:relative; display:inline-block; cursor:pointer; }
+.my-orders-review-rating input { position:absolute; opacity:0; width:100%; height:100%; margin:0; cursor:pointer; }
+.my-orders-review-rating span { display:block; padding:2px 5px; color:#8d5fba; font-size:32px; line-height:1.2; }
+.my-orders-review-rating input:focus-visible+span { outline:2px solid #8d5fba; border-radius:4px; }
+.my-orders-review-modal textarea { width:100%; box-sizing:border-box; resize:vertical; border:1px solid #dcd2e2; border-radius:6px; padding:10px; font:inherit; font-size:14px; }
+.my-orders-review-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
+.my-orders-review-actions button { padding:9px 14px; border:1px solid #dcd2e2; border-radius:6px; background:#fff; color:#8052a9; font:inherit; font-size:13px; cursor:pointer; }
+.my-orders-review-actions button:disabled { background:#eee3f7; color:#8b7a95; cursor:not-allowed; }
+.my-orders-reviewed { color:#48765b; font-size:11px; font-weight:600; }
+.my-orders-review-success { margin:0; color:#48765b; font-size:14px; }
+.my-orders-review-actions button:last-child:not(:disabled) { background:#8d5fba; border-color:#8d5fba; color:#fff; }
