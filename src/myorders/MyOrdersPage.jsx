@@ -5,7 +5,7 @@ import { getOrderProgressStage, getOrderProgressStages, getOrderProgressLabel, i
 import { supabase } from '../lib/supabase.js'
 import { clearCart, removeCartQuantity } from '../cartStore.js'
 import PaymentSuccessModal from '../components/PaymentSuccessModal.jsx'
-import { CART_PAYMENT_RETURN_STORAGE_KEY, loadConfirmedItems } from '../cartpage/paymentConfirmation.js'
+import { CART_PAYMENT_RETURN_STORAGE_KEY, loadConfirmedItems, logPaymentReturn, shouldConsumePaymentReturn } from '../cartpage/paymentConfirmation.js'
 import { fetchCustomerReviews } from '../services/orderReviewService.js'
 import OrderReviewModal from './OrderReviewModal.jsx'
 import { ORDER_TABS, EMPTY_MESSAGES, attachOrderReviews, getOrderTabCounts, matchesOrderTab, isAwaitingPrice, historyStatus, itemDescription, referenceImages, getHistoryItems } from './orderHistory.js'
@@ -231,12 +231,12 @@ function OrderHistoryCard({ order, onSelect, onReview }) {
 function MyOrdersPage({ onNavigate, onCustomerLogout, isCustomerAuthenticated = false }) {
   const [orders, setOrders] = useState([]); const [selectedOrder, setSelectedOrder] = useState(null); const [previewImage, setPreviewImage] = useState(''); const [isLoading, setIsLoading] = useState(true); const [error, setError] = useState(''); const [verifiedRegularOrder, setVerifiedRegularOrder] = useState(null); const [paymentReturn, setPaymentReturn] = useState(() => { const params = new URLSearchParams(window.location.search); const payment = params.get('payment'); const orderId = params.get('order'); if (!orderId || !['success', 'cancelled'].includes(payment)) return null; return { orderId, status: payment === 'success' ? 'checking' : 'cancelled' } })
   useEffect(() => {
-    if (!paymentReturn) return
+    if (!paymentReturn || !shouldConsumePaymentReturn(paymentReturn.status)) return
     const url = new URL(window.location.href)
     url.searchParams.delete('payment')
     url.searchParams.delete('order')
     window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash)
-    if (['cancelled', 'timeout'].includes(paymentReturn.status)) {
+    if (paymentReturn.status === 'cancelled') {
       try {
         const receipt = JSON.parse(window.localStorage.getItem(CART_PAYMENT_RETURN_STORAGE_KEY) || 'null')
         if (receipt?.orderId === paymentReturn.orderId) window.localStorage.removeItem(CART_PAYMENT_RETURN_STORAGE_KEY)
@@ -339,6 +339,8 @@ function MyOrdersPage({ onNavigate, onCustomerLogout, isCustomerAuthenticated = 
   }, [orders, paymentReturn?.orderId, paymentReturn?.status, selectedOrder?.id])
   useEffect(() => {
     if (!paymentReturn?.orderId || paymentReturn.status !== 'checking') return undefined
+    logPaymentReturn('detected success URL', { isCustomerAuthenticated: true })
+    logPaymentReturn('verification started', { phase: 'owned-order' })
     let isMounted = true
     const wait = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds))
     async function refreshPaymentStatus() {
@@ -348,20 +350,22 @@ function MyOrdersPage({ onNavigate, onCustomerLogout, isCustomerAuthenticated = 
         const userId = sessionData?.session?.user?.id
         if (!userId) break
         const { data: freshOrder, error: refreshError } = await supabase.from('orders').select(ORDER_SELECT).eq('id', paymentReturn.orderId).eq('customer_id', userId).maybeSingle()
-        if (refreshError) { console.error('[MY ORDERS PAYMENT REFRESH]', refreshError); continue }
+        logPaymentReturn('verification result', { attempt: attempt + 1, phase: 'owned-order', outcome: refreshError ? 'request-error' : freshOrder ? 'response' : 'not-found', paymentStatus: freshOrder?.payment_status })
+        if (refreshError) { continue }
         if (!isMounted) return
         if (!freshOrder) break
         setOrders((current) => current.map((order) => order.id === freshOrder.id ? { ...order, ...freshOrder } : order))
         setSelectedOrder((current) => current?.id === freshOrder.id ? { ...current, ...freshOrder } : current)
         if (isPaymentVerified(freshOrder.payment_status)) {
           let confirmedItems
-          try { confirmedItems = await loadConfirmedItems(supabase, freshOrder.id) } catch { continue }
+          try { confirmedItems = await loadConfirmedItems(supabase, freshOrder.id) } catch { logPaymentReturn('verification result', { phase: 'details', outcome: 'items-unavailable' }); continue }
           const verifiedOrder = { ...freshOrder, order_items: await attachCatalogImages(confirmedItems) }
           if (!isMounted) return
           if (isCustomOrder(verifiedOrder)) removePurchasedCartItems(verifiedOrder)
           else {
             let receipt = null
             try { receipt = JSON.parse(window.localStorage.getItem(CART_PAYMENT_RETURN_STORAGE_KEY) || 'null') } catch { /* Invalid context is not payment proof. */ }
+            logPaymentReturn('verification result', { phase: 'context', contextFound: receipt?.orderId === freshOrder.id, hasGuestEmail: Boolean(receipt?.guestEmail) })
             if (receipt?.orderId === freshOrder.id && !receipt.guestEmail) {
               clearCart()
               window.localStorage.removeItem(CART_PAYMENT_RETURN_STORAGE_KEY)
@@ -376,9 +380,9 @@ function MyOrdersPage({ onNavigate, onCustomerLogout, isCustomerAuthenticated = 
           return
         }
       }
-      if (isMounted) setPaymentReturn((current) => current ? { ...current, status: 'timeout' } : current)
+      if (isMounted) { logPaymentReturn('verification timeout', { phase: 'owned-order' }); setPaymentReturn((current) => current ? { ...current, status: 'timeout' } : current) }
     }
-    refreshPaymentStatus().catch(() => { if (isMounted) setPaymentReturn((current) => current ? { ...current, status: 'timeout' } : current) })
+    refreshPaymentStatus().catch(() => { if (isMounted) { logPaymentReturn('verification timeout', { phase: 'owned-order', outcome: 'request-exception' }); setPaymentReturn((current) => current ? { ...current, status: 'timeout' } : current) } })
     return () => { isMounted = false }
   }, [paymentReturn?.orderId, paymentReturn?.status])
   useEffect(() => {

@@ -20,7 +20,7 @@ import { supabase } from '../lib/supabase.js'
 import { getCheckoutSession, reusableCartOrder, getCartOrderReference, assertCartOrderReference } from './cartOrderOwnership.js'
 import { fetchAuthenticatedCustomerProfile } from '../services/customerProfileService.js'
 import PaymentSuccessModal from '../components/PaymentSuccessModal.jsx'
-import { CART_PAYMENT_RETURN_STORAGE_KEY, loadGuestConfirmation } from './paymentConfirmation.js'
+import { CART_PAYMENT_RETURN_STORAGE_KEY, loadGuestConfirmation, logPaymentReturn, savePaymentReturnContext, shouldConsumePaymentReturn } from './paymentConfirmation.js'
 import chocolateCakeImage from '../assets/othersweettreats/regular_chocolate.jpg'
 import redVelvetCakeImage from '../assets/othersweettreats/regular_redvelvet.png'
 import cheesecakeImage from '../assets/othersweettreats/halfordozen_cheesecake.png'
@@ -208,7 +208,12 @@ function CartPage({
     : 'Available times are temporarily unavailable. Please try again shortly.'
 
   useEffect(() => {
-    if (isCustomerAuthenticated || guestPaymentStatus !== 'success') return undefined
+    if (guestPaymentStatus !== 'success') return undefined
+    logPaymentReturn('detected success URL', { isCustomerAuthenticated })
+    if (isCustomerAuthenticated) {
+      logPaymentReturn('verification result', { phase: 'context', outcome: 'guest-poll-skipped-authenticated' })
+      return undefined
+    }
 
     let receipt = null
     try {
@@ -217,11 +222,13 @@ function CartPage({
       receipt = null
     }
 
+    logPaymentReturn('verification result', { phase: 'context', contextFound: Boolean(receipt?.orderId), hasGuestEmail: Boolean(receipt?.guestEmail) })
     if (!receipt?.orderId || !receipt?.guestEmail) {
       const timeoutId = window.setTimeout(() => setGuestPaymentTimedOut(true), 0)
       return () => window.clearTimeout(timeoutId)
     }
 
+    logPaymentReturn('verification started', { phase: 'guest-status' })
     let isMounted = true
     let attempts = 0
     let timeoutId = null
@@ -232,6 +239,7 @@ function CartPage({
       })
 
       if (!isMounted) return
+      logPaymentReturn('verification result', { attempt: attempts, phase: 'guest-status', outcome: error ? 'request-error' : 'response', httpStatus: error?.context?.status, paymentStatus: data?.paymentStatus })
       if (!error && ['paid', 'verified', 'payment_verified'].includes(String(data?.paymentStatus || '').toLowerCase())) {
         const order = await loadGuestConfirmation(supabase, receipt, data)
         if (!isMounted) return
@@ -246,17 +254,18 @@ function CartPage({
       }
 
       if (attempts >= 8) {
+        logPaymentReturn('verification timeout', { attempt: attempts })
         setGuestPaymentTimedOut(true)
         return
       }
 
       timeoutId = window.setTimeout(() => {
-        pollPaymentStatus().catch(() => { if (isMounted) setGuestPaymentTimedOut(true) })
+        pollPaymentStatus().catch(() => { if (isMounted) { logPaymentReturn('verification timeout', { attempt: attempts, outcome: 'request-exception' }); setGuestPaymentTimedOut(true) } })
       }, 1500)
     }
 
     pollPaymentStatus().catch(() => {
-      if (isMounted) setGuestPaymentTimedOut(true)
+      if (isMounted) { logPaymentReturn('verification timeout', { attempt: attempts, outcome: 'request-exception' }); setGuestPaymentTimedOut(true) }
     })
 
     return () => {
@@ -266,20 +275,16 @@ function CartPage({
   }, [guestPaymentStatus, isCustomerAuthenticated])
 
   useEffect(() => {
-    if (
-      guestPaymentStatus !== 'cancelled' &&
-      !guestPaymentVerified &&
-      !guestPaymentTimedOut
-    ) return
+    if (!shouldConsumePaymentReturn(guestPaymentVerified ? 'verified' : guestPaymentStatus)) return
 
-    if (guestPaymentStatus === 'cancelled' || guestPaymentTimedOut) {
+    if (guestPaymentStatus === 'cancelled') {
       window.localStorage.removeItem(CART_PAYMENT_RETURN_STORAGE_KEY)
     }
 
     const url = new URL(window.location.href)
     url.searchParams.delete('payment')
     window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
-  }, [guestPaymentStatus, guestPaymentTimedOut, guestPaymentVerified])
+  }, [guestPaymentStatus, guestPaymentVerified])
 
   useEffect(() => {
     if (!isCustomerAuthenticated) return undefined
@@ -668,13 +673,10 @@ function CartPage({
         throw new Error('Payment service returned no checkout URL.')
       }
 
-      window.localStorage.setItem(
-        CART_PAYMENT_RETURN_STORAGE_KEY,
-        JSON.stringify({
-          orderId,
-          ...(session ? {} : { guestEmail: customerInfo.email.trim() }),
-        }),
-      )
+      savePaymentReturnContext(window.localStorage, {
+        orderId,
+        ...(session ? {} : { guestEmail: customerInfo.email.trim() }),
+      })
 
       window.location.assign(paymentData.paymentUrl)
     } catch (error) {

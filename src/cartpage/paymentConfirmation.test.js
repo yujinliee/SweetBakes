@@ -1,10 +1,29 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { isVerifiedPayment, loadGuestConfirmation, loadConfirmedItems } from './paymentConfirmation.js'
+import { CART_PAYMENT_RETURN_STORAGE_KEY, isVerifiedPayment, loadGuestConfirmation, loadConfirmedItems, savePaymentReturnContext, shouldConsumePaymentReturn } from './paymentConfirmation.js'
 
 const receipt = { orderId: 'order-1', guestEmail: 'Guest@Example.com' }
 const status = { orderId: 'order-1', orderNumber: 'SB-1', paymentStatus: 'paid' }
 const order = { order_number: 'SB-1', payment_status: 'paid', total: 333, order_items: [{ product_name: 'Flan', quantity: 2, unit_price: 120, subtotal: 240 }, { product_name: 'Puto', quantity: 1, unit_price: 93, subtotal: 93 }] }
+
+test('save-before-redirect writes and reads back only the existing minimum context', () => {
+  const values = new Map()
+  const storage = { setItem: (key, value) => values.set(key, value), getItem: (key) => values.get(key) }
+  savePaymentReturnContext(storage, { ...receipt, total: 999, token: 'must-not-be-saved' })
+  assert.deepEqual(JSON.parse(values.get(CART_PAYMENT_RETURN_STORAGE_KEY)), receipt)
+  savePaymentReturnContext(storage, { orderId: receipt.orderId })
+  assert.deepEqual(JSON.parse(values.get(CART_PAYMENT_RETURN_STORAGE_KEY)), { orderId: receipt.orderId })
+})
+
+test('storage failure prevents the save-before-redirect operation from succeeding', () => {
+  assert.throws(() => savePaymentReturnContext({ setItem() {}, getItem() { return null } }, receipt), /Unable to retain/)
+  assert.throws(() => savePaymentReturnContext({ setItem() { throw new Error('Storage denied') } }, receipt), /Storage denied/)
+})
+
+test('timeout and checking preserve return context; only verified or explicit cancel consumes it', () => {
+  for (const state of ['checking', 'success', 'timeout', 'failed', undefined]) assert.equal(shouldConsumePaymentReturn(state), false)
+  for (const state of ['verified', 'cancelled']) assert.equal(shouldConsumePaymentReturn(state), true)
+})
 
 test('only existing verified payment statuses qualify', () => {
   for (const value of ['paid', 'verified', 'payment_verified']) assert.equal(isVerifiedPayment(value), true)
