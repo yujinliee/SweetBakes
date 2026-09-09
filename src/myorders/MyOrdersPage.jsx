@@ -4,8 +4,9 @@ import { SiteFooter, SiteTopbar } from '../landingpage/LandingPage.jsx'
 import { getOrderProgressStage, getOrderProgressStages, getOrderProgressLabel, isRegularProgressOrder } from '../services/orderStatusDisplay.js'
 import { supabase } from '../lib/supabase.js'
 import { clearCart, removeCartQuantity } from '../cartStore.js'
+import PaymentReturnStatus from '../cartpage/PaymentReturnStatus.jsx'
 import PaymentSuccessModal from '../components/PaymentSuccessModal.jsx'
-import { CART_PAYMENT_RETURN_STORAGE_KEY, loadConfirmedItems, logPaymentReturn, shouldConsumePaymentReturn } from '../cartpage/paymentConfirmation.js'
+import { CART_PAYMENT_RETURN_STORAGE_KEY, loadConfirmedItems, isVerifiedPayment as isPaymentVerified, logPaymentReturn, shouldConsumePaymentReturn } from '../cartpage/paymentConfirmation.js'
 import { fetchCustomerReviews } from '../services/orderReviewService.js'
 import OrderReviewModal from './OrderReviewModal.jsx'
 import { ORDER_TABS, EMPTY_MESSAGES, attachOrderReviews, getOrderTabCounts, matchesOrderTab, isAwaitingPrice, historyStatus, itemDescription, referenceImages, getHistoryItems } from './orderHistory.js'
@@ -21,7 +22,6 @@ const formatCurrency = (value) => new Intl.NumberFormat('en-PH', { style: 'curre
 const formatDate = (value) => { if (!value) return 'Not scheduled'; const date = new Date(`${value}T00:00:00`); return Number.isNaN(date.getTime()) ? 'Not scheduled' : date.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) }
 const formatStatus = (value) => { const normalized = String(value || '').trim(); return normalized ? normalized.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()) : 'Pending' }
 const formatTime = (value) => value ? new Date(`1970-01-01T${value}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'Not specified'
-const isPaymentVerified = (status) => ['paid', 'verified', 'payment_verified'].includes(String(status || '').toLowerCase())
 
 function isCustomOrder(order) { return (order?.order_items || []).some((item) => item.customization_data?.request_type) }
 function removePurchasedCartItems(order) { (order?.order_items || []).forEach((item) => removeCartQuantity(item.product_name, item.quantity)) }
@@ -156,8 +156,9 @@ function RegularPaymentPanel({ order }) {
   return eligible ? <div className="my-orders-detail-payment-action"><button type="button" className="my-orders-pay-button" onClick={handlePayNow} disabled={isCreatingPayment}>{isCreatingPayment ? 'Creating Payment...' : 'Pay Now'}</button>{paymentError ? <p className="my-orders-payment-error" role="alert">{paymentError}</p> : null}</div> : null
 }
 
-function PaymentReturnNotice({ order, paymentReturn }) {
+function PaymentReturnNotice({ order, paymentReturn, onRetry }) {
   if (!paymentReturn || paymentReturn.orderId !== order.id) return null
+  if (['checking', 'error', 'timeout'].includes(paymentReturn.status)) return <PaymentReturnStatus state={paymentReturn} onRetry={onRetry} />
   const amount = formatCurrency(isCustomOrder(order) ? order.required_down_payment : order.total)
   if (paymentReturn.status === 'verified') {
     return <section className="my-orders-payment-return my-orders-payment-return--success" role="status"><span className="my-orders-payment-return-icon" aria-hidden="true">✓</span><div><strong>Payment Successful</strong><p>Payment Verified</p><span>Thank you! We received your {amount}{isCustomOrder(order) ? ' down payment' : ' payment'}.</span><small>Order {order.order_number || 'Order'}</small></div></section>
@@ -171,7 +172,11 @@ function PaymentReturnNotice({ order, paymentReturn }) {
   return <section className="my-orders-payment-return" role="status"><strong>Confirming your payment...</strong><p>We’re waiting for payment verification from Xendit.</p></section>
 }
 
+<<<<<<< HEAD
 function OrderDetails({ order, onClose, onImageOpen, paymentReturn, completedOrdersCount = 0 }) {
+=======
+function OrderDetails({ order, onClose, onImageOpen, paymentReturn, onPaymentRetry }) {
+>>>>>>> 32c1cfaf60fa509508d255c7ac47b89197af0026
   useLayoutEffect(() => {
     const root = document.documentElement
     const body = document.body
@@ -229,8 +234,13 @@ function OrderDetails({ order, onClose, onImageOpen, paymentReturn, completedOrd
         </div>)}</div>
         {items.length > 1 ? <div className="my-orders-detail-total"><span>Order Total</span><strong className="my-orders-detail-price">{isAwaitingPrice(order) ? 'Awaiting Price' : formatCurrency(finalPrice)}</strong></div> : null}
         {referenceImages.length ? <div className="my-orders-detail-references"><h4>Reference Images</h4><div className="my-orders-reference-images">{referenceImages.map((image, index) => <button type="button" key={image.path || image.signed_url || index} onClick={() => onImageOpen(image.signed_url || image.url)}><img src={image.signed_url || image.url} alt={image.name || 'Order reference'} /></button>)}</div></div> : null}
+<<<<<<< HEAD
         <PaymentReturnNotice order={order} paymentReturn={paymentReturn} />
         {isCustomOrder(order) ? <PaymentPanel order={order} downPayment={downPayment} completedOrdersCount={completedOrdersCount} /> : <RegularPaymentPanel order={order} />}
+=======
+        <PaymentReturnNotice order={order} paymentReturn={paymentReturn} onRetry={onPaymentRetry} />
+        {isCustomOrder(order) ? <PaymentPanel order={order} downPayment={downPayment} /> : <RegularPaymentPanel order={order} />}
+>>>>>>> 32c1cfaf60fa509508d255c7ac47b89197af0026
       </section>
       <section className="my-orders-detail-card"><h3>Fulfillment Details</h3><dl className="my-orders-detail-fulfillment"><div><dt>Preferred Date</dt><dd>{formatDate(order.preferred_date)}</dd></div><div><dt>Preferred Time</dt><dd>{formatTime(order.preferred_time)}</dd></div><div className="my-orders-detail-wide"><dt>Order Method</dt><dd>{isDelivery ? 'Delivery' : 'Store Pickup'}</dd></div>{isDelivery ? <><div className="my-orders-detail-wide"><dt>Delivery Address</dt><dd>{address || 'Not provided'}</dd></div>{order.different_recipient ? <div className="my-orders-detail-wide"><dt>Recipient</dt><dd>{order.recipient_name || 'Not provided'} {order.recipient_contact || ''}</dd></div> : null}</> : <div className="my-orders-detail-wide"><dt>Pickup Location</dt><dd>Sweet Bakes store pickup</dd></div>}</dl></section>
     </div>
@@ -387,17 +397,17 @@ function MyOrdersPage({ onNavigate, onCustomerLogout, isCustomerAuthenticated = 
         if (attempt > 0) await wait(1500)
         const { data: sessionData } = await supabase.auth.getSession()
         const userId = sessionData?.session?.user?.id
-        if (!userId) break
+        if (!userId) throw Object.assign(new Error(), { code: 'SESSION_REQUIRED' })
         const { data: freshOrder, error: refreshError } = await supabase.from('orders').select(ORDER_SELECT).eq('id', paymentReturn.orderId).eq('customer_id', userId).maybeSingle()
         logPaymentReturn('verification result', { attempt: attempt + 1, phase: 'owned-order', outcome: refreshError ? 'request-error' : freshOrder ? 'response' : 'not-found', paymentStatus: freshOrder?.payment_status })
-        if (refreshError) { continue }
+        if (refreshError) throw refreshError
         if (!isMounted) return
         if (!freshOrder) break
         setOrders((current) => current.map((order) => order.id === freshOrder.id ? { ...order, ...freshOrder } : order))
         setSelectedOrder((current) => current?.id === freshOrder.id ? { ...current, ...freshOrder } : current)
         if (isPaymentVerified(freshOrder.payment_status)) {
           let confirmedItems
-          try { confirmedItems = await loadConfirmedItems(supabase, freshOrder.id) } catch { logPaymentReturn('verification result', { phase: 'details', outcome: 'items-unavailable' }); continue }
+          try { confirmedItems = await loadConfirmedItems(supabase, freshOrder.id) } catch (error) { logPaymentReturn('details-error', { errorCode: error.code }); throw error }
           const verifiedOrder = { ...freshOrder, order_items: await attachCatalogImages(confirmedItems) }
           if (!isMounted) return
           if (isCustomOrder(verifiedOrder)) removePurchasedCartItems(verifiedOrder)
@@ -411,7 +421,8 @@ function MyOrdersPage({ onNavigate, onCustomerLogout, isCustomerAuthenticated = 
               setSelectedOrder(null)
               setVerifiedRegularOrder(verifiedOrder)
             } else {
-              setPaymentReturn(null)
+              logPaymentReturn('context-error', { errorCode: 'INVALID_RETURN_CONTEXT' })
+              setPaymentReturn((current) => ({ ...current, status: 'error', stage: 'context' }))
               return
             }
           }
@@ -421,7 +432,7 @@ function MyOrdersPage({ onNavigate, onCustomerLogout, isCustomerAuthenticated = 
       }
       if (isMounted) { logPaymentReturn('verification timeout', { phase: 'owned-order' }); setPaymentReturn((current) => current ? { ...current, status: 'timeout' } : current) }
     }
-    refreshPaymentStatus().catch(() => { if (isMounted) { logPaymentReturn('verification timeout', { phase: 'owned-order', outcome: 'request-exception' }); setPaymentReturn((current) => current ? { ...current, status: 'timeout' } : current) } })
+    refreshPaymentStatus().catch((error) => { if (isMounted) { logPaymentReturn('verification-error', { errorCode: error.code, httpStatus: error.context?.status }); setPaymentReturn((current) => current ? { ...current, status: 'error', stage: 'verification' } : current) } })
     return () => { isMounted = false }
   }, [paymentReturn?.orderId, paymentReturn?.status])
   useEffect(() => {
@@ -439,11 +450,16 @@ function MyOrdersPage({ onNavigate, onCustomerLogout, isCustomerAuthenticated = 
     return () => { isMounted = false }
   }, [selectedOrder?.id])
   return <div className="my-orders-page"><SiteTopbar forceScrolled homeHref="/" locationHref="/#location" contactHref="#contact" onNavigate={onNavigate} onCustomerLogout={onCustomerLogout} isCustomerAuthenticated={isCustomerAuthenticated} /><main className="my-orders-content"><section className="my-orders-shell" aria-labelledby="my-orders-title"><div className="my-orders-heading"><p className="my-orders-eyebrow">Sweet Bakes Account</p><h1 id="my-orders-title">My Orders</h1></div><nav className="my-orders-tabs" aria-label="Filter orders by status">{ORDER_TABS.map((tab) => <button type="button" key={tab} className={activeTab === tab ? 'is-active' : ''} aria-pressed={activeTab === tab} aria-controls="my-orders-results" onClick={() => setActiveTab(tab)}>{tab}<span className="my-orders-tab-count">{tabCounts[tab]}</span></button>)}</nav>
+      {['checking', 'error', 'timeout'].includes(paymentReturn?.status) ? <PaymentReturnStatus state={paymentReturn} onRetry={() => setPaymentReturn((current) => ({ ...current, status: 'checking' }))} /> : null}
       {reviewMessage ? <p role="status" className="my-orders-review-success">{reviewMessage}</p> : null}<div id="my-orders-results" aria-live="polite" aria-busy={isLoading}>
         {isLoading ? <div className="my-orders-card my-orders-state">Loading orders...</div> : error ? <div className="my-orders-card my-orders-state my-orders-state--error" role="alert">{error}</div> : visibleOrders.length === 0 ? <div className="my-orders-card my-orders-empty"><p>{EMPTY_MESSAGES[activeTab]}</p></div> : <>
           {activeTab === 'To Receive' ? <p className="my-orders-tab-note">Ready for store pickup.</p> : null}
           <div className="my-orders-list">{visibleOrders.map((order) => <OrderHistoryCard key={order.id} order={order} onSelect={handleSelectOrder} onReview={activeTab === 'To Review' ? setReviewOrder : undefined} />)}</div>
         </>}
+<<<<<<< HEAD
       </div></section></main><SiteFooter />{reviewOrder ? <OrderReviewModal key={reviewOrder.id} order={reviewOrder} onSubmitted={handleReviewSubmitted} onClose={() => setReviewOrder(null)} /> : null}{selectedOrder ? <OrderDetails order={selectedOrder} paymentReturn={paymentReturn} onClose={() => setSelectedOrder(null)} onImageOpen={setPreviewImage} completedOrdersCount={orders.filter((order) => order.order_status === 'completed').length} /> : null}{previewImage ? <div className="my-orders-image-backdrop" role="presentation" onClick={() => setPreviewImage('')}><img src={previewImage} alt="Larger order reference" /></div> : null}{verifiedRegularOrder ? <PaymentSuccessModal order={verifiedRegularOrder} onClose={() => setVerifiedRegularOrder(null)} onPrimary={() => { setVerifiedRegularOrder(null); setActiveTab('All'); handleSelectOrder(verifiedRegularOrder) }} onContinue={() => { setVerifiedRegularOrder(null); onNavigate?.('/#sweet-treats') }} /> : null}</div>
+=======
+      </div></section></main><SiteFooter />{reviewOrder ? <OrderReviewModal key={reviewOrder.id} order={reviewOrder} onSubmitted={handleReviewSubmitted} onClose={() => setReviewOrder(null)} /> : null}{selectedOrder ? <OrderDetails order={selectedOrder} paymentReturn={paymentReturn} onPaymentRetry={() => setPaymentReturn((current) => ({ ...current, status: 'checking' }))} onClose={() => setSelectedOrder(null)} onImageOpen={setPreviewImage} /> : null}{previewImage ? <div className="my-orders-image-backdrop" role="presentation" onClick={() => setPreviewImage('')}><img src={previewImage} alt="Larger order reference" /></div> : null}{verifiedRegularOrder ? <PaymentSuccessModal order={verifiedRegularOrder} onClose={() => setVerifiedRegularOrder(null)} onPrimary={() => { setVerifiedRegularOrder(null); setActiveTab('All'); handleSelectOrder(verifiedRegularOrder) }} onContinue={() => { setVerifiedRegularOrder(null); onNavigate?.('/#sweet-treats') }} /> : null}</div>
+>>>>>>> 32c1cfaf60fa509508d255c7ac47b89197af0026
 }
 export default MyOrdersPage

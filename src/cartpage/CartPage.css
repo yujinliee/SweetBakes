@@ -803,3 +803,17 @@
   }
 }
 .cart-guest-order-id > span { display:block; margin-bottom:5px; font-size:11px; font-weight:600; }
+.cart-payment-return-panel {
+  position: relative;
+  z-index: 2;
+  margin: 110px auto 20px;
+  width: min(680px, calc(100% - 32px));
+  padding: 20px;
+  box-sizing: border-box;
+  background: #fffdf8;
+  border: 1px solid #eadfd9;
+  border-radius: 12px;
+  color: #3a2e2e;
+  text-align: left;
+}
+.cart-payment-return-panel p { font-size: 14px; line-height: 1.6; }

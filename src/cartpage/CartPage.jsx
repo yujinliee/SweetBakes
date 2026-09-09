@@ -19,8 +19,11 @@ import { assertCanAcceptOrderForDate } from '../admin/services/availabilityServi
 import { supabase } from '../lib/supabase.js'
 import { getCheckoutSession, reusableCartOrder, getCartOrderReference, assertCartOrderReference } from './cartOrderOwnership.js'
 import { fetchAuthenticatedCustomerProfile } from '../services/customerProfileService.js'
+import { startPaymentReturn } from './paymentReturnController.js'
+import { requestGuestPaymentStatus, createGuestOrderClient } from './guestPaymentStatus.js'
+import PaymentReturnStatus from './PaymentReturnStatus.jsx'
 import PaymentSuccessModal from '../components/PaymentSuccessModal.jsx'
-import { CART_PAYMENT_RETURN_STORAGE_KEY, loadGuestConfirmation, logPaymentReturn, savePaymentReturnContext, shouldConsumePaymentReturn } from './paymentConfirmation.js'
+import { CART_PAYMENT_RETURN_STORAGE_KEY, loadGuestConfirmation, loadConfirmedItems, isVerifiedPayment, logPaymentReturn, savePaymentReturnContext, shouldConsumePaymentReturn } from './paymentConfirmation.js'
 import chocolateCakeImage from '../assets/othersweettreats/regular_chocolate.jpg'
 import redVelvetCakeImage from '../assets/othersweettreats/regular_redvelvet.png'
 import cheesecakeImage from '../assets/othersweettreats/halfordozen_cheesecake.png'
@@ -48,6 +51,7 @@ const ORDER_METHODS = [
 ]
 
 const CART_ORDER_PAYMENT_METHOD = 'Xendit'
+const guestOrderClient = createGuestOrderClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY)
 
 const CART_IMAGE_FALLBACKS = {
   'Chocolate Cake': chocolateCakeImage,
@@ -196,7 +200,9 @@ function CartPage({
   const [guestPaymentVerified, setGuestPaymentVerified] = useState(false)
   const [confirmedOrder, setConfirmedOrder] = useState(null)
   const [guestTrackingEmail, setGuestTrackingEmail] = useState('')
-  const [guestPaymentTimedOut, setGuestPaymentTimedOut] = useState(false)
+  const [paymentReturnState, setPaymentReturnState] = useState(null)
+  const [verificationAttempt, setVerificationAttempt] = useState(0)
+  const [confirmationIsGuest, setConfirmationIsGuest] = useState(true)
   const guestPaymentStatus = new URLSearchParams(window.location.search).get('payment')
   const pendingOrderIdRef = useRef(null)
   const profileUserIdRef = useRef(null)
@@ -209,70 +215,50 @@ function CartPage({
 
   useEffect(() => {
     if (guestPaymentStatus !== 'success') return undefined
-    logPaymentReturn('detected success URL', { isCustomerAuthenticated })
-    if (isCustomerAuthenticated) {
-      logPaymentReturn('verification result', { phase: 'context', outcome: 'guest-poll-skipped-authenticated' })
-      return undefined
-    }
-
-    let receipt = null
-    try {
-      receipt = JSON.parse(window.localStorage.getItem(CART_PAYMENT_RETURN_STORAGE_KEY) || 'null')
-    } catch {
-      receipt = null
-    }
-
-    logPaymentReturn('verification result', { phase: 'context', contextFound: Boolean(receipt?.orderId), hasGuestEmail: Boolean(receipt?.guestEmail) })
-    if (!receipt?.orderId || !receipt?.guestEmail) {
-      const timeoutId = window.setTimeout(() => setGuestPaymentTimedOut(true), 0)
-      return () => window.clearTimeout(timeoutId)
-    }
-
-    logPaymentReturn('verification started', { phase: 'guest-status' })
-    let isMounted = true
-    let attempts = 0
-    let timeoutId = null
-    const pollPaymentStatus = async () => {
-      attempts += 1
-      const { data, error } = await supabase.functions.invoke('create-cart-xendit-payment', {
-        body: { orderId: receipt.orderId, guestEmail: receipt.guestEmail, statusOnly: true },
-      })
-
-      if (!isMounted) return
-      logPaymentReturn('verification result', { attempt: attempts, phase: 'guest-status', outcome: error ? 'request-error' : 'response', httpStatus: error?.context?.status, paymentStatus: data?.paymentStatus })
-      if (!error && ['paid', 'verified', 'payment_verified'].includes(String(data?.paymentStatus || '').toLowerCase())) {
-        const order = await loadGuestConfirmation(supabase, receipt, data)
-        if (!isMounted) return
-        if (order) {
-          setConfirmedOrder(order)
-          setGuestTrackingEmail(receipt.guestEmail)
-          clearCart()
-          window.localStorage.removeItem(CART_PAYMENT_RETURN_STORAGE_KEY)
-          setGuestPaymentVerified(true)
-          return
+    logPaymentReturn('return-detected')
+    return startPaymentReturn({
+      storage: window.localStorage,
+      verify: async (receipt) => {
+        if (receipt.guestEmail) return requestGuestPaymentStatus({
+          url: import.meta.env.VITE_SUPABASE_URL,
+          apiKey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          receipt,
+        })
+        const session = await getCheckoutSession(supabase)
+        if (!session) throw Object.assign(new Error(), { code: 'SESSION_REQUIRED' })
+        return supabase.functions.invoke('create-cart-xendit-payment', {
+          body: { orderId: receipt.orderId, statusOnly: true },
+          headers: { Authorization: 'Bearer ' + session.access_token },
+        })
+      },
+      loadDetails: async (receipt, status) => {
+        if (receipt.guestEmail) {
+          if (!status.orderNumber) throw Object.assign(new Error(), { code: 'MISSING_ORDER_NUMBER_CONTRACT' })
+          return loadGuestConfirmation(guestOrderClient, receipt, status)
         }
-      }
-
-      if (attempts >= 8) {
-        logPaymentReturn('verification timeout', { attempt: attempts })
-        setGuestPaymentTimedOut(true)
-        return
-      }
-
-      timeoutId = window.setTimeout(() => {
-        pollPaymentStatus().catch(() => { if (isMounted) { logPaymentReturn('verification timeout', { attempt: attempts, outcome: 'request-exception' }); setGuestPaymentTimedOut(true) } })
-      }, 1500)
-    }
-
-    pollPaymentStatus().catch(() => {
-      if (isMounted) { logPaymentReturn('verification timeout', { attempt: attempts, outcome: 'request-exception' }); setGuestPaymentTimedOut(true) }
+        const session = await getCheckoutSession(supabase)
+        if (!session) throw Object.assign(new Error(), { code: 'SESSION_REQUIRED' })
+        const { data: order, error } = await supabase.from('orders')
+          .select('id, order_number, payment_status, total, order_method, preferred_date, preferred_time, address, barangay, city_municipality, province, apartment_unit, landmark')
+          .eq('id', receipt.orderId).eq('customer_id', session.user.id).maybeSingle()
+        if (error) throw error
+        if (!order || !isVerifiedPayment(order.payment_status)) return null
+        return { ...order, order_items: await loadConfirmedItems(supabase, receipt.orderId) }
+      },
+      onState: setPaymentReturnState,
+      onConfirmed: (order, receipt) => {
+        setConfirmedOrder(order)
+        setConfirmationIsGuest(Boolean(receipt.guestEmail))
+        setGuestTrackingEmail(receipt.guestEmail || '')
+        clearCart()
+        logPaymentReturn('cart-cleared')
+        setGuestPaymentVerified(true)
+        setPaymentReturnState({ status: 'verified' })
+        logPaymentReturn('modal-opened')
+        try { window.localStorage.removeItem(CART_PAYMENT_RETURN_STORAGE_KEY) } catch { /* URL cleanup also prevents repeat display. */ }
+      },
     })
-
-    return () => {
-      isMounted = false
-      if (timeoutId) window.clearTimeout(timeoutId)
-    }
-  }, [guestPaymentStatus, isCustomerAuthenticated])
+  }, [guestPaymentStatus, verificationAttempt])
 
   useEffect(() => {
     if (!shouldConsumePaymentReturn(guestPaymentVerified ? 'verified' : guestPaymentStatus)) return
@@ -728,6 +714,26 @@ function CartPage({
     setCartQuantity(productName, (items[productName] ?? 1) + delta)
   }
 
+  const paymentReturnUI = <>
+    {guestPaymentStatus === 'success' && !guestPaymentVerified ? <PaymentReturnStatus
+      state={paymentReturnState || { status: 'checking' }}
+      onRetry={() => { setPaymentReturnState({ status: 'checking' }); setVerificationAttempt((attempt) => attempt + 1) }}
+    /> : null}
+    {guestPaymentVerified ? (
+        <PaymentSuccessModal
+          order={confirmedOrder}
+          guest={confirmationIsGuest}
+          onContinue={() => { setGuestPaymentVerified(false); onNavigate?.('/#sweet-treats') }}
+          onClose={() => setGuestPaymentVerified(false)}
+          onPrimary={() => {
+            setGuestPaymentVerified(false)
+            if (confirmationIsGuest) openTrackOrderDrawer({ orderNumber: confirmedOrder.order_number, email: guestTrackingEmail })
+            else onNavigate?.('/my-orders?order=' + encodeURIComponent(confirmedOrder.id))
+          }}
+        />
+      ) : null}
+  </>
+
   if (cartProducts.length === 0) {
     return (
       <div className="page-shell cart-page-shell">
@@ -741,6 +747,7 @@ function CartPage({
           isCustomerAuthenticated={isCustomerAuthenticated}
         />
 
+        {paymentReturnUI}
         <main className="cart-empty-main">
           <div className="cart-empty-state">
             <h1>Your cart is empty.</h1>
@@ -770,6 +777,7 @@ function CartPage({
         isCustomerAuthenticated={isCustomerAuthenticated}
       />
 
+      {paymentReturnUI}
       <main className="cart-main">
         <div className="cart-container">
           <div className="cart-layout">
@@ -1096,16 +1104,6 @@ function CartPage({
                 </div>
 
                 <div className="cart-checkout-actions">
-                  {!isCustomerAuthenticated && guestPaymentStatus === 'success' && !guestPaymentVerified && !guestPaymentTimedOut ? (
-                    <p className="cart-payment-placeholder cart-payment-success" role="status">
-                      Confirming your payment...
-                    </p>
-                  ) : null}
-                  {!isCustomerAuthenticated && guestPaymentTimedOut ? (
-                    <p className="cart-payment-placeholder" role="status">
-                      We&apos;re still confirming your payment. Please check My Orders or Track Order shortly.
-                    </p>
-                  ) : null}
                   {!isCustomerAuthenticated && guestPaymentStatus === 'cancelled' ? (
                     <p className="cart-payment-placeholder" role="status">
                       Payment was not completed. Your cart is still available if you&apos;d like to try again.
@@ -1219,18 +1217,6 @@ function CartPage({
           </div>
         </div>
       </main>
-      {guestPaymentVerified ? (
-        <PaymentSuccessModal
-          order={confirmedOrder}
-          guest
-          onContinue={() => { setGuestPaymentVerified(false); onNavigate?.('/#sweet-treats') }}
-          onClose={() => setGuestPaymentVerified(false)}
-          onPrimary={() => {
-            setGuestPaymentVerified(false)
-            openTrackOrderDrawer({ orderNumber: confirmedOrder.order_number, email: guestTrackingEmail })
-          }}
-        />
-      ) : null}
     </div>
   )
 }
