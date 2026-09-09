@@ -39,10 +39,16 @@ function StatusProgress({ order }) {
   </div>
 }
 
-function PaymentPanel({ order, downPayment }) {
+function PaymentPanel({ order, downPayment, completedOrdersCount = 0 }) {
   const [isCreatingPayment, setIsCreatingPayment] = useState(false)
   const [paymentError, setPaymentError] = useState('')
+  const [voucherApplied, setVoucherApplied] = useState(false)
   const eligible = String(order.order_status || '').toLowerCase() === 'confirmed' && String(order.payment_status || '').toLowerCase() === 'pending' && Number(downPayment) > 0
+  const originalDownPayment = Number(downPayment) || 0
+  const discountAmount = Math.round(originalDownPayment * 0.20 * 100) / 100
+  const finalPayable = Math.max(0, originalDownPayment - discountAmount)
+  const voucherEligible = completedOrdersCount >= 2 && originalDownPayment > 0
+
   const handlePayDownPayment = async () => {
     if (isCreatingPayment || !eligible) return
     setIsCreatingPayment(true)
@@ -55,9 +61,22 @@ function PaymentPanel({ order, downPayment }) {
         setPaymentError('Authentication is required. Please sign in again.')
         return
       }
-      console.log('[XENDIT ORDER ID]', { orderId: order?.id, orderNumber: order?.order_number })
+      console.log('[XENDIT ORDER ID]', { orderId: order?.id, orderNumber: order?.order_number, voucherApplied, discountAmount })
+      const body = {
+        order_id: order.id,
+        orderId: order.id,
+        order_number: order.order_number,
+        orderNumber: order.order_number,
+      }
+      if (voucherApplied && voucherEligible) {
+        body.voucher_applied = true
+        body.voucherApplied = true
+        body.discount_amount = discountAmount
+        body.discountAmount = discountAmount
+        body.amount = finalPayable
+      }
       const invokeResult = await supabase.functions.invoke('create-xendit-payment', {
-        body: { orderId: order.id },
+        body,
         headers: { Authorization: `Bearer ${session.access_token}` },
       })
       const invokeError = invokeResult.error
@@ -82,7 +101,27 @@ function PaymentPanel({ order, downPayment }) {
       setIsCreatingPayment(false)
     }
   }
-  return eligible ? <div className="my-orders-detail-payment-action"><button type="button" className="my-orders-pay-button" onClick={handlePayDownPayment} disabled={isCreatingPayment}>{isCreatingPayment ? 'Creating Payment...' : `Pay Down Payment: ${formatCurrency(downPayment)}`}</button>{paymentError ? <p className="my-orders-payment-error" role="alert">{paymentError}</p> : null}</div> : null
+
+  if (!eligible) return null
+
+  const displayAmount = voucherApplied && voucherEligible ? finalPayable : originalDownPayment
+
+  return <div className="my-orders-detail-payment-action">
+    <button type="button" className="my-orders-pay-button" onClick={handlePayDownPayment} disabled={isCreatingPayment}>{isCreatingPayment ? 'Creating Payment...' : `Pay Down Payment: ${formatCurrency(displayAmount)}`}</button>
+    {paymentError ? <p className="my-orders-payment-error" role="alert">{paymentError}</p> : null}
+    {voucherEligible ? <div className="my-orders-voucher-section">
+      <button type="button" className={`my-orders-voucher-toggle${voucherApplied ? ' is-active' : ''}`} onClick={() => setVoucherApplied((current) => !current)}>
+        <span className="my-orders-voucher-icon" aria-hidden="true">{voucherApplied ? '\u2713' : '\uD83C\uDF9F'}</span>
+        <span className="my-orders-voucher-label">Loyalty Reward: 20% OFF Down Payment</span>
+        <span className="my-orders-voucher-sublabel">Earned after {completedOrdersCount} completed orders</span>
+      </button>
+      {voucherApplied && <div className="my-orders-voucher-breakdown">
+        <div className="my-orders-voucher-row"><span>Original Down Payment</span><strong>{formatCurrency(originalDownPayment)}</strong></div>
+        <div className="my-orders-voucher-row my-orders-voucher-row--discount"><span>20% Voucher Discount</span><strong>{formatCurrency(-discountAmount)}</strong></div>
+        <div className="my-orders-voucher-row my-orders-voucher-row--final"><span>Final Payable Amount</span><strong>{formatCurrency(finalPayable)}</strong></div>
+      </div>}
+    </div> : <div className="my-orders-voucher-locked"><span className="my-orders-voucher-icon" aria-hidden="true">{'\uD83D\uDD12'}</span><span>Complete 2 previous orders to unlock a 20% Down Payment Discount Voucher on your 3rd order!</span></div>}
+  </div>
 }
 
 function RegularPaymentPanel({ order }) {
@@ -132,7 +171,7 @@ function PaymentReturnNotice({ order, paymentReturn }) {
   return <section className="my-orders-payment-return" role="status"><strong>Confirming your payment...</strong><p>We’re waiting for payment verification from Xendit.</p></section>
 }
 
-function OrderDetails({ order, onClose, onImageOpen, paymentReturn }) {
+function OrderDetails({ order, onClose, onImageOpen, paymentReturn, completedOrdersCount = 0 }) {
   useLayoutEffect(() => {
     const root = document.documentElement
     const body = document.body
@@ -191,7 +230,7 @@ function OrderDetails({ order, onClose, onImageOpen, paymentReturn }) {
         {items.length > 1 ? <div className="my-orders-detail-total"><span>Order Total</span><strong className="my-orders-detail-price">{isAwaitingPrice(order) ? 'Awaiting Price' : formatCurrency(finalPrice)}</strong></div> : null}
         {referenceImages.length ? <div className="my-orders-detail-references"><h4>Reference Images</h4><div className="my-orders-reference-images">{referenceImages.map((image, index) => <button type="button" key={image.path || image.signed_url || index} onClick={() => onImageOpen(image.signed_url || image.url)}><img src={image.signed_url || image.url} alt={image.name || 'Order reference'} /></button>)}</div></div> : null}
         <PaymentReturnNotice order={order} paymentReturn={paymentReturn} />
-        {isCustomOrder(order) ? <PaymentPanel order={order} downPayment={downPayment} /> : <RegularPaymentPanel order={order} />}
+        {isCustomOrder(order) ? <PaymentPanel order={order} downPayment={downPayment} completedOrdersCount={completedOrdersCount} /> : <RegularPaymentPanel order={order} />}
       </section>
       <section className="my-orders-detail-card"><h3>Fulfillment Details</h3><dl className="my-orders-detail-fulfillment"><div><dt>Preferred Date</dt><dd>{formatDate(order.preferred_date)}</dd></div><div><dt>Preferred Time</dt><dd>{formatTime(order.preferred_time)}</dd></div><div className="my-orders-detail-wide"><dt>Order Method</dt><dd>{isDelivery ? 'Delivery' : 'Store Pickup'}</dd></div>{isDelivery ? <><div className="my-orders-detail-wide"><dt>Delivery Address</dt><dd>{address || 'Not provided'}</dd></div>{order.different_recipient ? <div className="my-orders-detail-wide"><dt>Recipient</dt><dd>{order.recipient_name || 'Not provided'} {order.recipient_contact || ''}</dd></div> : null}</> : <div className="my-orders-detail-wide"><dt>Pickup Location</dt><dd>Sweet Bakes store pickup</dd></div>}</dl></section>
     </div>
@@ -405,6 +444,6 @@ function MyOrdersPage({ onNavigate, onCustomerLogout, isCustomerAuthenticated = 
           {activeTab === 'To Receive' ? <p className="my-orders-tab-note">Ready for store pickup.</p> : null}
           <div className="my-orders-list">{visibleOrders.map((order) => <OrderHistoryCard key={order.id} order={order} onSelect={handleSelectOrder} onReview={activeTab === 'To Review' ? setReviewOrder : undefined} />)}</div>
         </>}
-      </div></section></main><SiteFooter />{reviewOrder ? <OrderReviewModal key={reviewOrder.id} order={reviewOrder} onSubmitted={handleReviewSubmitted} onClose={() => setReviewOrder(null)} /> : null}{selectedOrder ? <OrderDetails order={selectedOrder} paymentReturn={paymentReturn} onClose={() => setSelectedOrder(null)} onImageOpen={setPreviewImage} /> : null}{previewImage ? <div className="my-orders-image-backdrop" role="presentation" onClick={() => setPreviewImage('')}><img src={previewImage} alt="Larger order reference" /></div> : null}{verifiedRegularOrder ? <PaymentSuccessModal order={verifiedRegularOrder} onClose={() => setVerifiedRegularOrder(null)} onPrimary={() => { setVerifiedRegularOrder(null); setActiveTab('All'); handleSelectOrder(verifiedRegularOrder) }} onContinue={() => { setVerifiedRegularOrder(null); onNavigate?.('/#sweet-treats') }} /> : null}</div>
+      </div></section></main><SiteFooter />{reviewOrder ? <OrderReviewModal key={reviewOrder.id} order={reviewOrder} onSubmitted={handleReviewSubmitted} onClose={() => setReviewOrder(null)} /> : null}{selectedOrder ? <OrderDetails order={selectedOrder} paymentReturn={paymentReturn} onClose={() => setSelectedOrder(null)} onImageOpen={setPreviewImage} completedOrdersCount={orders.filter((order) => order.order_status === 'completed').length} /> : null}{previewImage ? <div className="my-orders-image-backdrop" role="presentation" onClick={() => setPreviewImage('')}><img src={previewImage} alt="Larger order reference" /></div> : null}{verifiedRegularOrder ? <PaymentSuccessModal order={verifiedRegularOrder} onClose={() => setVerifiedRegularOrder(null)} onPrimary={() => { setVerifiedRegularOrder(null); setActiveTab('All'); handleSelectOrder(verifiedRegularOrder) }} onContinue={() => { setVerifiedRegularOrder(null); onNavigate?.('/#sweet-treats') }} /> : null}</div>
 }
 export default MyOrdersPage

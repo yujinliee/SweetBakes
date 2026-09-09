@@ -178,9 +178,11 @@
   letter-spacing: 0.01em;
 }
 
-.dash-status--pending   { border-color: #8b5cf6; color: #7c3aed; }
-.dash-status--confirmed { border-color: #3b82f6; color: #2563eb; }
-.dash-status--completed { border-color: #22c55e; color: #16a34a; }
+.dash-status--pending   { border-color: #a16207; color: #a16207; background: #fef9c3; }
+.dash-status--confirmed { border-color: #6b21a8; color: #6b21a8; background: #f3e8ff; }
+.dash-status--preparing { border-color: #c2410c; color: #c2410c; background: #ffedd5; }
+.dash-status--ready     { border-color: #1d4ed8; color: #1d4ed8; background: #dbeafe; }
+.dash-status--completed { border-color: #15803d; color: #15803d; background: #dcfce7; }
 
 /* ── Panel Footer ──────────────────────────────────────── */
 .dash-panel-footer {

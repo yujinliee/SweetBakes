@@ -3,7 +3,7 @@ import { getInventoryItems } from '../../services/inventoryService.js'
 import './Inventory.css'
 
 const CATEGORY_OPTIONS = ['All Categories', 'Cakes', 'Cupcakes', 'Party Packages', 'Sweet Treats']
-const STATUS_OPTIONS = ['All Status', 'In Stock', 'Low Stock', 'Out of Stock', 'Available', 'Unavailable']
+const STATUS_OPTIONS = ['All Status', 'Available', 'Unavailable', 'Out of Stock']
 
 function normalizeText(value) {
   return String(value ?? '').toLowerCase()
@@ -11,13 +11,7 @@ function normalizeText(value) {
 
 function getInventoryStatus(item) {
   if ('stock' in item) {
-    if (item.stock > 5) {
-      return 'In Stock'
-    }
-    if (item.stock >= 1) {
-      return 'Low Stock'
-    }
-    return 'Out of Stock'
+    return item.stock > 0 ? 'Available' : 'Out of Stock'
   }
   return item.availability
 }

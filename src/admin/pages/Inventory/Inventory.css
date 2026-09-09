@@ -298,34 +298,22 @@
   letter-spacing: 0.01em;
 }
 
-.admin-inventory-status--in-stock {
-  background: transparent;
-  border-color: #22c55e;
-  color: #16a34a;
-}
-
 .admin-inventory-status--available {
-  background: transparent;
-  border-color: #22c55e;
-  color: #16a34a;
-}
-
-.admin-inventory-status--low-stock {
-  background: transparent;
-  border-color: #f59e0b;
-  color: #b45309;
-}
-
-.admin-inventory-status--out-of-stock {
-  background: transparent;
-  border-color: #ef4444;
-  color: #dc2626;
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #15803d;
 }
 
 .admin-inventory-status--unavailable {
-  background: transparent;
-  border-color: #ef4444;
-  color: #dc2626;
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+.admin-inventory-status--out-of-stock {
+  background: #1f2937;
+  border-color: #1f2937;
+  color: #ffffff;
 }
 
 .admin-inventory-action-btn {

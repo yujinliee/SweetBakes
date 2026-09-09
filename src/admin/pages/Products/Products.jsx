@@ -780,7 +780,8 @@ function SweetTreatsCategoryModal({ draft, onClose, onSave }) {
 
 function Products({ category = 'Cakes' }) {
   const activeCategoryTab = category
-  const [activeGroupTab, setActiveGroupTab] = useState(() => getProductOptionGroups(activeCategoryTab)[0])
+  const activeCategory = CATEGORY_TABS.find((t) => t.label === activeCategoryTab).productCategory
+  const [activeGroupTab, setActiveGroupTab] = useState(() => getProductOptionGroups(activeCategory)[0])
   const [searchValue, setSearchValue] = useState('')
   const [catalog, setCatalog] = useState(() => getCustomizationCatalog())
   const [sweetTreats, setSweetTreats] = useState([])
@@ -794,7 +795,6 @@ function Products({ category = 'Cakes' }) {
   const sweetTreatsActionMenuRef = useRef(null)
 
   const isSweetTreats = activeCategoryTab === 'Sweet Treats'
-  const activeCategory = CATEGORY_TABS.find((t) => t.label === activeCategoryTab).productCategory
   const groups = getProductOptionGroups(activeCategory)
 
   const loadSweetTreats = async () => {

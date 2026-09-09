@@ -4,6 +4,7 @@ import {
   reviewCustomOrderRequest,
   updateAdminOrderStatus,
 } from '../../services/orderService.js'
+import { getAdminAuthStatus } from '../../auth/adminAuth.js'
 import { getOrderProgressStages, getOrderProgressStage, isRegularProgressOrder } from '../../../services/orderStatusDisplay.js'
 import chocolateCakeImage from '../../../assets/othersweettreats/regular_chocolate.jpg'
 import redVelvetCakeImage from '../../../assets/othersweettreats/regular_redvelvet.png'
@@ -453,6 +454,7 @@ function Orders() {
   const [orderDetailTab, setOrderDetailTab] = useState('Overview')
   const [previewImage, setPreviewImage] = useState(null)
   const [previewZoom, setPreviewZoom] = useState(1)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   const displayOrders = useMemo(() => orders.map(mapAdminOrder), [orders])
   const activeOrder = displayOrders.find((order) => order.id === activeOrderId) || null
@@ -555,6 +557,23 @@ function Orders() {
       isMounted = false
     }
   }, [])
+
+  const handleRefresh = async () => {
+    if (isRefreshing) return
+
+    setIsRefreshing(true)
+    setOrdersError('')
+
+    try {
+      const nextOrders = await fetchAdminOrders()
+      setOrders(nextOrders)
+    } catch (error) {
+      console.error('[ADMIN ORDERS] refresh error:', error)
+      setOrdersError('Unable to refresh orders from Supabase.')
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
 
   useEffect(() => {
     const handlePointerDown = (event) => {
@@ -729,6 +748,13 @@ function Orders() {
       return
     }
 
+    const { status: authStatus, isAuthenticated } = await getAdminAuthStatus()
+
+    if (!isAuthenticated || authStatus !== 'admin') {
+      setCustomReviewError('Admin session required to review custom orders. Please sign in again.')
+      return
+    }
+
     try {
       setUpdatingOrderId(activeOrder.id)
       setCustomReviewError('')
@@ -755,7 +781,16 @@ function Orders() {
       )
     } catch (error) {
       console.error('[ADMIN ORDERS] custom review error:', error)
-      setCustomReviewError('Unable to review this custom request. Please try again.')
+
+      const isAdminRequired =
+        error?.code === 'P0001' ||
+        String(error?.message || '').includes('ADMIN_REQUIRED')
+
+      if (isAdminRequired) {
+        setCustomReviewError('Admin privileges are required to review custom orders. Contact an administrator or sign in again.')
+      } else {
+        setCustomReviewError('Unable to review this custom request. Please try again.')
+      }
     } finally {
       setUpdatingOrderId(null)
     }
@@ -803,8 +838,28 @@ function Orders() {
 
   return (
     <section className="admin-page admin-orders-page">
-      <div className="admin-page-heading">
-        <h2>Orders</h2>
+      <div className="admin-orders-page-toolbar">
+        <div className="admin-page-heading">
+          <h2>Orders</h2>
+        </div>
+        <button
+          type="button"
+          className={`admin-orders-refresh-btn${isRefreshing ? ' is-refreshing' : ''}`}
+          aria-label="Refresh orders"
+          title="Refresh orders"
+          disabled={isRefreshing}
+          onClick={handleRefresh}
+        >
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="M4 12a8 8 0 0 1 13.7-5.6L20 8M20 4v4h-4M20 12a8 8 0 0 1-13.7 5.6L4 16M4 20v-4h4"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
       </div>
 
       <div className="admin-orders-toolbar" role="region" aria-label="Order search and filters">
@@ -1085,7 +1140,7 @@ function Orders() {
           >
             <div className="admin-orders-details-header">
               <div>
-                <p className="admin-orders-details-eyebrow">Order</p>
+                <p className="admin-orders-details-eyebrow">Order ID</p>
                 <h3 id="admin-orders-details-title">{activeOrder.displayId}</h3>
               </div>
               <button
@@ -1104,32 +1159,26 @@ function Orders() {
               ) : getOrderProgressStages(activeOrder).map((stage, index) => {
                 const currentIndex = getOrderProgressStage({ orderStatus: activeOrder.order_status, paymentStatus: activeOrder.payment_status, isRegularOrder: isRegularProgressOrder(activeOrder) })
                 const state = index < currentIndex ? 'complete' : index === currentIndex ? 'current' : 'future'
-                return <div className={`admin-orders-progress-step is-${state}`} key={stage}><span className="admin-orders-progress-dot">{state === 'complete' ? '✓' : ''}</span><span>{stage}</span>{index < getOrderProgressStages(activeOrder).length - 1 ? <i /> : null}</div>
+                const displayStage = stage === 'Preparing Cake' ? 'Preparing Order' : stage
+                return <div className={`admin-orders-progress-step is-${state}`} key={stage}><span className="admin-orders-progress-dot">{state === 'complete' ? '✓' : state === 'current' ? index + 1 : ''}</span><span>{displayStage}</span>{index < getOrderProgressStages(activeOrder).length - 1 ? <i /> : null}</div>
               })}
             </div>
 
             <div className="admin-orders-details-ecommerce-layout">
               <main className="admin-orders-details-main-column">
                 <section className="admin-orders-details-card admin-orders-details-item-card">
-                  <div className="admin-orders-details-card-heading">
-                    <h4>Order Item</h4>
-                  </div>
-                  {primaryOrderItem ? (
-                    <>
-                      <div className="admin-order-detail-list">
-                        <div className="admin-order-detail-row"><OrderDetailIcon type="item" /><span>Order Item</span><strong>{primaryOrderItem.customization_data?.request_type === 'custom_cake' ? 'Custom Cake' : primaryOrderItem.product_name || 'Product'}</strong></div>
-                        <div className="admin-order-detail-row"><OrderDetailIcon type="quantity" /><span>Quantity</span><strong>{primaryOrderItem.quantity || 0}</strong></div>
-                        <div className="admin-order-detail-row"><OrderDetailIcon type="price" /><span>Price</span><strong>{formatPrice(primaryOrderItem.subtotal, activeOrder)}</strong></div>
-                        {hasCustomizationValue(['flavor']) ? <div className="admin-order-detail-row"><OrderDetailIcon type="flavor" /><span>Flavor</span><strong>{getCustomizationValue(['flavor'])}</strong></div> : null}
-                        {hasCustomizationValue(['size', 'cake size']) ? <div className="admin-order-detail-row"><OrderDetailIcon type="size" /><span>Size</span><strong>{getCustomizationValue(['size', 'cake size'])}</strong></div> : null}
-                        {hasCustomizationValue(['layers', 'layer']) ? <div className="admin-order-detail-row"><OrderDetailIcon type="layers" /><span>Layers</span><strong>{getCustomizationValue(['layers', 'layer'])}</strong></div> : null}
-                        {hasCustomizationValue(['theme', 'cupcake theme']) ? <div className="admin-order-detail-row"><OrderDetailIcon type="theme" /><span>Theme</span><strong>{getCustomizationValue(['theme', 'cupcake theme'])}</strong></div> : null}
-                        {hasCustomizationValue(['cake message', 'message']) ? <div className="admin-order-detail-row"><OrderDetailIcon type="theme" /><span>Cake Message</span><strong>{getCustomizationValue(['cake message', 'message'])}</strong></div> : null}
-                        {hasCustomizationValue(['special instructions', 'instructions']) ? <div className="admin-order-detail-row"><OrderDetailIcon type="theme" /><span>Special Instructions</span><strong>{getCustomizationValue(['special instructions', 'instructions'])}</strong></div> : null}
-                      </div>
-                      {primaryReferenceImages.length ? <div className="admin-orders-details-reference-block"><h5>Reference Images</h5><div className="admin-orders-reference-images">{primaryReferenceImages.map((image) => <button type="button" className="admin-orders-reference-thumbnail-button" key={image.path || image.signed_url || image.url} onClick={() => openImagePreview(image)}><img src={image.signed_url || image.url} alt={image.name || 'Reference'} /></button>)}</div></div> : null}
-                    </>
-                  ) : <p className="admin-orders-details-muted">No order items found.</p>}
+                  <div className="admin-orders-details-card-heading"><h4>Order Information</h4><span>{activeOrder.orderMethod}</span></div>
+                  {(activeOrder.order_items || []).length ? activeOrder.order_items.map((item) => {
+                    const itemName = item.customization_data?.request_type === 'custom_cake' ? 'Custom Cake' : item.product_name || 'Product'
+                    const itemCategory = [PRODUCT_TYPE_LABELS[normalizeText(item.product_type)] || toTitleCase(item.product_type), item.variant_name].filter(Boolean).join(' · ') || 'Sweet Treats'
+                    return <div className="admin-orders-details-product-row" key={item.id}>
+                      <OrderThumbnail order={{ ...activeOrder, order_items: [item] }} />
+                      <div className="admin-orders-details-product-copy"><strong>{itemName}</strong><span>{itemCategory}</span><span>Qty: {item.quantity || 0} · {activeOrder.orderMethod}</span></div>
+                      <div className="admin-orders-details-product-price"><span className={`admin-orders-payment-badge ${getPaymentClassName(activeOrder.payment_status)}`}>{formatPaymentStatus(activeOrder.payment_status)}</span><strong>{formatPrice(item.subtotal, activeOrder)}</strong></div>
+                    </div>
+                  }) : <p className="admin-orders-details-muted">No order items found.</p>}
+                  {primaryReferenceImages.length ? <div className="admin-orders-details-reference-block"><h5>Reference Images</h5><div className="admin-orders-reference-images">{primaryReferenceImages.map((image) => <button type="button" className="admin-orders-reference-thumbnail-button" key={image.path || image.signed_url || image.url} onClick={() => openImagePreview(image)}><img src={image.signed_url || image.url} alt={image.name || 'Reference'} /></button>)}</div></div> : null}
+                  <div className="admin-orders-details-total admin-orders-details-order-total"><span>Order Total</span><strong>{formatPrice(activeOrder.total, activeOrder)}</strong></div>
                 </section>
 
                 <section className="admin-orders-details-card admin-orders-details-summary-card">
@@ -1155,8 +1204,8 @@ function Orders() {
                   <dl><div><dt>Email</dt><dd>{activeOrder.email || '—'}</dd></div><div><dt>Contact</dt><dd>{activeOrder.contact_number || '—'}</dd></div></dl>
                 </section>
 
-                <section className="admin-orders-details-card">
-                  <h4>{activeOrder.orderMethod} Details</h4>
+                <section className="admin-orders-details-card admin-orders-details-fulfillment-card">
+                  <h4>Fulfillment Details</h4>
                   <dl>
                     <div className="admin-order-detail-row"><OrderDetailIcon type="calendar" /><dt>Date</dt><dd>{activeOrder.requestedDate}</dd></div>
                     <div className="admin-order-detail-row"><OrderDetailIcon type="clock" /><dt>Time</dt><dd>{activeOrder.preferredTime}</dd></div>

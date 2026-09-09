@@ -93,16 +93,18 @@ export default {
       !input ||
       typeof input !== "object" ||
       Array.isArray(input) ||
-      !("orderId" in input) ||
-      typeof (input as { orderId?: unknown }).orderId !== "string" ||
-      !(input as { orderId: string }).orderId.trim()
+      !(
+        ("orderId" in input && typeof (input as { orderId?: unknown }).orderId === "string" && (input as { orderId: string }).orderId.trim()) ||
+        ("order_id" in input && typeof (input as { order_id?: unknown }).order_id === "string" && (input as { order_id: string }).order_id.trim())
+      )
     ) {
       return jsonResponse({ error: "A non-empty orderId is required." }, 400);
     }
 
-    const request = input as { orderId: string; paymentType?: unknown };
-    const orderId = request.orderId.trim();
+    const request = input as { orderId?: string; order_id?: string; paymentType?: unknown; appliedVoucher?: unknown; voucher_applied?: unknown; discountAmount?: unknown; discount_amount?: unknown; discountedDownPayment?: unknown; amount?: unknown };
+    const orderId = ((request.orderId ?? request.order_id ?? "").trim());
     const paymentType = request.paymentType === "regular" ? "regular" : "custom_down_payment";
+    const clientAppliedVoucher = (request.appliedVoucher === true || request.voucher_applied === true) && paymentType === "custom_down_payment";
     const { data: order, error: orderError } = await customerSupabase
       .from("orders")
       .select(
@@ -174,6 +176,52 @@ export default {
     }
     const normalizedAmount = Math.round(amount * 100) / 100;
 
+    // Voucher validation: server-side eligibility check for loyalty discount
+    let finalAmount = normalizedAmount;
+    let voucherDiscountAmount = 0;
+    let voucherUsed = false;
+
+    if (clientAppliedVoucher) {
+      const { count: completedCount, error: countError } = await customerSupabase
+        .from("orders")
+        .select("id", { count: "exact", head: true })
+        .eq("customer_id", user.id)
+        .eq("order_status", "completed");
+
+      if (countError) {
+        console.error("[CREATE XENDIT PAYMENT] voucher count error:", countError);
+      }
+
+      const serverCompletedCount = completedCount ?? 0;
+
+      if (serverCompletedCount >= 2) {
+        const serverDiscount = Math.round(normalizedAmount * 0.20 * 100) / 100;
+        voucherDiscountAmount = serverDiscount;
+        finalAmount = Math.max(0, Math.round((normalizedAmount - serverDiscount) * 100) / 100);
+        voucherUsed = finalAmount > 0 && finalAmount < normalizedAmount;
+
+        console.log("[CREATE XENDIT PAYMENT] loyalty voucher applied:", {
+          orderId,
+          userId: user.id,
+          completedOrders: serverCompletedCount,
+          originalAmount: normalizedAmount,
+          discountAmount: voucherDiscountAmount,
+          finalAmount,
+        });
+      } else {
+        console.log("[CREATE XENDIT PAYMENT] loyalty voucher ineligible:", {
+          orderId,
+          userId: user.id,
+          completedOrders: serverCompletedCount,
+          requiredOrders: 2,
+        });
+      }
+    }
+
+    if (voucherUsed && (!Number.isFinite(finalAmount) || finalAmount <= 0)) {
+      return jsonResponse({ error: "The voucher discount makes the down payment amount invalid." }, 400);
+    }
+
     const secretKey = Deno.env.get("XENDIT_SECRET_KEY");
     if (!secretKey) {
       console.error("[XENDIT] XENDIT_SECRET_KEY is not configured");
@@ -215,7 +263,7 @@ export default {
       reference_id: referenceId,
       session_type: "PAY",
       mode: "PAYMENT_LINK",
-      amount: normalizedAmount,
+      amount: finalAmount,
       currency: "PHP",
       country: "PH",
       customer: {
@@ -227,18 +275,18 @@ export default {
       items: [
         {
           reference_id: `I${orderReference}`.slice(0, 64),
-          name: paymentType === "regular" ? "Sweet Bakes order" : "Sweet Bakes down payment",
+          name: paymentType === "regular" ? "Sweet Bakes order" : voucherUsed ? "Sweet Bakes down payment (Loyalty Voucher)" : "Sweet Bakes down payment",
           type: "PHYSICAL_SERVICE",
-          net_unit_amount: normalizedAmount,
+          net_unit_amount: finalAmount,
           quantity: 1,
           currency: "PHP",
           category: "BAKERY",
-          description: `${paymentType === "regular" ? "Payment for" : "Down payment for"} order ${order.order_number ?? order.id}`.slice(0, 255),
+          description: `${paymentType === "regular" ? "Payment for" : "Down payment for"} order ${order.order_number ?? order.id}${voucherUsed ? ` (20% loyalty voucher applied, -PHP ${voucherDiscountAmount.toFixed(2)})` : ""}`.slice(0, 255),
         },
       ],
       capture_method: "AUTOMATIC",
       locale: "en",
-      description: `Sweet Bakes ${paymentType === "regular" ? "payment" : "down payment"} for order ${order.order_number ?? order.id}`.slice(0, 255),
+      description: `Sweet Bakes ${paymentType === "regular" ? "payment" : voucherUsed ? "down payment (loyalty voucher)" : "down payment"} for order ${order.order_number ?? order.id}`.slice(0, 255),
       ...returnUrls,
     };
 

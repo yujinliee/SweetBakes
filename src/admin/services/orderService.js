@@ -203,6 +203,69 @@ export async function fetchAdminOrders() {
   })
 }
 
+export async function fetchAdminDashboardData() {
+  const [totalOrdersResult, pendingOrdersResult, completedOrdersResult, customersResult, recentOrdersResult] = await Promise.all([
+    supabase.from('orders').select('id', { count: 'exact', head: true }),
+    supabase.from('orders').select('id', { count: 'exact', head: true }).eq('order_status', 'pending'),
+    supabase.from('orders').select('id', { count: 'exact', head: true }).eq('order_status', 'completed'),
+    supabase.from('profiles').select('id', { count: 'exact', head: true }).ilike('role', 'customer'),
+    supabase
+      .from('orders')
+      .select(ORDER_COLUMNS)
+      .order('created_at', { ascending: false })
+      .limit(5),
+  ])
+
+  const queryResults = [
+    totalOrdersResult,
+    pendingOrdersResult,
+    completedOrdersResult,
+    customersResult,
+    recentOrdersResult,
+  ]
+  const queryError = queryResults.find((result) => result.error)?.error
+
+  if (queryError) {
+    throw queryError
+  }
+
+  const recentOrders = recentOrdersResult.data || []
+  const orderIds = recentOrders.map((order) => order.id).filter(Boolean)
+  let items = []
+
+  if (orderIds.length > 0) {
+    const { data, error } = await supabase
+      .from('order_items')
+      .select(ORDER_ITEM_COLUMNS)
+      .in('order_id', orderIds)
+
+    if (error) {
+      throw error
+    }
+
+    items = data || []
+  }
+
+  const itemsByOrderId = items.reduce((groups, item) => {
+    if (!groups[item.order_id]) groups[item.order_id] = []
+    groups[item.order_id].push(item)
+    return groups
+  }, {})
+
+  return {
+    summary: {
+      totalOrders: totalOrdersResult.count || 0,
+      pendingOrders: pendingOrdersResult.count || 0,
+      completedOrders: completedOrdersResult.count || 0,
+      totalCustomers: customersResult.count || 0,
+    },
+    recentOrders: recentOrders.map((order) => ({
+      ...order,
+      order_items: itemsByOrderId[order.id] || [],
+    })),
+  }
+}
+
 export async function updateAdminOrderStatus(orderId, newStatus) {
   const { data, error } = await supabase
     .from('orders')

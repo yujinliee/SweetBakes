@@ -114,42 +114,64 @@ function FilterDropdown({ id, value, options, icon, isOpen, onToggle, onSelect }
   )
 }
 
+function getInitials(customer) {
+  const name = String(customer.name || '').trim()
+  if (!name) return '?'
+  const parts = name.split(/\s+/).filter(Boolean)
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+  return parts[0].slice(0, 2).toUpperCase()
+}
+
 function CustomerDetailModal({ customer, onClose }) {
+  const hasOrders = (customer.recentOrders || []).length > 0
+
   return (
-    <div className="admin-customers-modal-backdrop" onClick={onClose}>
-      <div className="admin-customers-modal" onClick={(e) => e.stopPropagation()}>
+    <div className="admin-customers-modal-backdrop admin-customers-modal-backdrop--split" onClick={onClose}>
+      <div className="admin-customers-modal admin-customers-modal--split" onClick={(e) => e.stopPropagation()}>
         <div className="admin-customers-modal-header">
           <h3>Customer Details</h3>
           <button type="button" className="admin-customers-modal-close" onClick={onClose} aria-label="Close">×</button>
         </div>
-        <div className="admin-customers-modal-body">
-          <div className="admin-customers-modal-section">
-            <span className="admin-customers-modal-section-title">Customer Profile</span>
-            <p className="admin-customers-modal-name">{customer.name}</p>
-            <p className="admin-customers-modal-meta">{customer.email}</p>
-            <p className="admin-customers-modal-meta">First Name: {customer.first_name || '—'}</p>
-            <p className="admin-customers-modal-meta">Last Name: {customer.last_name || '—'}</p>
-            <p className="admin-customers-modal-meta">Account Created: {formatDate(customer.created_at)}</p>
-            <p className="admin-customers-modal-meta">Latest order contact: {customer.latestOrderContact}</p>
-          </div>
-          <div className="admin-customers-modal-stats">
-            <div className="admin-customers-modal-stat">
-              <span className="admin-customers-modal-stat-label">Total Orders</span>
-              <span className="admin-customers-modal-stat-value">{customer.orders} {customer.orders === 1 ? 'Order' : 'Orders'}</span>
+        <div className="admin-customers-modal-body admin-customers-modal-body--split">
+          <div className="admin-customers-modal-column admin-customers-modal-column--profile">
+            <div className="admin-customers-modal-profile">
+              <span className="admin-customers-modal-avatar" aria-hidden="true">{getInitials(customer)}</span>
+              <p className="admin-customers-modal-name">{customer.name}</p>
+              <p className="admin-customers-modal-email">{customer.email}</p>
             </div>
-            <div className="admin-customers-modal-stat">
-              <span className="admin-customers-modal-stat-label">Total Spent</span>
-              <span className="admin-customers-modal-stat-value">{CURRENCY_FORMATTER.format(customer.totalSpent)}</span>
+
+            <div className="admin-customers-modal-section">
+              <span className="admin-customers-modal-section-title">Customer Profile</span>
+              <p className="admin-customers-modal-meta">Account Created: {formatDate(customer.created_at)}</p>
+              <p className="admin-customers-modal-meta">Contact Number: {customer.latestOrderContact}</p>
+              <p className="admin-customers-modal-meta">First Name: {customer.first_name || '—'}</p>
+              <p className="admin-customers-modal-meta">Last Name: {customer.last_name || '—'}</p>
             </div>
-            <div className="admin-customers-modal-stat">
-              <span className="admin-customers-modal-stat-label">Last Order</span>
-              <span className="admin-customers-modal-stat-value">{customer.lastOrder}</span>
+
+            <div className="admin-customers-modal-section">
+              <span className="admin-customers-modal-section-title">Order Summary</span>
+              <div className="admin-customers-modal-stats">
+                <div className="admin-customers-modal-stat">
+                  <span className="admin-customers-modal-stat-label">Total Orders</span>
+                  <span className="admin-customers-modal-stat-value">{customer.orders} {customer.orders === 1 ? 'Order' : 'Orders'}</span>
+                </div>
+                <div className="admin-customers-modal-stat">
+                  <span className="admin-customers-modal-stat-label">Total Spent</span>
+                  <span className="admin-customers-modal-stat-value">{CURRENCY_FORMATTER.format(customer.totalSpent)}</span>
+                </div>
+                <div className="admin-customers-modal-stat">
+                  <span className="admin-customers-modal-stat-label">Last Order</span>
+                  <span className="admin-customers-modal-stat-value">{customer.lastOrder}</span>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="admin-customers-modal-section">
-            <span className="admin-customers-modal-section-title">Recent Orders</span>
-            {(customer.recentOrders || []).length === 0 ? (
+          <div className="admin-customers-modal-column admin-customers-modal-column--orders">
+            <div className="admin-customers-modal-section">
+              <span className="admin-customers-modal-section-title">Recent Orders</span>
+            </div>
+            {!hasOrders ? (
               <p className="admin-customers-modal-meta">No valid orders found.</p>
             ) : (
               <div className="admin-customers-modal-orders">
@@ -157,15 +179,18 @@ function CustomerDetailModal({ customer, onClose }) {
                   <div className="admin-customers-modal-order" key={order.id}>
                     <div>
                       <span className="admin-customers-modal-order-id">{formatOrderNumber(order)}</span>
-                      <span className="admin-customers-modal-order-meta">{formatDate(order.created_at)}</span>
+                      <span className="admin-customers-modal-order-date">{formatDate(order.created_at)}</span>
                     </div>
                     <div className="admin-customers-modal-order-side">
-                      <span>
+                      <span className="admin-customers-modal-order-amount">
                         {String(order.order_status || '').toLowerCase() === 'pending' && Number(order.total) === 0
                           ? 'Price Pending'
                           : CURRENCY_FORMATTER.format(Number(order.total) || 0)}
                       </span>
-                      <span>{toTitleCase(order.order_status) || 'Pending'} · {toTitleCase(order.payment_status) || 'Unpaid'}</span>
+                      <span className="admin-customers-modal-order-badges">
+                        <span className={`admin-customers-modal-chip admin-customers-modal-chip--${String(order.order_status || '').toLowerCase()}`}>{toTitleCase(order.order_status) || 'Pending'}</span>
+                        <span className={`admin-customers-modal-chip admin-customers-modal-chip--payment-${String(order.payment_status || '').toLowerCase()}`}>{toTitleCase(order.payment_status) || 'Unpaid'}</span>
+                      </span>
                     </div>
                   </div>
                 ))}

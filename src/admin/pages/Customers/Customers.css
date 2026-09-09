@@ -569,7 +569,7 @@
 }
 
 .admin-customers-modal-order-meta,
-.admin-customers-modal-order-side span:last-child {
+.admin-customers-modal-order-date {
   display: block;
   margin-top: 3px;
   color: #6b7280;
@@ -581,11 +581,172 @@
   white-space: nowrap;
 }
 
-.admin-customers-modal-order-side span:first-child {
+.admin-customers-modal-order-side .admin-customers-modal-order-amount {
   display: block;
   color: #111827;
   font-size: 13px;
   font-weight: 700;
+}
+
+/* ── Split 2-column modal ────────────────────────────── */
+
+.admin-customers-modal-backdrop--split {
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-customers-modal--split {
+  display: flex;
+  flex-direction: column;
+  width: min(880px, 100%);
+  max-height: min(640px, 92vh);
+  overflow: hidden;
+}
+
+.admin-customers-modal--split .admin-customers-modal-header {
+  position: relative;
+  justify-content: center;
+}
+
+.admin-customers-modal--split .admin-customers-modal-header h3 {
+  font-size: 17px;
+}
+
+.admin-customers-modal--split .admin-customers-modal-close {
+  position: absolute;
+  top: 50%;
+  right: 16px;
+  transform: translateY(-50%);
+}
+
+.admin-customers-modal-body--split {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: 22px;
+  padding: 20px;
+  min-height: 0;
+  flex: 1;
+}
+
+.admin-customers-modal-column {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 0;
+}
+
+.admin-customers-modal-column--orders {
+  border-left: 1px solid #f1f2f4;
+  padding-left: 20px;
+}
+
+.admin-customers-modal-profile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  padding: 6px 0 4px;
+}
+
+.admin-customers-modal-avatar {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #8b6ea8, #6b21a8);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.admin-customers-modal-email {
+  margin: 0;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.admin-customers-modal--split .admin-customers-modal-section {
+  width: 100%;
+}
+
+.admin-customers-modal-order-date {
+  display: block;
+  margin-top: 3px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.admin-customers-modal-order-amount {
+  display: block;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.admin-customers-modal-order-badges {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 5px;
+}
+
+.admin-customers-modal-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  padding: 0 7px;
+  border: 1px solid;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.admin-customers-modal-chip--pending   { background: #fef9c3; border-color: #a16207; color: #a16207; }
+.admin-customers-modal-chip--confirmed { background: #f3e8ff; border-color: #6b21a8; color: #6b21a8; }
+.admin-customers-modal-chip--preparing { background: #ffedd5; border-color: #c2410c; color: #c2410c; }
+.admin-customers-modal-chip--ready     { background: #dbeafe; border-color: #1d4ed8; color: #1d4ed8; }
+.admin-customers-modal-chip--completed { background: #dcfce7; border-color: #15803d; color: #15803d; }
+.admin-customers-modal-chip--cancelled { background: #fee2e2; border-color: #b91c1c; color: #b91c1c; }
+.admin-customers-modal-chip--rejected  { background: #fee2e2; border-color: #b91c1c; color: #b91c1c; }
+.admin-customers-modal-chip--payment-paid       { background: #dcfce7; border-color: #15803d; color: #15803d; }
+.admin-customers-modal-chip--payment-unpaid     { background: #fef9c3; border-color: #a16207; color: #a16207; }
+.admin-customers-modal-chip--payment-pending    { background: #fef9c3; border-color: #a16207; color: #a16207; }
+.admin-customers-modal-chip--payment-partial    { background: #f3e8ff; border-color: #6b21a8; color: #6b21a8; }
+.admin-customers-modal-chip--payment-failed     { background: #fee2e2; border-color: #b91c1c; color: #b91c1c; }
+.admin-customers-modal-chip--payment-refunded   { background: #fee2e2; border-color: #b91c1c; color: #b91c1c; }
+
+.admin-customers-modal-column--orders .admin-customers-modal-orders {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+@media (max-width: 720px) {
+  .admin-customers-modal-body--split {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+    flex: initial;
+  }
+
+  .admin-customers-modal-column--orders {
+    border-left: 0;
+    border-top: 1px solid #f1f2f4;
+    padding-left: 0;
+    padding-top: 18px;
+  }
+
+  .admin-customers-modal-column--orders .admin-customers-modal-orders {
+    overflow: visible;
+  }
 }
 
 /* ── Responsive ───────────────────────────────────────── */

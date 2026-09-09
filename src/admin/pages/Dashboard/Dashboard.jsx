@@ -1,17 +1,12 @@
 import { useEffect, useState } from 'react'
-import { fetchAdminOrders } from '../../services/orderService.js'
+import { fetchAdminDashboardData } from '../../services/orderService.js'
 import './Dashboard.css'
-
-const SUMMARY_CARDS = [
-  { label: 'Total Orders', value: 128 },
-  { label: 'Pending Orders', value: 12 },
-  { label: 'Completed Orders', value: 96 },
-  { label: 'Total Customers', value: 84 },
-]
 
 const STATUS_CLASS = {
   Pending: 'dash-status--pending',
   Confirmed: 'dash-status--confirmed',
+  Preparing: 'dash-status--preparing',
+  Ready: 'dash-status--ready',
   Completed: 'dash-status--completed',
 }
 
@@ -56,18 +51,25 @@ function mapRecentOrder(order) {
 }
 
 function Dashboard() {
+  const [summary, setSummary] = useState(null)
   const [recentOrders, setRecentOrders] = useState([])
   const [isLoadingRecentOrders, setIsLoadingRecentOrders] = useState(true)
 
   useEffect(() => {
     let isMounted = true
 
-    fetchAdminOrders()
-      .then((orders) => {
-        if (isMounted) setRecentOrders(orders.slice(0, 5).map(mapRecentOrder))
+    fetchAdminDashboardData()
+      .then(({ summary: dashboardSummary, recentOrders: orders }) => {
+        if (isMounted) {
+          setSummary(dashboardSummary)
+          setRecentOrders(orders.map(mapRecentOrder))
+        }
       })
       .catch(() => {
-        if (isMounted) setRecentOrders([])
+        if (isMounted) {
+          setSummary(null)
+          setRecentOrders([])
+        }
       })
       .finally(() => {
         if (isMounted) setIsLoadingRecentOrders(false)
@@ -85,11 +87,16 @@ function Dashboard() {
       </div>
 
       <div className="dash-cards">
-        {SUMMARY_CARDS.map((card) => (
+        {[
+          { label: 'Total Orders', value: summary?.totalOrders },
+          { label: 'Pending Orders', value: summary?.pendingOrders },
+          { label: 'Completed Orders', value: summary?.completedOrders },
+          { label: 'Total Customers', value: summary?.totalCustomers },
+        ].map((card) => (
           <div className="dash-card" key={card.label}>
             <span className="dash-card-accent" aria-hidden="true" />
             <span className="dash-card-label">{card.label}</span>
-            <strong className="dash-card-value">{card.value}</strong>
+            <strong className="dash-card-value">{card.value ?? '—'}</strong>
           </div>
         ))}
       </div>
