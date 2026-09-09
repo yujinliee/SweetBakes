@@ -96,9 +96,18 @@ export default function TrackOrderDrawer({ initialValues, onClose }) {
     try {
       const { data, error: lookupError } = await supabase.rpc('track_guest_order', { p_order_number: orderNumber.trim().toUpperCase(), p_email: email.trim().toLowerCase() })
       if (!alive.current) return
-      if (lookupError || !data) setError(NOT_FOUND)
+      if (lookupError) {
+        // Log diagnostic codes only: server messages/details can contain input data.
+        if (import.meta.env.DEV) console.error('[TRACK ORDER] RPC error:', {
+          code: lookupError.code || 'UNKNOWN_RPC_ERROR',
+          rpc: 'track_guest_order',
+        })
+        setError(NOT_FOUND)
+      }
+      else if (!data) setError(NOT_FOUND)
       else setResult(data)
     } catch {
+      if (import.meta.env.DEV) console.error('[TRACK ORDER] RPC request failed (network/client exception).')
       if (alive.current) setError(NOT_FOUND)
     } finally {
       busy.current = false

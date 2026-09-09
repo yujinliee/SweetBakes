@@ -1,0 +1,23 @@
+.payment-success-modal { box-sizing: border-box; width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); margin: auto; padding: 28px; border: 1px solid #eadfd9; border-radius: 16px; background: #fff; color: #3a2e2e; box-shadow: 0 24px 70px #3a2e2e30; font-family: 'Poppins', sans-serif; text-align: left; font-size: 14px; overflow: auto; }
+.payment-success-modal::backdrop { background: #3a2e2e66; }
+.payment-success-modal h2 { margin: 12px 30px 8px 0; font-size: 23px; }
+.payment-success-modal h3 { margin: 22px 0 12px; font-size: 14px; }
+.payment-success-modal p { font-size: 14px; line-height: 1.6; }
+.payment-success-close { position: absolute; right: 16px; top: 12px; border: 0; background: transparent; color: inherit; font-size: 26px; cursor: pointer; }
+.payment-success-check { display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: #eadcf7; color: #7b4e87; }
+.payment-success-reference { display: grid; gap: 5px; margin-top: 18px; overflow-wrap: anywhere; }
+.payment-success-reference span, .payment-success-modal dt { color: #75645e; font-size: 13px; }
+.payment-success-note { padding: 12px; background: #f7f0f5; border-radius: 8px; }
+.payment-success-items { list-style: none; padding: 0; margin: 0; }
+.payment-success-items li { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #eadfd9; }
+.payment-success-items img { width: 54px; height: 54px; border-radius: 8px; object-fit: cover; }
+.payment-success-items li div { display: grid; gap: 4px; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.payment-success-items li span { font-size: 13px; }
+.payment-success-modal dl { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.payment-success-modal dd { margin: 4px 0 0; overflow-wrap: anywhere; }
+.payment-success-wide { grid-column: 1 / -1; }
+.payment-success-total { display: flex; justify-content: space-between; border-top: 1px solid #eadfd9; padding-top: 16px; font-size: 16px; }
+.payment-success-actions { display: grid; gap: 10px; margin-top: 24px; }
+.payment-success-actions button { border: 1px solid #7b4e87; border-radius: 8px; padding: 12px; background: #7b4e87; color: white; font: inherit; cursor: pointer; }
+.payment-success-actions button + button { background: white; color: #7b4e87; }
+@media (max-width: 420px) { .payment-success-modal { padding: 20px; } .payment-success-items li { flex-wrap: wrap; } .payment-success-items li > strong { margin-left: auto; } }
