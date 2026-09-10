@@ -172,11 +172,7 @@ function PaymentReturnNotice({ order, paymentReturn, onRetry }) {
   return <section className="my-orders-payment-return" role="status"><strong>Confirming your payment...</strong><p>We’re waiting for payment verification from Xendit.</p></section>
 }
 
-<<<<<<< HEAD
-function OrderDetails({ order, onClose, onImageOpen, paymentReturn, completedOrdersCount = 0 }) {
-=======
-function OrderDetails({ order, onClose, onImageOpen, paymentReturn, onPaymentRetry }) {
->>>>>>> 32c1cfaf60fa509508d255c7ac47b89197af0026
+function OrderDetails({ order, onClose, onImageOpen, paymentReturn, onPaymentRetry, completedOrdersCount = 0 }) {
   useLayoutEffect(() => {
     const root = document.documentElement
     const body = document.body
@@ -234,13 +230,8 @@ function OrderDetails({ order, onClose, onImageOpen, paymentReturn, onPaymentRet
         </div>)}</div>
         {items.length > 1 ? <div className="my-orders-detail-total"><span>Order Total</span><strong className="my-orders-detail-price">{isAwaitingPrice(order) ? 'Awaiting Price' : formatCurrency(finalPrice)}</strong></div> : null}
         {referenceImages.length ? <div className="my-orders-detail-references"><h4>Reference Images</h4><div className="my-orders-reference-images">{referenceImages.map((image, index) => <button type="button" key={image.path || image.signed_url || index} onClick={() => onImageOpen(image.signed_url || image.url)}><img src={image.signed_url || image.url} alt={image.name || 'Order reference'} /></button>)}</div></div> : null}
-<<<<<<< HEAD
-        <PaymentReturnNotice order={order} paymentReturn={paymentReturn} />
+<PaymentReturnNotice order={order} paymentReturn={paymentReturn} onRetry={onPaymentRetry} />
         {isCustomOrder(order) ? <PaymentPanel order={order} downPayment={downPayment} completedOrdersCount={completedOrdersCount} /> : <RegularPaymentPanel order={order} />}
-=======
-        <PaymentReturnNotice order={order} paymentReturn={paymentReturn} onRetry={onPaymentRetry} />
-        {isCustomOrder(order) ? <PaymentPanel order={order} downPayment={downPayment} /> : <RegularPaymentPanel order={order} />}
->>>>>>> 32c1cfaf60fa509508d255c7ac47b89197af0026
       </section>
       <section className="my-orders-detail-card"><h3>Fulfillment Details</h3><dl className="my-orders-detail-fulfillment"><div><dt>Preferred Date</dt><dd>{formatDate(order.preferred_date)}</dd></div><div><dt>Preferred Time</dt><dd>{formatTime(order.preferred_time)}</dd></div><div className="my-orders-detail-wide"><dt>Order Method</dt><dd>{isDelivery ? 'Delivery' : 'Store Pickup'}</dd></div>{isDelivery ? <><div className="my-orders-detail-wide"><dt>Delivery Address</dt><dd>{address || 'Not provided'}</dd></div>{order.different_recipient ? <div className="my-orders-detail-wide"><dt>Recipient</dt><dd>{order.recipient_name || 'Not provided'} {order.recipient_contact || ''}</dd></div> : null}</> : <div className="my-orders-detail-wide"><dt>Pickup Location</dt><dd>Sweet Bakes store pickup</dd></div>}</dl></section>
     </div>
@@ -456,10 +447,6 @@ function MyOrdersPage({ onNavigate, onCustomerLogout, isCustomerAuthenticated = 
           {activeTab === 'To Receive' ? <p className="my-orders-tab-note">Ready for store pickup.</p> : null}
           <div className="my-orders-list">{visibleOrders.map((order) => <OrderHistoryCard key={order.id} order={order} onSelect={handleSelectOrder} onReview={activeTab === 'To Review' ? setReviewOrder : undefined} />)}</div>
         </>}
-<<<<<<< HEAD
-      </div></section></main><SiteFooter />{reviewOrder ? <OrderReviewModal key={reviewOrder.id} order={reviewOrder} onSubmitted={handleReviewSubmitted} onClose={() => setReviewOrder(null)} /> : null}{selectedOrder ? <OrderDetails order={selectedOrder} paymentReturn={paymentReturn} onClose={() => setSelectedOrder(null)} onImageOpen={setPreviewImage} completedOrdersCount={orders.filter((order) => order.order_status === 'completed').length} /> : null}{previewImage ? <div className="my-orders-image-backdrop" role="presentation" onClick={() => setPreviewImage('')}><img src={previewImage} alt="Larger order reference" /></div> : null}{verifiedRegularOrder ? <PaymentSuccessModal order={verifiedRegularOrder} onClose={() => setVerifiedRegularOrder(null)} onPrimary={() => { setVerifiedRegularOrder(null); setActiveTab('All'); handleSelectOrder(verifiedRegularOrder) }} onContinue={() => { setVerifiedRegularOrder(null); onNavigate?.('/#sweet-treats') }} /> : null}</div>
-=======
-      </div></section></main><SiteFooter />{reviewOrder ? <OrderReviewModal key={reviewOrder.id} order={reviewOrder} onSubmitted={handleReviewSubmitted} onClose={() => setReviewOrder(null)} /> : null}{selectedOrder ? <OrderDetails order={selectedOrder} paymentReturn={paymentReturn} onPaymentRetry={() => setPaymentReturn((current) => ({ ...current, status: 'checking' }))} onClose={() => setSelectedOrder(null)} onImageOpen={setPreviewImage} /> : null}{previewImage ? <div className="my-orders-image-backdrop" role="presentation" onClick={() => setPreviewImage('')}><img src={previewImage} alt="Larger order reference" /></div> : null}{verifiedRegularOrder ? <PaymentSuccessModal order={verifiedRegularOrder} onClose={() => setVerifiedRegularOrder(null)} onPrimary={() => { setVerifiedRegularOrder(null); setActiveTab('All'); handleSelectOrder(verifiedRegularOrder) }} onContinue={() => { setVerifiedRegularOrder(null); onNavigate?.('/#sweet-treats') }} /> : null}</div>
->>>>>>> 32c1cfaf60fa509508d255c7ac47b89197af0026
+</div></section></main><SiteFooter />{reviewOrder ? <OrderReviewModal key={reviewOrder.id} order={reviewOrder} onSubmitted={handleReviewSubmitted} onClose={() => setReviewOrder(null)} /> : null}{selectedOrder ? <OrderDetails order={selectedOrder} paymentReturn={paymentReturn} onPaymentRetry={() => setPaymentReturn((current) => ({ ...current, status: 'checking' }))} onClose={() => setSelectedOrder(null)} onImageOpen={setPreviewImage} completedOrdersCount={orders.filter((order) => order.order_status === 'completed').length} /> : null}{previewImage ? <div className="my-orders-image-backdrop" role="presentation" onClick={() => setPreviewImage('')}><img src={previewImage} alt="Larger order reference" /></div> : null}{verifiedRegularOrder ? <PaymentSuccessModal order={verifiedRegularOrder} onClose={() => setVerifiedRegularOrder(null)} onPrimary={() => { setVerifiedRegularOrder(null); setActiveTab('All'); handleSelectOrder(verifiedRegularOrder) }} onContinue={() => { setVerifiedRegularOrder(null); onNavigate?.('/#sweet-treats') }} /> : null}</div>
 }
 export default MyOrdersPage
