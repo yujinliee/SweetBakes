@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { getOrderProgressStage, getOrderProgressStages, getOrderProgressLabel, isRegularProgressOrder } from '../services/orderStatusDisplay.js'
 import { itemFallback, itemImage } from '../myorders/orderHistoryImages.js'
+import { formatDisplayTime } from '../components/timeUtils.js'
 import '../myorders/MyOrdersPage.css'
 import './TrackOrderPage.css'
 import './TrackOrderDrawer.css'
@@ -9,7 +10,7 @@ import './TrackOrderDrawer.css'
 const NOT_FOUND = "We couldn't find an order matching that Order ID and email."
 const currency = (value) => new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(Number(value) || 0)
 const dateLabel = (value) => value ? new Date(`${value}T00:00:00`).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Not scheduled'
-const timeLabel = (value) => value ? new Date(`1970-01-01T${value}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'Not specified'
+const timeLabel = (value) => (value ? formatDisplayTime(value) : 'Not specified')
 
 function Thumbnail({ item }) {
   const [failed, setFailed] = useState(false)

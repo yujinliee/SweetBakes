@@ -11,9 +11,11 @@ import { fetchCustomerReviews } from '../services/orderReviewService.js'
 import OrderReviewModal from './OrderReviewModal.jsx'
 import { ORDER_TABS, EMPTY_MESSAGES, attachOrderReviews, getOrderTabCounts, matchesOrderTab, isAwaitingPrice, historyStatus, itemDescription, referenceImages, getHistoryItems } from './orderHistory.js'
 import { attachCatalogImages, itemImage, itemFallback } from './orderHistoryImages.js'
+import { formatDisplayTime } from '../components/timeUtils.js'
+import { calculateLoyaltyReward, getCustomDownPaymentState } from './loyaltyReward.js'
 import './MyOrdersPage.css'
 
-const ORDER_SELECT = `id, order_number, customer_id, first_name, last_name, email, order_method, province, city_municipality, barangay, postal_code, address, apartment_unit, landmark, different_recipient, recipient_name, recipient_contact, preferred_date, preferred_time, subtotal, delivery_fee, total, required_down_payment, order_status, payment_status, payment_method, created_at, updated_at`
+const ORDER_SELECT = `id, order_number, customer_id, first_name, last_name, email, order_method, province, city_municipality, barangay, postal_code, address, apartment_unit, landmark, different_recipient, recipient_name, recipient_contact, preferred_date, preferred_time, subtotal, delivery_fee, total, required_down_payment, amount_paid, loyalty_reward_applied, loyalty_discount_percent, loyalty_discount_amount, payment_amount_due, order_status, payment_status, payment_method, created_at, updated_at`
 const ORDER_ITEM_SELECT = `id, order_id, product_id, product_name, product_type, variant_name, quantity, subtotal, unit_price, customization_data`
 const PRICE_ITEM_SELECT = 'id, order_id, description, amount, sort_order'
 const REFERENCE_BUCKET = 'custom-order-references'
@@ -21,7 +23,7 @@ const REFERENCE_BUCKET = 'custom-order-references'
 const formatCurrency = (value) => new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 2 }).format(Number(value) || 0)
 const formatDate = (value) => { if (!value) return 'Not scheduled'; const date = new Date(`${value}T00:00:00`); return Number.isNaN(date.getTime()) ? 'Not scheduled' : date.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) }
 const formatStatus = (value) => { const normalized = String(value || '').trim(); return normalized ? normalized.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()) : 'Pending' }
-const formatTime = (value) => value ? new Date(`1970-01-01T${value}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'Not specified'
+const formatTime = (value) => (value ? formatDisplayTime(value) : 'Not specified')
 
 function isCustomOrder(order) { return (order?.order_items || []).some((item) => item.customization_data?.request_type) }
 function removePurchasedCartItems(order) { (order?.order_items || []).forEach((item) => removeCartQuantity(item.product_name, item.quantity)) }
@@ -39,20 +41,43 @@ function StatusProgress({ order }) {
   </div>
 }
 
-function PaymentPanel({ order, downPayment, completedOrdersCount = 0 }) {
+function PaymentPanel({ order, completedOrdersCount = 0 }) {
   const [isCreatingPayment, setIsCreatingPayment] = useState(false)
   const [paymentError, setPaymentError] = useState('')
-  const [voucherApplied, setVoucherApplied] = useState(false)
-  const eligible = String(order.order_status || '').toLowerCase() === 'confirmed' && String(order.payment_status || '').toLowerCase() === 'pending' && Number(downPayment) > 0
-  const originalDownPayment = Number(downPayment) || 0
-  const discountAmount = Math.round(originalDownPayment * 0.20 * 100) / 100
-  const finalPayable = Math.max(0, originalDownPayment - discountAmount)
-  const voucherEligible = completedOrdersCount >= 2 && originalDownPayment > 0
+  const [voucherPreview, setVoucherPreview] = useState(false)
+
+  const reward = getCustomDownPaymentState(order, completedOrdersCount)
+  const previewReward = calculateLoyaltyReward(reward.originalDownPayment, completedOrdersCount)
+
+  const canPay = String(order.order_status || '').toLowerCase() === 'confirmed'
+    && ['pending', 'unpaid'].includes(String(order.payment_status || '').toLowerCase())
+    && reward.originalDownPayment > 0
+
+  if (reward.paid) {
+    return <div className="my-orders-detail-payment-action my-orders-detail-payment-paid" role="status">
+      <div className="my-orders-paid-summary">
+        <strong className="my-orders-paid-label">Down Payment Paid</strong>
+        {reward.rewardApplied ? <>
+          <div className="my-orders-voucher-row"><span>Original Down Payment</span><strong>{formatCurrency(reward.originalDownPayment)}</strong></div>
+          <div className="my-orders-voucher-row my-orders-voucher-row--discount"><span>Loyalty Discount</span><strong>{formatCurrency(-reward.discountAmount)}</strong></div>
+        </> : null}
+        <div className="my-orders-voucher-row"><span>Amount Paid</span><strong>{formatCurrency(reward.amountPaid)}</strong></div>
+        <div className="my-orders-voucher-row my-orders-voucher-row--final"><span>Remaining Balance</span><strong>{formatCurrency(reward.remainingBalance)}</strong></div>
+      </div>
+    </div>
+  }
+  if (!canPay) return null
+
+  const previewingVoucher = reward.eligible && !reward.rewardApplied && !reward.hasPersistedSession && voucherPreview
+  const usingVoucher = reward.hasPersistedSession ? Boolean(reward.rewardApplied) : previewingVoucher
+  const displayDiscount = reward.hasPersistedSession ? reward.discountAmount : (usingVoucher ? previewReward.discountAmount : 0)
+  const displayPayable = reward.hasPersistedSession ? reward.payableAmount : (usingVoucher ? previewReward.payableAmount : reward.originalDownPayment)
 
   const handlePayDownPayment = async () => {
-    if (isCreatingPayment || !eligible) return
+    if (isCreatingPayment || !canPay) return
     setIsCreatingPayment(true)
     setPaymentError('')
+    let responseError = null
     try {
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
       const session = sessionData?.session
@@ -61,20 +86,15 @@ function PaymentPanel({ order, downPayment, completedOrdersCount = 0 }) {
         setPaymentError('Authentication is required. Please sign in again.')
         return
       }
-      console.log('[XENDIT ORDER ID]', { orderId: order?.id, orderNumber: order?.order_number, voucherApplied, discountAmount })
       const body = {
-        order_id: order.id,
         orderId: order.id,
-        order_number: order.order_number,
-        orderNumber: order.order_number,
+        paymentType: 'custom_down_payment',
       }
-      if (voucherApplied && voucherEligible) {
-        body.voucher_applied = true
-        body.voucherApplied = true
-        body.discount_amount = discountAmount
-        body.discountAmount = discountAmount
-        body.amount = finalPayable
+      if (usingVoucher) {
+        body.appliedVoucher = true
+        body.amount = displayPayable
       }
+      console.log('[XENDIT ORDER ID]', { orderId: order?.id, orderNumber: order?.order_number, usingVoucher, displayPayable })
       const invokeResult = await supabase.functions.invoke('create-xendit-payment', {
         body,
         headers: { Authorization: `Bearer ${session.access_token}` },
@@ -85,7 +105,11 @@ function PaymentPanel({ order, downPayment, completedOrdersCount = 0 }) {
         const response = invokeError.context
         if (response instanceof Response) {
           try {
-            console.error('[XENDIT PAYMENT RESPONSE]', await response.clone().json())
+            const parsed = await response.clone().json()
+            console.error('[XENDIT PAYMENT RESPONSE]', parsed)
+            if (Number.isFinite(Number(parsed?.expected_amount))) {
+              responseError = `Payment amount was recalculated to ${formatCurrency(parsed.expected_amount)}. Please refresh and try again.`
+            }
           } catch {
             try { console.error('[XENDIT PAYMENT RESPONSE]', await response.clone().text()) } catch { /* no diagnostic body */ }
           }
@@ -96,31 +120,27 @@ function PaymentPanel({ order, downPayment, completedOrdersCount = 0 }) {
       window.location.assign(invokeData.paymentUrl)
     } catch (error) {
       console.error('[XENDIT PAYMENT]', error)
-      setPaymentError('Unable to start payment. Please try again.')
+      setPaymentError(responseError || 'Unable to start payment. Please try again.')
     } finally {
       setIsCreatingPayment(false)
     }
   }
 
-  if (!eligible) return null
-
-  const displayAmount = voucherApplied && voucherEligible ? finalPayable : originalDownPayment
-
   return <div className="my-orders-detail-payment-action">
-    <button type="button" className="my-orders-pay-button" onClick={handlePayDownPayment} disabled={isCreatingPayment}>{isCreatingPayment ? 'Creating Payment...' : `Pay Down Payment: ${formatCurrency(displayAmount)}`}</button>
+    <button type="button" className="my-orders-pay-button" onClick={handlePayDownPayment} disabled={isCreatingPayment}>{isCreatingPayment ? 'Creating Payment...' : `Pay Down Payment: ${formatCurrency(displayPayable)}`}</button>
     {paymentError ? <p className="my-orders-payment-error" role="alert">{paymentError}</p> : null}
-    {voucherEligible ? <div className="my-orders-voucher-section">
-      <button type="button" className={`my-orders-voucher-toggle${voucherApplied ? ' is-active' : ''}`} onClick={() => setVoucherApplied((current) => !current)}>
-        <span className="my-orders-voucher-icon" aria-hidden="true">{voucherApplied ? '\u2713' : '\uD83C\uDF9F'}</span>
+    <div className="my-orders-voucher-section">
+      {reward.eligible ? <button type="button" className={`my-orders-voucher-toggle${usingVoucher ? ' is-active' : ''}`} onClick={() => { if (!reward.hasPersistedSession) setVoucherPreview((current) => !current) }}>
+        <span className="my-orders-voucher-icon" aria-hidden="true">{usingVoucher ? '\u2713' : '\uD83C\uDF9F'}</span>
         <span className="my-orders-voucher-label">Loyalty Reward: 20% OFF Down Payment</span>
-        <span className="my-orders-voucher-sublabel">Earned after {completedOrdersCount} completed orders</span>
-      </button>
-      {voucherApplied && <div className="my-orders-voucher-breakdown">
-        <div className="my-orders-voucher-row"><span>Original Down Payment</span><strong>{formatCurrency(originalDownPayment)}</strong></div>
-        <div className="my-orders-voucher-row my-orders-voucher-row--discount"><span>20% Voucher Discount</span><strong>{formatCurrency(-discountAmount)}</strong></div>
-        <div className="my-orders-voucher-row my-orders-voucher-row--final"><span>Final Payable Amount</span><strong>{formatCurrency(finalPayable)}</strong></div>
-      </div>}
-    </div> : <div className="my-orders-voucher-locked"><span className="my-orders-voucher-icon" aria-hidden="true">{'\uD83D\uDD12'}</span><span>Complete 2 previous orders to unlock a 20% Down Payment Discount Voucher on your 3rd order!</span></div>}
+        <span className="my-orders-voucher-sublabel">Earned after 2 completed orders</span>
+      </button> : <div className="my-orders-voucher-locked"><span className="my-orders-voucher-icon" aria-hidden="true">{'\uD83D\uDD12'}</span><span>Complete 2 previous orders to unlock a 20% Down Payment Discount on your next order.</span></div>}
+      {usingVoucher ? <div className="my-orders-voucher-breakdown">
+        <div className="my-orders-voucher-row"><span>Original Down Payment</span><strong>{formatCurrency(reward.originalDownPayment)}</strong></div>
+        <div className="my-orders-voucher-row my-orders-voucher-row--discount"><span>Loyalty Discount</span><strong>{formatCurrency(-displayDiscount)}</strong></div>
+        <div className="my-orders-voucher-row my-orders-voucher-row--final"><span>Amount Due Now</span><strong>{formatCurrency(displayPayable)}</strong></div>
+      </div> : null}
+    </div>
   </div>
 }
 
@@ -159,7 +179,8 @@ function RegularPaymentPanel({ order }) {
 function PaymentReturnNotice({ order, paymentReturn, onRetry }) {
   if (!paymentReturn || paymentReturn.orderId !== order.id) return null
   if (['checking', 'error', 'timeout'].includes(paymentReturn.status)) return <PaymentReturnStatus state={paymentReturn} onRetry={onRetry} />
-  const amount = formatCurrency(isCustomOrder(order) ? order.required_down_payment : order.total)
+  const receivedAmount = Number(order.amount_paid) > 0 ? order.amount_paid : (isCustomOrder(order) ? order.required_down_payment : order.total)
+  const amount = formatCurrency(receivedAmount)
   if (paymentReturn.status === 'verified') {
     return <section className="my-orders-payment-return my-orders-payment-return--success" role="status"><span className="my-orders-payment-return-icon" aria-hidden="true">✓</span><div><strong>Payment Successful</strong><p>Payment Verified</p><span>Thank you! We received your {amount}{isCustomOrder(order) ? ' down payment' : ' payment'}.</span><small>Order {order.order_number || 'Order'}</small></div></section>
   }
@@ -205,7 +226,6 @@ function OrderDetails({ order, onClose, onImageOpen, paymentReturn, onPaymentRet
   const items = order.order_items || []
   const priceItems = order.price_items || []
   const finalPrice = priceItems.length ? priceItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0) : Number(order.total) || 0
-  const downPayment = Number(order.required_down_payment) || finalPrice * 0.5
   const referenceImages = items.flatMap((item) => (Array.isArray(item.customization_data?.reference_images) ? item.customization_data.reference_images : [])).filter((image) => image.signed_url || image.url)
   const isDelivery = String(order.order_method || '').toLowerCase() === 'delivery'
   const address = [order.address, [order.barangay, order.city_municipality].filter(Boolean).join(', '), [order.province, order.postal_code].filter(Boolean).join(' ')].filter(Boolean).join(', ')
@@ -231,7 +251,7 @@ function OrderDetails({ order, onClose, onImageOpen, paymentReturn, onPaymentRet
         {items.length > 1 ? <div className="my-orders-detail-total"><span>Order Total</span><strong className="my-orders-detail-price">{isAwaitingPrice(order) ? 'Awaiting Price' : formatCurrency(finalPrice)}</strong></div> : null}
         {referenceImages.length ? <div className="my-orders-detail-references"><h4>Reference Images</h4><div className="my-orders-reference-images">{referenceImages.map((image, index) => <button type="button" key={image.path || image.signed_url || index} onClick={() => onImageOpen(image.signed_url || image.url)}><img src={image.signed_url || image.url} alt={image.name || 'Order reference'} /></button>)}</div></div> : null}
 <PaymentReturnNotice order={order} paymentReturn={paymentReturn} onRetry={onPaymentRetry} />
-        {isCustomOrder(order) ? <PaymentPanel order={order} downPayment={downPayment} completedOrdersCount={completedOrdersCount} /> : <RegularPaymentPanel order={order} />}
+        {isCustomOrder(order) ? <PaymentPanel order={order} completedOrdersCount={completedOrdersCount} /> : <RegularPaymentPanel order={order} />}
       </section>
       <section className="my-orders-detail-card"><h3>Fulfillment Details</h3><dl className="my-orders-detail-fulfillment"><div><dt>Preferred Date</dt><dd>{formatDate(order.preferred_date)}</dd></div><div><dt>Preferred Time</dt><dd>{formatTime(order.preferred_time)}</dd></div><div className="my-orders-detail-wide"><dt>Order Method</dt><dd>{isDelivery ? 'Delivery' : 'Store Pickup'}</dd></div>{isDelivery ? <><div className="my-orders-detail-wide"><dt>Delivery Address</dt><dd>{address || 'Not provided'}</dd></div>{order.different_recipient ? <div className="my-orders-detail-wide"><dt>Recipient</dt><dd>{order.recipient_name || 'Not provided'} {order.recipient_contact || ''}</dd></div> : null}</> : <div className="my-orders-detail-wide"><dt>Pickup Location</dt><dd>Sweet Bakes store pickup</dd></div>}</dl></section>
     </div>

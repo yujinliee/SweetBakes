@@ -11,6 +11,7 @@ import ubeImage from '../../../assets/othersweettreats/ube.png'
 import grahamImage from '../../../assets/othersweettreats/graham de leche.png'
 import lecheFlanImage from '../../../assets/othersweettreats/leche_flan.png'
 import putoImage from '../../../assets/othersweettreats/puto.jpg'
+import { formatDisplayTime } from '../../../components/timeUtils.js'
 import './OrderModal.css'
 
 const CURRENCY_FORMATTER = new Intl.NumberFormat('en-PH', {
@@ -64,7 +65,7 @@ function formatDate(value) {
 }
 
 function formatTime(value) {
-  return value || '—'
+  return formatDisplayTime(value, '—')
 }
 
 function resolveItemThumbnail(item, order) {
@@ -322,7 +323,6 @@ export default function OrderModal({ order, onClose, onProgressOrder, onStatusCh
                           value={item.description}
                           aria-label={`Price item ${index + 1} description`}
                           onChange={(e) => onUpdatePriceItem?.(index, 'description', e.target.value)}
-                          disabled={updatingOrderId === order.id}
                         />
                         <div className="om-price-amount">
                           <span>₱</span>
@@ -334,7 +334,6 @@ export default function OrderModal({ order, onClose, onProgressOrder, onStatusCh
                             value={item.amount}
                             aria-label={`Price item ${index + 1} amount`}
                             onChange={(e) => onUpdatePriceItem?.(index, 'amount', e.target.value)}
-                            disabled={updatingOrderId === order.id}
                           />
                         </div>
                         <button
@@ -358,12 +357,12 @@ export default function OrderModal({ order, onClose, onProgressOrder, onStatusCh
                   </button>
                   <dl className="om-price-totals">
                     <div>
-                      <dt>Final Price</dt>
-                      <dd>₱{customPriceTotal.toLocaleString('en-PH', { maximumFractionDigits: 2 })}</dd>
-                    </div>
-                    <div>
                       <dt>Required Down Payment (50%)</dt>
                       <dd>₱{customDownPayment.toLocaleString('en-PH', { maximumFractionDigits: 2 })}</dd>
+                    </div>
+                    <div>
+                      <dt>Final Price</dt>
+                      <dd>₱{customPriceTotal.toLocaleString('en-PH', { maximumFractionDigits: 2 })}</dd>
                     </div>
                   </dl>
                 </>

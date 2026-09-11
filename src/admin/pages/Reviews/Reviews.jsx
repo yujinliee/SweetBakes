@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { fetchAdminReviews } from '../../services/reviewService.js'
 import { fetchAdminOrders } from '../../services/orderService.js'
 import { getOrderProgressStages, getOrderProgressStage, isRegularProgressOrder } from '../../../services/orderStatusDisplay.js'
+import { formatDisplayTime } from '../../../components/timeUtils.js'
 import chocolateCakeImage from '../../../assets/othersweettreats/regular_chocolate.jpg'
 import redVelvetCakeImage from '../../../assets/othersweettreats/regular_redvelvet.png'
 import cheesecakeImage from '../../../assets/othersweettreats/halfordozen_cheesecake.png'
@@ -216,7 +217,7 @@ function mapAdminOrder(order) {
     category: formatCategory(order),
     orderMethod: formatOrderMethod(order.order_method),
     requestedDate: formatDate(order.preferred_date),
-    preferredTime: order.preferred_time || '—',
+    preferredTime: formatDisplayTime(order.preferred_time, '—'),
     status: formatStatus(order.order_status),
     paymentStatus: formatPaymentStatus(order.payment_status),
     total: order.total === null || order.total === undefined ? null : Number(order.total) || 0,

@@ -20,7 +20,7 @@ import { supabase } from '../lib/supabase.js'
 import { getCheckoutSession, reusableCartOrder, getCartOrderReference, assertCartOrderReference } from './cartOrderOwnership.js'
 import { fetchAuthenticatedCustomerProfile } from '../services/customerProfileService.js'
 import { startPaymentReturn } from './paymentReturnController.js'
-import { requestGuestPaymentStatus, createGuestOrderClient } from './guestPaymentStatus.js'
+import { requestGuestPaymentStatus, createGuestRpcClient } from './guestPaymentStatus.js'
 import PaymentReturnStatus from './PaymentReturnStatus.jsx'
 import PaymentSuccessModal from '../components/PaymentSuccessModal.jsx'
 import { CART_PAYMENT_RETURN_STORAGE_KEY, loadGuestConfirmation, loadConfirmedItems, isVerifiedPayment, logPaymentReturn, savePaymentReturnContext, shouldConsumePaymentReturn } from './paymentConfirmation.js'
@@ -51,7 +51,7 @@ const ORDER_METHODS = [
 ]
 
 const CART_ORDER_PAYMENT_METHOD = 'Xendit'
-const guestOrderClient = createGuestOrderClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY)
+const guestRpcClient = createGuestRpcClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY)
 
 const CART_IMAGE_FALLBACKS = {
   'Chocolate Cake': chocolateCakeImage,
@@ -234,7 +234,7 @@ function CartPage({
       loadDetails: async (receipt, status) => {
         if (receipt.guestEmail) {
           if (!status.orderNumber) throw Object.assign(new Error(), { code: 'MISSING_ORDER_NUMBER_CONTRACT' })
-          return loadGuestConfirmation(guestOrderClient, receipt, status)
+          return loadGuestConfirmation(guestRpcClient, receipt, status)
         }
         const session = await getCheckoutSession(supabase)
         if (!session) throw Object.assign(new Error(), { code: 'SESSION_REQUIRED' })

@@ -30,6 +30,11 @@ type Order = {
   required_down_payment: number | string | null;
   payment_status: string | null;
   order_status: string | null;
+  amount_paid: number | string | null;
+  loyalty_reward_applied: boolean | null;
+  loyalty_discount_percent: number | string | null;
+  loyalty_discount_amount: number | string | null;
+  payment_amount_due: number | string | null;
   guest_confirmation_email_claimed_at: string | null;
   guest_confirmation_email_sent_at: string | null;
 };
@@ -397,7 +402,7 @@ export default {
 
     const { data: orders, error: orderLookupError } = await supabaseAdmin
       .from("orders")
-      .select("id, order_number, customer_id, email, first_name, last_name, order_method, preferred_date, preferred_time, total, required_down_payment, payment_status, order_status, guest_confirmation_email_claimed_at, guest_confirmation_email_sent_at") as {
+      .select("id, order_number, customer_id, email, first_name, last_name, order_method, preferred_date, preferred_time, total, required_down_payment, payment_status, order_status, amount_paid, loyalty_reward_applied, loyalty_discount_percent, loyalty_discount_amount, payment_amount_due, guest_confirmation_email_claimed_at, guest_confirmation_email_sent_at") as {
         data: Order[] | null;
         error: { code?: string; message?: string; details?: string; hint?: string } | null;
       };
@@ -420,13 +425,24 @@ export default {
       return jsonResponse({ received: true, result: "ignored_unknown_reference" });
     }
 
-    const expectedAmount = Number(isRegularPayment ? order.total : order.required_down_payment);
+    // The discounted down payment (payment_amount_due) is the authoritative
+    // charged amount recorded when the payment session was created. Fall back to
+    // the full required_down_payment only when no session amount was persisted.
+    const expectedAmount = Number(
+      isRegularPayment
+        ? order.total
+        : Number(order.payment_amount_due) > 0
+          ? order.payment_amount_due
+          : order.required_down_payment,
+    );
     if (!Number.isFinite(expectedAmount) || Math.round(expectedAmount * 100) !== Math.round(amount * 100)) {
       console.error("[XENDIT WEBHOOK] amount mismatch", {
         event,
         referenceId,
         orderId: order.id,
         amount,
+        expectedAmount,
+        discountAmount: Number(order.payment_amount_due) > 0 ? Number(order.loyalty_discount_amount) : 0,
       });
       return jsonResponse({ error: "Payment amount does not match the order." }, 400);
     }
@@ -443,7 +459,11 @@ export default {
 
     let updateQuery = supabaseAdmin
       .from("orders")
-      .update({ payment_status: "paid", updated_at: new Date().toISOString() })
+      .update({
+        payment_status: "paid",
+        amount_paid: Math.round(amount * 100) / 100,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", order.id);
     updateQuery = isRegularPayment
       ? updateQuery.eq("order_status", "pending").in("payment_status", ["unpaid", "pending"])
@@ -467,6 +487,10 @@ export default {
       paymentSessionId,
       paymentId,
       amount,
+      amountPaid: Math.round(amount * 100) / 100,
+      loyaltyRewardApplied: Boolean(order.loyalty_reward_applied),
+      loyaltyDiscountAmount: Number(order.loyalty_discount_amount) || 0,
+      requiredDownPayment: Number(order.required_down_payment) || 0,
       currentPaymentStatus: order.payment_status,
       updateResult: "payment_status_paid",
       result: "payment_verified",

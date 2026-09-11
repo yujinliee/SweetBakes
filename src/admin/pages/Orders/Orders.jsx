@@ -13,6 +13,13 @@ import ubeImage from '../../../assets/othersweettreats/ube.png'
 import grahamImage from '../../../assets/othersweettreats/graham de leche.png'
 import lecheFlanImage from '../../../assets/othersweettreats/leche_flan.png'
 import putoImage from '../../../assets/othersweettreats/puto.jpg'
+import {
+  CUSTOM_CAKE_PREVIEW_IMAGES,
+  CUSTOM_CUPCAKE_PREVIEW_IMAGES,
+  CUSTOM_PACKAGE_PREVIEW_IMAGES,
+} from '../../../components/customOrderPreviewImages.js'
+import { resolveOrderThumbnail } from './orderThumbnailResolver.js'
+import { formatDisplayTime } from '../../../components/timeUtils.js'
 import './Orders.css'
 
 const TAB_OPTIONS = ['All Orders', 'Pending', 'Confirmed', 'Completed', 'Cancelled']
@@ -61,17 +68,23 @@ const STATIC_FALLBACK_IMAGES = {
   'puto': putoImage,
 }
 
-function resolveOrderThumbnail(order) {
-  // 1. DB product image (public URL, already resolved in orderService)
-  if (order.thumbnailUrl) return order.thumbnailUrl
-  // 2. Static bundled fallback keyed by first item product_name
-  const firstName = normalizeText((order.order_items?.[0]?.product_name) || '')
-  if (firstName) {
-    for (const [key, img] of Object.entries(STATIC_FALLBACK_IMAGES)) {
-      if (firstName.includes(key)) return img
-    }
-  }
-  return null
+const CUSTOM_ITEM_LABELS = {
+  custom_cake: 'Custom Cake',
+  custom_cupcake: 'Custom Cupcakes',
+  custom_cupcakes: 'Custom Cupcakes',
+  custom_party_package: 'Party Package',
+  custom_package: 'Party Package',
+}
+
+function resolveThumbnail(order) {
+  return resolveOrderThumbnail(order, {
+    previewImages: {
+      cake: CUSTOM_CAKE_PREVIEW_IMAGES,
+      cupcake: CUSTOM_CUPCAKE_PREVIEW_IMAGES,
+      package: CUSTOM_PACKAGE_PREVIEW_IMAGES,
+    },
+    staticFallbacks: STATIC_FALLBACK_IMAGES,
+  })
 }
 
 const PRODUCT_TYPE_LABELS = {
@@ -136,7 +149,7 @@ function formatDateTime(value) {
 }
 
 function formatTime(value) {
-  return value || '—'
+  return formatDisplayTime(value, '—')
 }
 
 function formatOrderNumber(order) {
@@ -267,6 +280,7 @@ function mapAdminOrder(order) {
       order.delivery_fee === null || order.delivery_fee === undefined
         ? null
         : Number(order.delivery_fee) || 0,
+    itemCount: (order.order_items || []).length,
     isCustomCake: isCustomCakeOrder(order),
     isCustomized: isCustomizedOrder(order),
     priceItems: order.price_items || [],
@@ -322,11 +336,15 @@ function flattenCustomizationData(value, prefix = '') {
 }
 
 function getReferenceImages(item) {
-  const referenceImages = item.customization_data?.reference_images
-
-  return Array.isArray(referenceImages)
-    ? referenceImages.filter((image) => image?.signed_url || image?.url)
+  const customization = item?.customization_data
+  const topLevel = Array.isArray(customization?.reference_images)
+    ? customization.reference_images
     : []
+  const packageLevel = Array.isArray(customization?.package_customization?.packageReferenceImages)
+    ? customization.package_customization.packageReferenceImages
+    : []
+
+  return [...topLevel, ...packageLevel].filter((image) => image?.signed_url || image?.url)
 }
 
 function getStatusClassName(status) {
@@ -362,7 +380,7 @@ function OrderDetailIcon({ type }) {
 
 function OrderThumbnail({ order }) {
   const [errored, setErrored] = useState(false)
-  const src = resolveOrderThumbnail(order)
+  const src = resolveThumbnail(order)
 
   if (!src || errored) {
     return <span className="admin-orders-thumb admin-orders-thumb--placeholder" aria-hidden="true" />
@@ -660,9 +678,7 @@ function Orders() {
     setCustomPriceItems(
       savedPriceItems.length > 0
         ? savedPriceItems.map((item) => ({ ...item, amount: String(item.amount ?? '') }))
-        : isCustomCakeOrder(selectedOrder)
-          ? [{ id: 'base-custom-cake', description: 'Base Customized Cake', amount: '1500' }]
-          : [],
+        : [],
     )
   }
 
@@ -1060,7 +1076,12 @@ function Orders() {
                     </td>
                     <td className="admin-orders-category-cell">
                       <OrderThumbnail order={order} />
-                      <span>{order.category}</span>
+                      <span className="admin-orders-category-name">
+                        <span>{order.category}</span>
+                        {order.itemCount > 1 ? (
+                          <span className="admin-orders-more-items">+{order.itemCount - 1} more</span>
+                        ) : null}
+                      </span>
                     </td>
                     <td>{order.orderMethod}</td>
                     <td>{order.requestedDate}</td>
@@ -1169,7 +1190,7 @@ function Orders() {
                 <section className="admin-orders-details-card admin-orders-details-item-card">
                   <div className="admin-orders-details-card-heading"><h4>Order Information</h4><span>{activeOrder.orderMethod}</span></div>
                   {(activeOrder.order_items || []).length ? activeOrder.order_items.map((item) => {
-                    const itemName = item.customization_data?.request_type === 'custom_cake' ? 'Custom Cake' : item.product_name || 'Product'
+                    const itemName = CUSTOM_ITEM_LABELS[normalizeText(item.customization_data?.request_type)] || item.product_name || 'Product'
                     const itemCategory = [PRODUCT_TYPE_LABELS[normalizeText(item.product_type)] || toTitleCase(item.product_type), item.variant_name].filter(Boolean).join(' · ') || 'Sweet Treats'
                     return <div className="admin-orders-details-product-row" key={item.id}>
                       <OrderThumbnail order={{ ...activeOrder, order_items: [item] }} />
@@ -1181,20 +1202,29 @@ function Orders() {
                   <div className="admin-orders-details-total admin-orders-details-order-total"><span>Order Total</span><strong>{formatPrice(activeOrder.total, activeOrder)}</strong></div>
                 </section>
 
-                <section className="admin-orders-details-card admin-orders-details-summary-card">
-                  {activeOrder.isCustomized ? <>
-                    <div className="admin-orders-pricing-heading"><div><h4>Price Breakdown</h4><p>Itemize the agreed quotation for this customized order.</p></div><span>PHP</span></div>
-                    <div className="admin-orders-price-items">
-                      {customPriceItems.map((item, index) => <div className="admin-orders-price-item" key={item.id || index}>
-                        <input aria-label={`Price item ${index + 1} description`} type="text" placeholder="Description" value={item.description} onChange={(event) => updateCustomPriceItem(index, 'description', event.target.value)} disabled={updatingOrderId === activeOrder.id} />
-                        <div className="admin-orders-price-amount"><span>₱</span><input aria-label={`Price item ${index + 1} amount`} type="number" min="0" step="1" placeholder="0" value={item.amount} onChange={(event) => updateCustomPriceItem(index, 'amount', event.target.value)} disabled={updatingOrderId === activeOrder.id} /></div>
-                        <button type="button" aria-label={`Remove price item ${index + 1}`} onClick={() => removeCustomPriceItem(index)} disabled={updatingOrderId === activeOrder.id}>×</button>
-                      </div>)}
-                    </div>
-                    <button type="button" className="admin-orders-add-price-item" onClick={addCustomPriceItem} disabled={updatingOrderId === activeOrder.id}>＋ Add Price Item</button>
-                    <dl className="admin-orders-price-totals"><div className="admin-orders-details-total"><dt>Final Price</dt><dd>₱{customPriceTotal.toLocaleString('en-PH', { maximumFractionDigits: 2 })}</dd></div><div><dt>Required Down Payment (50%)</dt><dd>₱{customDownPayment.toLocaleString('en-PH', { maximumFractionDigits: 2 })}</dd></div></dl>
-                  </> : <><h4>Order Summary</h4><dl><div><dt>Subtotal</dt><dd>{formatPrice(activeOrder.subtotal, activeOrder)}</dd></div><div><dt>Delivery Fee</dt><dd>{formatPrice(activeOrder.deliveryFee, activeOrder)}</dd></div><div className="admin-orders-details-total"><dt>Total</dt><dd>{formatPrice(activeOrder.total, activeOrder)}</dd></div></dl></>}
-                </section>
+<section className="admin-orders-details-card admin-orders-details-summary-card admin-orders-pricing-card">
+  {activeOrder.isCustomized ? <>
+    <div className="admin-orders-pricing-heading"><div><h4>Price Breakdown</h4><p>Build the quotation for this customized order.</p></div><span>PHP</span></div>
+    <div className="admin-orders-price-items">
+      {customPriceItems.map((item, index) => <div className="admin-orders-price-item" key={item.id || index}>
+        <input aria-label={`Price item ${index + 1} description`} type="text" placeholder="Description" value={item.description} onChange={(event) => updateCustomPriceItem(index, 'description', event.target.value)} disabled={updatingOrderId === activeOrder.id} />
+        <div className="admin-orders-price-amount"><span>₱</span><input aria-label={`Price item ${index + 1} amount`} type="number" min="0" step="1" placeholder="0" value={item.amount} onChange={(event) => updateCustomPriceItem(index, 'amount', event.target.value)} disabled={updatingOrderId === activeOrder.id} /></div>
+        <button type="button" aria-label={`Remove price item ${index + 1}`} onClick={() => removeCustomPriceItem(index)} disabled={updatingOrderId === activeOrder.id}>×</button>
+      </div>)}
+    </div>
+    <button type="button" className="admin-orders-add-price-item" onClick={addCustomPriceItem} disabled={updatingOrderId === activeOrder.id}>＋ Add Price Item</button>
+    <dl className="admin-orders-price-totals">
+      <div className="admin-orders-price-summary-row">
+        <dt>Required Down Payment</dt>
+        <dd>₱{customDownPayment.toLocaleString('en-PH', { maximumFractionDigits: 0 })}</dd>
+      </div>
+      <div className="admin-orders-price-summary-row admin-orders-price-final-row">
+        <dt>Final Price</dt>
+        <dd>₱{customPriceTotal.toLocaleString('en-PH', { maximumFractionDigits: 0 })}</dd>
+      </div>
+    </dl>
+  </>
+: null}</section>
               </main>
 
               <aside className="admin-orders-details-side-column">
@@ -1218,7 +1248,14 @@ function Orders() {
 
                 <section className="admin-orders-details-card">
                   <h4>Payment</h4>
-                  <dl><div><dt>Payment Status</dt><dd>{activeOrder.paymentStatus}</dd></div><div><dt>Payment Method</dt><dd>{toTitleCase(activeOrder.payment_method) || '—'}</dd></div></dl>
+                  <dl>
+                    <div><dt>Payment Status</dt><dd>{activeOrder.paymentStatus}</dd></div>
+                    <div><dt>Payment Method</dt><dd>{toTitleCase(activeOrder.payment_method) || '—'}</dd></div>
+                    {Number(activeOrder.required_down_payment) > 0 ? <div><dt>Required Down Payment</dt><dd>{formatPrice(activeOrder.required_down_payment, activeOrder)}</dd></div> : null}
+                    {Number(activeOrder.loyalty_discount_amount) > 0 ? <div><dt>Loyalty Discount ({Number(activeOrder.loyalty_discount_percent) || 20}%)</dt><dd>−{formatPrice(activeOrder.loyalty_discount_amount, activeOrder)}</dd></div> : null}
+                    {Number(activeOrder.amount_paid) > 0 ? <div><dt>Amount Paid</dt><dd>{formatPrice(activeOrder.amount_paid, activeOrder)}</dd></div> : null}
+                    {Number(activeOrder.total) > 0 && Number(activeOrder.amount_paid) > 0 ? <div><dt>Remaining Balance</dt><dd>{formatPrice(Math.max(0, Number(activeOrder.total) - Number(activeOrder.amount_paid)), activeOrder)}</dd></div> : null}
+                  </dl>
                 </section>
 
                 <section className={`admin-orders-details-card admin-orders-details-actions-card${['completed', 'cancelled', 'rejected'].includes(normalizeText(activeOrder.order_status)) ? ' is-complete' : ''}`}>

@@ -1,11 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { SiteFooter, SiteTopbar } from '../landingpage/LandingPage.jsx'
-import chocoOneLayer from '../assets/cakepage/choco_onelayer.png'
-import chocoThreeLayer from '../assets/cakepage/choco_threelayer.png'
-import chocoTwoLayer from '../assets/cakepage/choco_twolayer.png'
-import redVelvetOneLayer from '../assets/cakepage/redvelvet_onelayer.png'
-import redVelvetThreeLayer from '../assets/cakepage/redvelvet_thirdlayer.png'
-import redVelvetTwoLayer from '../assets/cakepage/redvelvet_twolayer.png'
+import { CUSTOM_CAKE_PREVIEW_IMAGES as cakePreviewMap } from '../components/customOrderPreviewImages.js'
 import CakeBaseForm from './components/CakeBaseForm.jsx'
 import CakeAvailabilityCalendar from './components/CakeAvailabilityCalendar.jsx'
 import CakeCustomerForm from './components/CakeCustomerForm.jsx'
@@ -36,19 +31,6 @@ import {
   subscribeToCustomDraftAuth,
 } from '../services/customDraftService.js'
 import './CakePage.css'
-
-const cakePreviewMap = {
-  chocolate: {
-    1: chocoOneLayer,
-    2: chocoTwoLayer,
-    3: chocoThreeLayer,
-  },
-  redvelvet: {
-    1: redVelvetOneLayer,
-    2: redVelvetTwoLayer,
-    3: redVelvetThreeLayer,
-  },
-}
 
 const contactNumberPattern = /^\d{11}$/
 

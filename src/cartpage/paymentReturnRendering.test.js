@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { transformWithOxc } from 'vite'
+import { formatDisplayTime } from '../components/timeUtils.js'
 
 async function compile(code, name, scope = {}) {
   const result = await transformWithOxc(code, 'return-render-test.jsx', { jsx: { runtime: 'classic' } })
@@ -11,7 +12,7 @@ async function compile(code, name, scope = {}) {
 }
 const read = (relative) => readFileSync(new URL(relative, import.meta.url), 'utf8').replaceAll('\r\n', '\n')
 const modal = await compile(read('../components/PaymentSuccessModal.jsx').replace(/^import .*$/gm, '').replace('export default function', 'function'), 'PaymentSuccessModal', {
-  useLayoutEffect: React.useLayoutEffect, useRef: React.useRef, itemImage: () => '', itemFallback: () => '/image.png',
+  useLayoutEffect: React.useLayoutEffect, useRef: React.useRef, itemImage: () => '', itemFallback: () => '/image.png', formatDisplayTime,
 })
 const panel = await compile(read('./PaymentReturnStatus.jsx').replace('export default function', 'function'), 'PaymentReturnStatus')
 

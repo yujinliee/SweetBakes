@@ -1,27 +1,9 @@
-import chocolateSixPcs from '../../assets/cupcakepage/chocolate_sixpcs.png'
-import chocolateTwelvePcs from '../../assets/cupcakepage/chocolate_twelvepcs.png'
-import chocolateEighteenPcs from '../../assets/cupcakepage/chocolate_eighteenpcs.png'
-import redVelvetSixPcs from '../../assets/cupcakepage/redvelvet_sixpcs.png'
-import redVelvetTwelvePcs from '../../assets/cupcakepage/redvelvet_twelvepcs.png'
-import redVelvetEighteenPcs from '../../assets/cupcakepage/redvelvet_eighteenpcs.png'
-
-const cupcakePreviewMap = {
-  chocolate: {
-    6: chocolateSixPcs,
-    12: chocolateTwelvePcs,
-    18: chocolateEighteenPcs,
-  },
-  redvelvet: {
-    6: redVelvetSixPcs,
-    12: redVelvetTwelvePcs,
-    18: redVelvetEighteenPcs,
-  },
-}
+import { CUSTOM_CUPCAKE_PREVIEW_IMAGES } from '../../components/customOrderPreviewImages.js'
 
 function CupcakePreview({ selectedFlavor, selectedQuantity }) {
   const imageSrc =
     selectedFlavor && selectedQuantity
-      ? cupcakePreviewMap[selectedFlavor]?.[selectedQuantity] ?? null
+      ? CUSTOM_CUPCAKE_PREVIEW_IMAGES[selectedFlavor]?.[selectedQuantity] ?? null
       : null
 
   return (

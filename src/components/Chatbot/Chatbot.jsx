@@ -758,10 +758,12 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
 
       setAuthRole(null)
       setAuthUser(data?.session?.user || null)
-      console.log('[CUSTOMER CHAT AUTH]', {
-        hasSession: Boolean(data?.session),
-        userId: data?.session?.user?.id ?? null,
-      })
+      if (import.meta.env.DEV) {
+        console.log('[CUSTOMER CHAT AUTH]', {
+          hasSession: Boolean(data?.session),
+          userId: data?.session?.user?.id ?? null,
+        })
+      }
     }
 
     loadSession()

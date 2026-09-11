@@ -1,4 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import {
+  isTimeWithinWindow,
+  pad2,
+  parseTimeValue,
+  timeToMinutes,
+  to24hTime,
+  wheelIndexForScrollTop,
+} from './timeUtils.js'
 import './WheelTimePicker.css'
 
 const ROW_HEIGHT = 40
@@ -6,66 +14,25 @@ const MINUTES = [0, 15, 30, 45]
 const DEFAULT_START_TIME = '09:00'
 const DEFAULT_END_TIME = '19:00'
 
-const pad = (n) => String(n).padStart(2, '0')
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max)
 
-const parseValue = (value) => {
-  if (!value) {
-    return null
-  }
+const parseTimeForWheel = (value) => {
+  const parsed = parseTimeValue(value)
 
-  const match = /^(\d{1,2}):(\d{2})$/.exec(value)
-
-  if (!match) {
-    return null
-  }
-
-  const hour24 = Number(match[1])
-  const minute = Number(match[2])
-
-  if (hour24 > 23 || minute > 59) {
+  if (!parsed) {
     return null
   }
 
   return {
-    hour12: hour24 % 12 === 0 ? 12 : hour24 % 12,
-    minute,
-    period: hour24 < 12 ? 'AM' : 'PM',
+    hour12: parsed.hour % 12 === 0 ? 12 : parsed.hour % 12,
+    minute: parsed.minute,
+    period: parsed.hour < 12 ? 'AM' : 'PM',
   }
-}
-
-const timeToMinutes = (value) => {
-  const parsed = parseValue(value)
-
-  if (!parsed) {
-    return 0
-  }
-
-  const hour24 =
-    parsed.period === 'PM'
-      ? (parsed.hour12 % 12) + 12
-      : parsed.hour12 === 12
-        ? 0
-        : parsed.hour12
-
-  return hour24 * 60 + parsed.minute
-}
-
-const to24h = (hour12, minute, period) => {
-  let hour24 = hour12 % 12
-
-  if (period === 'PM') {
-    hour24 += 12
-  }
-
-  return `${pad(hour24)}:${pad(minute)}`
 }
 
 const isTimeAllowed = (hour12, minute, period, minTime, maxTime) => {
-  const value = to24h(hour12, minute, period)
-  const minutes = timeToMinutes(value)
-
-  return minutes >= timeToMinutes(minTime) && minutes <= timeToMinutes(maxTime)
+  const value = to24hTime(hour12, minute, period)
+  return isTimeWithinWindow(value, minTime, maxTime)
 }
 
 const buildHourOptions = () => Array.from({ length: 12 }, (_, index) => index + 1)
@@ -84,7 +51,7 @@ const resolveIndexes = (hourIndex, minuteIndex, periodIndex, hours, periods) => 
 const WHEEL_CYCLES = 101
 const WHEEL_EDGE_CYCLES = 8
 
-function WheelColumn({ label, options, getLabel, valueIndex, onSelect, loop = false }) {
+function WheelColumn({ label, options, getLabel, valueIndex, onSelect, loop = false, onNode }) {
   const wheelRef = useRef(null)
   const selectedIndexRef = useRef(valueIndex)
   const isInitializedRef = useRef(false)
@@ -106,6 +73,16 @@ function WheelColumn({ label, options, getLabel, valueIndex, onSelect, loop = fa
     })
   }
 
+  const commitLogical = (index) => {
+    const logical = loop
+      ? ((index % cycleLength) + cycleLength) % cycleLength
+      : clamp(index, 0, cycleLength - 1)
+    if (logical !== selectedIndexRef.current) {
+      selectedIndexRef.current = logical
+      onSelect(logical)
+    }
+  }
+
   useLayoutEffect(() => {
     const node = wheelRef.current
     if (!node || isInitializedRef.current) return
@@ -114,6 +91,13 @@ function WheelColumn({ label, options, getLabel, valueIndex, onSelect, loop = fa
     setCenterIndex(middleIndex)
     isInitializedRef.current = true
   }, [middleIndex, valueIndex])
+
+  useLayoutEffect(() => {
+    const node = wheelRef.current
+    if (node) {
+      onNode(node)
+    }
+  }, [onNode])
 
   useEffect(() => {
     const node = wheelRef.current
@@ -149,6 +133,7 @@ function WheelColumn({ label, options, getLabel, valueIndex, onSelect, loop = fa
       event.preventDefault()
       const direction = event.deltaY > 0 ? 1 : -1
       const currentIndex = Math.max(0, Math.round(node.scrollTop / ROW_HEIGHT))
+      commitLogical(currentIndex + direction)
       settleToIndex(currentIndex + direction)
     }
 
@@ -188,6 +173,7 @@ function WheelColumn({ label, options, getLabel, valueIndex, onSelect, loop = fa
     dragRef.current = null
     if (node.hasPointerCapture(event.pointerId)) node.releasePointerCapture(event.pointerId)
     setIsDragging(false)
+    commitLogical(nearestIndex)
     settleToIndex(nearestIndex)
   }
 
@@ -196,6 +182,7 @@ function WheelColumn({ label, options, getLabel, valueIndex, onSelect, loop = fa
       didDragRef.current = false
       return
     }
+    commitLogical(index)
     settleToIndex(index)
   }
 
@@ -236,8 +223,8 @@ function WheelTimePicker({
   minTime = DEFAULT_START_TIME,
   maxTime = DEFAULT_END_TIME,
 }) {
-  const normalizedMinTime = parseValue(minTime) ? minTime : DEFAULT_START_TIME
-  const normalizedMaxCandidate = parseValue(maxTime) ? maxTime : DEFAULT_END_TIME
+  const normalizedMinTime = parseTimeForWheel(minTime) ? minTime : DEFAULT_START_TIME
+  const normalizedMaxCandidate = parseTimeForWheel(maxTime) ? maxTime : DEFAULT_END_TIME
   const normalizedMaxTime =
     timeToMinutes(normalizedMinTime) <= timeToMinutes(normalizedMaxCandidate)
       ? normalizedMaxCandidate
@@ -248,9 +235,9 @@ function WheelTimePicker({
   const [placement, setPlacement] = useState('bottom')
   const [time, setTime] = useState(() =>
     resolveIndexes(
-      getHourIndex(hours, parseValue(normalizedMinTime).hour12),
-      getMinuteIndex(parseValue(normalizedMinTime).minute),
-      getPeriodIndex(periods, parseValue(normalizedMinTime).period),
+      getHourIndex(hours, parseTimeForWheel(normalizedMinTime).hour12),
+      getMinuteIndex(parseTimeForWheel(normalizedMinTime).minute),
+      getPeriodIndex(periods, parseTimeForWheel(normalizedMinTime).period),
       hours,
       periods,
       normalizedMinTime,
@@ -259,10 +246,38 @@ function WheelTimePicker({
   )
   const containerRef = useRef(null)
   const panelRef = useRef(null)
+  const hourNodeRef = useRef(null)
+  const minuteNodeRef = useRef(null)
+  const periodNodeRef = useRef(null)
+  const registerHourNode = useCallback((node) => {
+    hourNodeRef.current = node
+  }, [])
+  const registerMinuteNode = useCallback((node) => {
+    minuteNodeRef.current = node
+  }, [])
+  const registerPeriodNode = useCallback((node) => {
+    periodNodeRef.current = node
+  }, [])
+
+  const deriveSelectionFromWheels = () => {
+    const hourNode = hourNodeRef.current
+    const minuteNode = minuteNodeRef.current
+    const periodNode = periodNodeRef.current
+
+    if (!hourNode || !minuteNode || !periodNode) {
+      return null
+    }
+
+    return {
+      hourIndex: clamp(wheelIndexForScrollTop(hourNode.scrollTop, hours.length), 0, hours.length - 1),
+      minuteIndex: clamp(wheelIndexForScrollTop(minuteNode.scrollTop, MINUTES.length), 0, MINUTES.length - 1),
+      periodIndex: clamp(wheelIndexForScrollTop(periodNode.scrollTop, periods.length), 0, periods.length - 1),
+    }
+  }
 
   const openPicker = () => {
-    const parsed = parseValue(value)
-    const fallback = parseValue(normalizedMinTime)
+    const parsed = parseTimeForWheel(value)
+    const fallback = parseTimeForWheel(normalizedMinTime)
     const hour =
       parsed && hours.includes(parsed.hour12) && MINUTES.includes(parsed.minute)
         ? parsed.hour12
@@ -342,10 +357,13 @@ function WheelTimePicker({
   }, [open])
 
   const handleDone = () => {
+    const wheelSelection = deriveSelectionFromWheels() ?? time
+    const next = resolveIndexes(wheelSelection.hourIndex, wheelSelection.minuteIndex, wheelSelection.periodIndex, hours, periods)
+
     const selectedIsValid = isTimeAllowed(
-      hours[time.hourIndex],
-      MINUTES[time.minuteIndex],
-      periods[time.periodIndex],
+      hours[next.hourIndex],
+      MINUTES[next.minuteIndex],
+      periods[next.periodIndex],
       normalizedMinTime,
       normalizedMaxTime,
     )
@@ -354,7 +372,23 @@ function WheelTimePicker({
       return
     }
 
-    onChange(to24h(hours[time.hourIndex], MINUTES[time.minuteIndex], periods[time.periodIndex]))
+    const committed = to24hTime(
+      hours[next.hourIndex],
+      MINUTES[next.minuteIndex],
+      periods[next.periodIndex],
+    )
+
+    if (import.meta.env.DEV) {
+      console.log('[TIME PICKER] raw wheel selection', {
+        hour12: hours[next.hourIndex],
+        minute: MINUTES[next.minuteIndex],
+        period: periods[next.periodIndex],
+      })
+      console.log('[TIME PICKER] state after change', committed)
+    }
+
+    setTime(next)
+    onChange(committed)
     setOpen(false)
   }
 
@@ -370,9 +404,9 @@ function WheelTimePicker({
     }
   }
 
-  const parsedDisplay = parseValue(value)
+  const parsedDisplay = parseTimeForWheel(value)
   const displayValue = parsedDisplay
-    ? `${parsedDisplay.hour12}:${pad(parsedDisplay.minute)} ${parsedDisplay.period}`
+    ? `${parsedDisplay.hour12}:${pad2(parsedDisplay.minute)} ${parsedDisplay.period}`
     : ''
 
   const selectHour = useCallback((rawIndex) => {
@@ -455,14 +489,16 @@ function WheelTimePicker({
               getLabel={(hour) => String(hour)}
               valueIndex={time.hourIndex}
               onSelect={selectHour}
+              onNode={registerHourNode}
               loop
             />
             <WheelColumn
               label="MINUTE"
               options={MINUTES}
-              getLabel={(minute) => pad(minute)}
+              getLabel={(minute) => pad2(minute)}
               valueIndex={time.minuteIndex}
               onSelect={selectMinute}
+              onNode={registerMinuteNode}
               loop
             />
             <WheelColumn
@@ -471,6 +507,7 @@ function WheelTimePicker({
               getLabel={(period) => period}
               valueIndex={time.periodIndex}
               onSelect={selectPeriod}
+              onNode={registerPeriodNode}
             />
           </div>
           <div className="wtp-actions">

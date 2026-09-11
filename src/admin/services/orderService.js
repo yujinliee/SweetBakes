@@ -27,6 +27,11 @@ const ORDER_COLUMNS = `
   delivery_fee,
   total,
   required_down_payment,
+  amount_paid,
+  loyalty_reward_applied,
+  loyalty_discount_percent,
+  loyalty_discount_amount,
+  payment_amount_due,
   order_status,
   payment_status,
   payment_method,
@@ -64,8 +69,31 @@ export const getOrderByRequestNumber = (requestNumber) =>
   getOrders().find((order) => order.requestNumber === requestNumber) || null
 
 async function attachReferenceImageSignedUrls(items = []) {
+  // Safely collect all reference-image paths from an order item's customization data.
+  // Handles: null customization_data, missing reference_images, nested package references,
+  // and deduplicates paths so the same storage object is not signed twice.
+  function collectReferences(customization) {
+    if (customization == null || typeof customization !== 'object') return []
+
+    const topLevelRefs =
+      Array.isArray(customization.reference_images)
+        ? customization.reference_images
+        : []
+
+    const packageRefs =
+      Array.isArray(
+        customization.package_customization?.packageReferenceImages
+      )
+        ? customization.package_customization.packageReferenceImages
+        : []
+
+    // Deduplicate within the collected set before returning.
+    const all = [...topLevelRefs, ...packageRefs]
+    return [...new Set(all)]
+  }
+
   const referencePaths = items
-    .flatMap((item) => item.customization_data?.reference_images || [])
+    .flatMap((item) => collectReferences(item.customization_data))
     .map((image) => image?.path)
     .filter(Boolean)
 
@@ -91,23 +119,33 @@ async function attachReferenceImageSignedUrls(items = []) {
     return urls
   }, {})
 
+  const signReferences = (image) => ({
+    ...image,
+    signed_url: image.path ? signedUrlByPath[image.path] || '' : '',
+  })
+
   return items.map((item) => {
-    const referenceImages = item.customization_data?.reference_images
+    const customization = item.customization_data
+    if (!customization) return item
 
-    if (!Array.isArray(referenceImages)) {
-      return item
+    const referenceImages = customization.reference_images
+    const packageReferences =
+      customization.package_customization?.packageReferenceImages
+
+    const nextCustomization = { ...customization }
+
+    if (Array.isArray(referenceImages)) {
+      nextCustomization.reference_images = referenceImages.map(signReferences)
     }
 
-    return {
-      ...item,
-      customization_data: {
-        ...item.customization_data,
-        reference_images: referenceImages.map((image) => ({
-          ...image,
-          signed_url: image.path ? signedUrlByPath[image.path] || '' : '',
-        })),
-      },
+    if (packageReferences != null && Array.isArray(packageReferences)) {
+      nextCustomization.package_customization = {
+        ...customization.package_customization,
+        packageReferenceImages: packageReferences.map(signReferences),
+      }
     }
+
+    return { ...item, customization_data: nextCustomization }
   })
 }
 

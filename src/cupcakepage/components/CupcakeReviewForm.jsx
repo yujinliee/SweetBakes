@@ -9,6 +9,8 @@ const quantityLabels = {
   18: '18 pcs',
 }
 
+import { formatDisplayTime } from '../../components/timeUtils.js'
+
 const fallbackText = 'None'
 const emptyCustomerText = 'Not provided'
 
@@ -20,25 +22,6 @@ const importantLabels = new Set([
   'Preferred Date',
   'Preferred Time',
 ])
-
-const formatTime = (time) => {
-  if (!time) {
-    return ''
-  }
-
-  const [hourValue, minuteValue] = time.split(':')
-  const hour = Number(hourValue)
-  const minute = minuteValue || '00'
-
-  if (Number.isNaN(hour)) {
-    return time
-  }
-
-  const period = hour >= 12 ? 'PM' : 'AM'
-  const displayHour = hour % 12 || 12
-
-  return `${displayHour}:${minute} ${period}`
-}
 
 function ReviewSection({ title, items }) {
   return (
@@ -86,7 +69,7 @@ function CupcakeReviewForm({
     customerInfo.fulfillment === 'pickup'
       ? customerInfo.preferredPickupTime
       : customerInfo.preferredDeliveryTime
-  const formattedPreferredTime = formatTime(preferredTime)
+  const formattedPreferredTime = formatDisplayTime(preferredTime)
   const recipientName = [customerInfo.recipientLastName, customerInfo.recipientFirstName]
     .filter(Boolean)
     .join(', ')

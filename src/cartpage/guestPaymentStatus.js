@@ -14,8 +14,36 @@ export async function requestGuestPaymentStatus({ url, apiKey, receipt, fetchImp
   if (!response.ok) throw Object.assign(new Error('Payment verification request failed.'), { httpStatus: response.status, code: data?.code })
   return { data, error: null }
 }
-import { createClient } from '@supabase/supabase-js'
 
-export function createGuestOrderClient(url, apiKey) {
-  return createClient(url, apiKey, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } })
+// Guest order confirmation reads intentionally bypass the shared authenticated
+// Supabase client: a guest order must never be fetched under a restored
+// account's Authorization header, even after login. This is a bare REST call to
+// the track_guest_order RPC using only the anonymous API key. It creates no
+// GoTrue/Supabase client at all, so it cannot produce a second auth storage key
+// or trigger the "Multiple GoTrueClient instances" warning. The server still
+// enforces order-number + email match, NULL ownership and order age.
+export function createGuestRpcClient(url, apiKey, { fetchImpl = fetch } = {}) {
+  return {
+    async rpc(name, body) {
+      const response = await fetchImpl(`${url}/rest/v1/rpc/${name}`, {
+        method: 'POST', credentials: 'omit',
+        headers: {
+          apikey: apiKey,
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      })
+      let data = null
+      let error = null
+      try {
+        const parsed = await response.json()
+        if (response.ok) data = parsed
+        else error = { ...parsed, status: response.status }
+      } catch {
+        error = { message: 'Guest order lookup failed.', code: null, status: response.status }
+      }
+      return { data, error }
+    },
+  }
 }

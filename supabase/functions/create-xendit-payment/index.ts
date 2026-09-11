@@ -3,6 +3,8 @@ import { withSupabase } from "@supabase/server";
 import { createClient } from "@supabase/supabase-js";
 
 const XENDIT_SESSIONS_URL = "https://api.xendit.co/sessions";
+const LOYALTY_DOWN_PAYMENT_PERCENT = 20;
+const LOYALTY_REQUIRED_COMPLETED_ORDERS = 2;
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, apikey, x-client-info, content-type",
@@ -20,6 +22,11 @@ type Order = {
   total: number | string | null;
   payment_status: string | null;
   order_status: string | null;
+  amount_paid: number | string | null;
+  loyalty_reward_applied: boolean | null;
+  loyalty_discount_percent: number | string | null;
+  loyalty_discount_amount: number | string | null;
+  payment_amount_due: number | string | null;
 };
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
@@ -32,6 +39,16 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
 function alphanumeric(value: string, fallback: string) {
   const cleaned = value.replace(/[^a-zA-Z0-9]/g, "");
   return cleaned || fallback;
+}
+
+// Round to two decimals so PHP cent values are exact and stable.
+function toMoney(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
+}
+
+function isValidOrderId(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 export default {
@@ -82,33 +99,44 @@ export default {
       return jsonResponse({ error: "Authentication is required." }, 401);
     }
 
-    let input: unknown;
+    let input: Record<string, unknown>;
     try {
-      input = await req.json();
+      const raw = await req.json();
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+        return jsonResponse({ error: "Request body must be a JSON object." }, 400);
+      }
+      input = raw as Record<string, unknown>;
     } catch {
       return jsonResponse({ error: "Request body must be valid JSON." }, 400);
     }
 
-    if (
-      !input ||
-      typeof input !== "object" ||
-      Array.isArray(input) ||
-      !(
-        ("orderId" in input && typeof (input as { orderId?: unknown }).orderId === "string" && (input as { orderId: string }).orderId.trim()) ||
-        ("order_id" in input && typeof (input as { order_id?: unknown }).order_id === "string" && (input as { order_id: string }).order_id.trim())
-      )
-    ) {
+    const orderId = isValidOrderId(input.orderId)
+      ? input.orderId.trim()
+      : isValidOrderId(input.order_id)
+        ? input.order_id.trim()
+        : "";
+    if (!orderId) {
       return jsonResponse({ error: "A non-empty orderId is required." }, 400);
     }
 
-    const request = input as { orderId?: string; order_id?: string; paymentType?: unknown; appliedVoucher?: unknown; voucher_applied?: unknown; discountAmount?: unknown; discount_amount?: unknown; discountedDownPayment?: unknown; amount?: unknown };
-    const orderId = ((request.orderId ?? request.order_id ?? "").trim());
-    const paymentType = request.paymentType === "regular" ? "regular" : "custom_down_payment";
-    const clientAppliedVoucher = (request.appliedVoucher === true || request.voucher_applied === true) && paymentType === "custom_down_payment";
+    const paymentType = input.paymentType === "regular" ? "regular" : "custom_down_payment";
+    const clientWantsVoucher = paymentType === "custom_down_payment" &&
+      (input.appliedVoucher === true || input.voucher_applied === true);
+    const clientAmount = Number(input.amount);
+    const clientProvidedAmount = Number.isFinite(clientAmount) && clientAmount > 0;
+
+    console.log("[XENDIT DOWNPAYMENT REQUEST]", {
+      orderId,
+      paymentPurpose: paymentType,
+      clientWantsVoucher,
+      clientProvidedAmount,
+      clientAmount: clientProvidedAmount ? clientAmount : null,
+    });
+
     const { data: order, error: orderError } = await customerSupabase
       .from("orders")
       .select(
-        "id, order_number, customer_id, email, first_name, last_name, required_down_payment, total, payment_status, order_status",
+        "id, order_number, customer_id, email, first_name, last_name, required_down_payment, total, payment_status, order_status, amount_paid, loyalty_reward_applied, loyalty_discount_percent, loyalty_discount_amount, payment_amount_due",
       )
       .eq("id", orderId)
       .eq("customer_id", user.id)
@@ -170,56 +198,118 @@ export default {
       return jsonResponse({ error: "This order is not eligible for a down payment yet." }, 400);
     }
 
-    const amount = Number(paymentType === "regular" ? order.total : order.required_down_payment);
-    if (!Number.isFinite(amount) || amount <= 0) {
+    const rawAmount = paymentType === "regular" ? order.total : order.required_down_payment;
+    const normalizedAmount = toMoney(rawAmount);
+    if (normalizedAmount <= 0) {
       return jsonResponse({ error: paymentType === "regular" ? "This order does not have a valid total." : "This order does not have a valid required down payment." }, 400);
     }
-    const normalizedAmount = Math.round(amount * 100) / 100;
 
-    // Voucher validation: server-side eligibility check for loyalty discount
-    let finalAmount = normalizedAmount;
-    let voucherDiscountAmount = 0;
+    // ── Backend-authoritative loyalty reward ────────────────────────────────
+    // The server decides eligibility from auth.uid() -> completed orders.
+    // Frontend-provided amount/discount/count fields are never trusted for the charge.
     let voucherUsed = false;
+    let voucherDiscountAmount = 0;
+    let finalAmount = normalizedAmount;
 
-    if (clientAppliedVoucher) {
-      const { count: completedCount, error: countError } = await customerSupabase
-        .from("orders")
-        .select("id", { count: "exact", head: true })
-        .eq("customer_id", user.id)
-        .eq("order_status", "completed");
-
-      if (countError) {
-        console.error("[CREATE XENDIT PAYMENT] voucher count error:", countError);
-      }
-
-      const serverCompletedCount = completedCount ?? 0;
-
-      if (serverCompletedCount >= 2) {
-        const serverDiscount = Math.round(normalizedAmount * 0.20 * 100) / 100;
-        voucherDiscountAmount = serverDiscount;
-        finalAmount = Math.max(0, Math.round((normalizedAmount - serverDiscount) * 100) / 100);
-        voucherUsed = finalAmount > 0 && finalAmount < normalizedAmount;
-
-        console.log("[CREATE XENDIT PAYMENT] loyalty voucher applied:", {
+    if (clientWantsVoucher) {
+      let completedCount = 0;
+      try {
+        const { data, error: rpcError } = await customerSupabase.rpc("get_customer_completed_order_count");
+        if (rpcError) {
+          console.error("[CREATE XENDIT PAYMENT] completed-order count error:", {
+            orderId,
+            userId: user.id,
+            code: rpcError.code ?? null,
+            message: rpcError.message ?? null,
+          });
+        }
+        completedCount = Number(data);
+      } catch (countError) {
+        console.error("[CREATE XENDIT PAYMENT] completed-order count threw:", {
           orderId,
           userId: user.id,
-          completedOrders: serverCompletedCount,
-          originalAmount: normalizedAmount,
+          error: countError instanceof Error ? countError.message : String(countError),
+        });
+      }
+      if (!Number.isFinite(completedCount)) completedCount = 0;
+
+      if (completedCount >= LOYALTY_REQUIRED_COMPLETED_ORDERS) {
+        voucherDiscountAmount = Math.round(normalizedAmount * (LOYALTY_DOWN_PAYMENT_PERCENT / 100) * 100) / 100;
+        finalAmount = Math.max(0, Math.round((normalizedAmount - voucherDiscountAmount) * 100) / 100);
+        voucherUsed = finalAmount > 0 && finalAmount < normalizedAmount;
+        console.log("[XENDIT LOYALTY] voucher applied", {
+          orderId,
+          userId: user.id,
+          completedOrders: completedCount,
+          originalDownPayment: normalizedAmount,
           discountAmount: voucherDiscountAmount,
-          finalAmount,
+          payableAmount: finalAmount,
         });
       } else {
-        console.log("[CREATE XENDIT PAYMENT] loyalty voucher ineligible:", {
+        console.log("[XENDIT LOYALTY] voucher denied - insufficient completed orders", {
           orderId,
           userId: user.id,
-          completedOrders: serverCompletedCount,
-          requiredOrders: 2,
+          completedOrders: completedCount,
+          requiredCompletedOrders: LOYALTY_REQUIRED_COMPLETED_ORDERS,
+          serverAmount: normalizedAmount,
         });
       }
     }
 
-    if (voucherUsed && (!Number.isFinite(finalAmount) || finalAmount <= 0)) {
+    // Client-tamper guard: the charged amount is always computed here. If the
+    // client supplied an amount that does not match the server calculation,
+    // reject it instead of charging a different value.
+    if (clientProvidedAmount && Math.abs(clientAmount - finalAmount) > 0.009) {
+      console.log("[XENDIT AMOUNT MISMATCH]", {
+        orderId,
+        paymentPurpose: paymentType,
+        clientAmount,
+        serverAmount: finalAmount,
+        originalDownPayment: normalizedAmount,
+        voucherUsed,
+      });
+      return jsonResponse({
+        error: "Payment amount does not match the calculated amount.",
+        expected_amount: finalAmount,
+      }, 400);
+    }
+
+    if (voucherUsed && finalAmount <= 0) {
       return jsonResponse({ error: "The voucher discount makes the down payment amount invalid." }, 400);
+    }
+
+    // ── Persist the authoritative payable before opening the payment session ──
+    // Guards against races: the update only applies while the order is still in
+    // the exact state required to pay. If zero rows matched, the state changed.
+    const dueUpdate: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (paymentType === "custom_down_payment") {
+      dueUpdate.payment_amount_due = finalAmount;
+      dueUpdate.loyalty_reward_applied = voucherUsed;
+      dueUpdate.loyalty_discount_percent = voucherUsed ? LOYALTY_DOWN_PAYMENT_PERCENT : 0;
+      dueUpdate.loyalty_discount_amount = voucherUsed ? voucherDiscountAmount : 0;
+    }
+
+    let persistQuery = ctx.supabaseAdmin
+      .from("orders")
+      .update(dueUpdate)
+      .eq("id", order.id)
+      .select("id");
+    persistQuery = paymentType === "regular"
+      ? persistQuery.eq("order_status", "pending").in("payment_status", ["unpaid", "pending"])
+      : persistQuery.eq("order_status", "confirmed").eq("payment_status", "pending");
+    const { data: persisted, error: persistError } = await persistQuery
+      .maybeSingle() as { data: { id: string } | null; error: { code?: string; message?: string } | null };
+
+    if (persistError) {
+      console.error("[CREATE XENDIT PAYMENT] persist payable failed", {
+        orderId,
+        code: persistError.code ?? null,
+        message: persistError.message ?? null,
+      });
+      return jsonResponse({ error: "Unable to prepare the payment amount." }, 500);
+    }
+    if (!persisted) {
+      return jsonResponse({ error: "The order is no longer payable in its current state. Please refresh." }, 409);
     }
 
     const secretKey = Deno.env.get("XENDIT_SECRET_KEY");
@@ -258,6 +348,16 @@ export default {
       console.error("[XENDIT] payment return URL is not configured with a valid HTTPS app URL");
       return jsonResponse({ error: "Payment return URL is not configured." }, 500);
     }
+
+    console.log("[XENDIT DOWNPAYMENT PAYLOAD]", {
+      orderId,
+      paymentPurpose: paymentType,
+      originalDownPayment: normalizedAmount,
+      discountAmount: voucherDiscountAmount,
+      payableAmount: finalAmount,
+      rewardApplied: voucherUsed,
+      referenceId,
+    });
 
     const sessionPayload = {
       reference_id: referenceId,
@@ -313,10 +413,13 @@ export default {
     }
 
     if (!xenditResponse.ok) {
-      console.error("[XENDIT SESSION ERROR]", {
+      console.error("[XENDIT DOWNPAYMENT ERROR]", {
+        orderId,
+        paymentPurpose: paymentType,
         status: xenditResponse.status,
-        statusText: xenditResponse.statusText,
-        body: xenditErrorBody,
+        code: xenditErrorBody.error_code ?? null,
+        message: xenditErrorBody.message ?? null,
+        validationErrors: xenditErrorBody.errors ?? xenditErrorBody.validation_errors ?? null,
       });
       return jsonResponse({
         error: "Payment service rejected the payment request.",
@@ -339,6 +442,10 @@ export default {
       referenceId: xenditErrorBody.reference_id ?? referenceId,
       status: xenditErrorBody.status ?? "ACTIVE",
       paymentUrl,
+      amount: finalAmount,
+      originalDownPayment: paymentType === "regular" ? null : normalizedAmount,
+      discountAmount: voucherUsed ? voucherDiscountAmount : 0,
+      rewardApplied: voucherUsed,
     });
   }),
 };

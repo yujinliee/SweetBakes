@@ -374,6 +374,20 @@
   white-space: nowrap;
 }
 
+.admin-orders-category-name {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.25;
+}
+
+.admin-orders-more-items {
+  color: #6b7280;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
 .admin-orders-thumb {
   display: inline-flex;
   flex: 0 0 38px;
@@ -500,6 +514,12 @@
   background: #f8f9fb;
   border-color: #e7ebf0;
   color: #4b5563;
+}
+
+.admin-orders-payment--unpaid {
+  background: #fff;
+  border-color: #ef4444;
+  color: #dc2626;
 }
 
 .admin-orders-action-btn {
@@ -1935,6 +1955,20 @@
   min-width: 0;
 }
 
+/* Desktop: Order Information + Price Breakdown side-by-side in one row. */
+/* Mobile: stack both cards full-width. */
+@media (min-width: 901px) {
+  .admin-orders-details-main-column {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .admin-orders-details-main-column {
+    grid-template-columns: 1fr;
+  }
+}
+
 .admin-orders-details-card {
   margin-bottom: 0;
   padding: 16px 18px;
@@ -2072,10 +2106,27 @@
   border-top: 1px solid #eee7e2;
 }
 
+.admin-orders-details-header {
+  display: flex;
+  align-items: flex-start;
+  padding: 12px 16px 8px;
+}
+
 .admin-orders-details-eyebrow {
-  margin-bottom: 6px;
+  margin: 0 0 6px;
+  text-transform: uppercase;
+  font-size: 10px;
+  font-weight: 700;
   color: #8b7f79;
   letter-spacing: .1em;
+}
+
+.admin-orders-details-title {
+  margin: 4px 0 0;
+  font-size: 26px;
+  font-weight: 800;
+  color: #3a2e2e;
+  letter-spacing: 0;
 }
 
 .admin-orders-details-header h3 {
@@ -2096,7 +2147,7 @@
   margin-bottom: 14px;
   border: 1px solid #eadfd8;
   border-radius: 12px;
-  background: #fffdfa;
+  background: #fff;
 }
 
 .admin-orders-progress {
@@ -2166,6 +2217,37 @@
 
 .admin-orders-details-product-row:last-of-type {
   border-bottom: 0;
+}
+
+.admin-order-detail-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid #eee7e2;
+}
+
+.admin-order-detail-row:last-of-type {
+  border-bottom: 0;
+}
+
+.admin-order-detail-row > .admin-orders-thumb {
+  width: 32px;
+  height: 32px;
+  margin: 0;
+}
+
+.admin-order-detail-row dt {
+  margin: 0;
+  font-size: 12px;
+  color: #8b7f79;
+}
+
+.admin-order-detail-row dd {
+  margin: 0;
+  font-size: 13px;
+  color: #3a2e2e;
 }
 
 .admin-orders-details-product-row > .admin-orders-thumb {
@@ -2246,7 +2328,7 @@
 .admin-orders-details-fulfillment-card dl {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px 22px;
+  gap: 8px 16px;
 }
 
 .admin-orders-details-fulfillment-card dl > div {
@@ -2259,11 +2341,16 @@
 
 .admin-orders-details-fulfillment-card dt {
   color: #8b7f79;
+  font-size: 12px;
+  font-weight: 500;
+  margin-bottom: 2px;
 }
 
 .admin-orders-details-fulfillment-card dd {
   color: #3a2e2e;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 2px;
 }
 
 @media (max-width: 520px) {
@@ -2320,4 +2407,157 @@
   .admin-orders-price-item {
     grid-template-columns: minmax(0, 1fr) 100px 26px;
   }
+}
+
+/* Price Breakdown totals — 2-column summary row. */
+.admin-orders-price-summary-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 12px;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.admin-orders-price-summary-row dt {
+  margin: 0;
+  font-size: 12px;
+  color: #8b7f79;
+  font-weight: 500;
+}
+
+.admin-orders-price-summary-row dd {
+  margin: 0;
+  font-size: 14px;
+  color: #3a2e2e;
+  font-weight: 600;
+  text-align: right;
+}
+
+/* Final Price strongest visual — slightly larger, bold, accent color. */
+.admin-orders-price-final-row {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #eee7e2;
+}
+
+.admin-orders-price-final-row dt {
+  font-size: 12px;
+  color: #3a2e2e;
+  font-weight: 700;
+}
+
+.admin-orders-price-final-row dd {
+  font-size: 18px !important;
+  font-weight: 800 !important;
+  color: #a86495 !important;
+  letter-spacing: -.01em;
+}
+
+/* Price breakdown rows — label left, amount right, consistent column alignment. */
+.admin-orders-price-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 12px;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+
+.admin-orders-price-row dt {
+  margin: 0;
+  font-size: 12px;
+  color: #8b7f79;
+  font-weight: 500;
+}
+
+.admin-orders-price-row dd {
+  margin: 0;
+  font-size: 14px;
+  color: #3a2e2e;
+  font-weight: 600;
+}
+
+/* Final Price row — strongest visual, right-aligned amount column. */
+.admin-orders-price-final-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 12px;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+
+.admin-orders-price-final-row dt {
+  margin: 0;
+  font-size: 12px;
+  color: #3a2e2e;
+  font-weight: 700;
+}
+
+.admin-orders-price-final-row dd {
+  margin: 0;
+  font-size: 18px !important;
+  font-weight: 800 !important;
+  color: #a86495 !important;
+  letter-spacing: -.01em;
+}
+
+/* Brand-accent pricing card — low-opacity tint so the quotation section is
+   visually stronger than Fulfillment Details without a heavy shadow. */
+.admin-orders-pricing-card {
+  border-color: #eadcf7;
+  background: #fbf7fd;
+}
+
+.admin-orders-pricing-heading h4 {
+  color: #3a2e2e;
+}
+
+.admin-orders-pricing-heading p {
+  color: #75645e;
+}
+
+.admin-orders-pricing-heading > span {
+  color: #8d5fba;
+}
+
+.admin-orders-price-empty {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 18px 16px;
+  border: 1px dashed #d8c9e6;
+  border-radius: 10px;
+  background: #fff;
+  color: #75645e;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.admin-orders-price-empty p {
+  margin: 0;
+}
+
+.admin-orders-price-empty .admin-orders-add-price-item {
+  justify-self: start;
+  margin-top: 2px;
+}
+
+.admin-orders-price-final {
+  margin-bottom: 2px;
+}
+
+.admin-orders-price-totals dt {
+  font-weight: 500;
+  color: #8b7f79;
+}
+
+.admin-orders-price-final dt {
+  font-weight: 700;
+  color: #3a2e2e;
+}
+
+.admin-orders-price-final dd {
+  font-size: 18px !important;
+  font-weight: 800 !important;
+  color: #a86495 !important;
+  letter-spacing: -.01em;
 }

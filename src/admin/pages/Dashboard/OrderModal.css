@@ -159,9 +159,9 @@
 
 .om-payment-badge--unpaid,
 .om-payment-badge--failed {
-  border-color: #f5c6cb;
-  background: #fff5f6;
-  color: #a94442;
+  border-color: #f87171;
+  background: #fff;
+  color: #b91c1c;
 }
 
 /* ── Status Stepper ── */
@@ -191,7 +191,7 @@
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: #f0ebe8;
+  background: #fff;
   color: #9e918a;
   font-size: 11px;
   font-weight: 800;
@@ -577,6 +577,7 @@
 
 .om-price-totals {
   display: grid;
+  grid-template-columns: auto 1fr;
   gap: 8px;
   margin: 15px 0 0;
   padding-top: 13px;
@@ -586,8 +587,7 @@
 .om-price-totals > div {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 4px;
 }
 
 .om-price-totals dt,
