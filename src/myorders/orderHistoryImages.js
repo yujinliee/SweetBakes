@@ -1,16 +1,21 @@
 import { supabase } from '../lib/supabase.js'
-import { referenceImages } from './orderHistory.js'
+import { resolveItemImage } from './orderImageResolver.js'
+import {
+  CUSTOM_CAKE_PREVIEW_IMAGES,
+  CUSTOM_CUPCAKE_PREVIEW_IMAGES,
+  CUSTOM_PACKAGE_PREVIEW_IMAGES,
+} from '../components/customOrderPreviewImages.js'
 import cakeIcon from '../assets/landingpage/cakes.svg'
 import cupcakeIcon from '../assets/landingpage/cupcakes.svg'
 import packageIcon from '../assets/landingpage/party_package.svg'
 import logo from '../assets/landingpage/sweetbakes_logo.svg'
-import chocolate from '../assets/othersweettreats/regular_chocolate.jpg'
-import redVelvet from '../assets/othersweettreats/regular_redvelvet.png'
-import cheesecake from '../assets/othersweettreats/halfordozen_cheesecake.png'
-import ube from '../assets/othersweettreats/ube.png'
-import graham from '../assets/othersweettreats/graham de leche.png'
-import flan from '../assets/othersweettreats/leche_flan.png'
-import puto from '../assets/othersweettreats/puto.jpg'
+import chocolate from '../assets/othersweettreats/regular_chocolate.webp'
+import redVelvet from '../assets/othersweettreats/regular_redvelvet.webp'
+import cheesecake from '../assets/othersweettreats/halfordozen_cheesecake.webp'
+import ube from '../assets/othersweettreats/ube.webp'
+import graham from '../assets/othersweettreats/graham de leche.webp'
+import flan from '../assets/othersweettreats/leche_flan.webp'
+import puto from '../assets/othersweettreats/puto.webp'
 
 const localProducts = { 'chocolate-cake': chocolate, 'red-velvet-cake': redVelvet, cheesecake, ube, 'graham-de-leche': graham, 'leche-flan': flan, puto }
 const normalize = (value) => String(value || '').trim().toLowerCase()
@@ -25,8 +30,15 @@ export function itemFallback(item) {
 }
 
 export function itemImage(item) {
-  return referenceImages(item).find((image) => image.signed_url)?.signed_url
-    || item.customization_data?.imageUrl || item.history_image || ''
+  return resolveItemImage(item, {
+    previewImages: {
+      cake: CUSTOM_CAKE_PREVIEW_IMAGES,
+      cupcake: CUSTOM_CUPCAKE_PREVIEW_IMAGES,
+      package: CUSTOM_PACKAGE_PREVIEW_IMAGES,
+    },
+    customFallback: itemFallback(item),
+    catalogImage: item.history_image || '',
+  })
 }
 
 // Read only the catalog records linked to this customer's canonical order items.

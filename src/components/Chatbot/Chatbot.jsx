@@ -465,6 +465,8 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
   const loadingConversationForUserRef = useRef(null)
   const loadedConversationUserIdRef = useRef(null)
   const sendInProgressRef = useRef(false)
+  const nearBottomRef = useRef(true)
+  const realtimeSubscribedRef = useRef(false)
 
   const releaseSendLock = () => {
     sendInProgressRef.current = false
@@ -593,6 +595,50 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
       console.error('[CHATBOT] mark admin replies read:', error)
     }
   }, [])
+
+  const syncConversationFromServer = useCallback(async () => {
+    const targetConversationId = conversationIdRef.current
+
+    if (!targetConversationId || !authUserRef.current?.id) {
+      return
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .select(CHAT_MESSAGE_SELECT)
+        .eq('conversation_id', targetConversationId)
+        .order('created_at', { ascending: true })
+
+      if (error) throw error
+
+      const rows = await Promise.all(
+        (data || []).map((row) => hydrateChatAttachment(mapDbMessage(row))),
+      )
+
+      if (import.meta.env.DEV) {
+        console.log('[CHAT REALTIME] reconcile', {
+          conversationId: targetConversationId,
+          received: rows.length,
+        })
+      }
+
+      setMessages((currentMessages) => {
+        const byId = new Map()
+        currentMessages.forEach((message) => byId.set(message.id, message))
+        rows.forEach((row) => byId.set(row.id, row))
+        return Array.from(byId.values()).sort((a, b) => {
+          const aTime = a.createdAt ? new Date(a.createdAt).getTime() : Number.NEGATIVE_INFINITY
+          const bTime = b.createdAt ? new Date(b.createdAt).getTime() : Number.NEGATIVE_INFINITY
+          return aTime - bTime
+        })
+      })
+
+      refreshUnreadCount(targetConversationId)
+    } catch (error) {
+      console.error('[CHAT REALTIME] reconcile failed:', error)
+    }
+  }, [refreshUnreadCount])
 
   const loadAuthenticatedConversation = useCallback(async (user) => {
     if (!user?.id) {
@@ -810,6 +856,8 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
       return undefined
     }
 
+    realtimeSubscribedRef.current = false
+
     const channel = supabase
       .channel(`customer-chat-messages-${conversationId}`)
       .on(
@@ -822,6 +870,15 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
         },
         async (payload) => {
           const nextMessage = await hydrateChatAttachment(mapDbMessage(payload.new))
+
+          if (import.meta.env.DEV) {
+            console.log('[CHAT REALTIME] message insert', {
+              messageId: payload.new?.id ?? null,
+              senderType: payload.new?.sender_type ?? null,
+              conversationId: payload.new?.conversation_id ?? null,
+            })
+          }
+
           setMessages((currentMessages) => {
             if (currentMessages.some((message) => message.id === nextMessage.id)) {
               return currentMessages
@@ -842,12 +899,22 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
           refreshUnreadCount(conversationId)
         },
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (import.meta.env.DEV) {
+          console.log('[CHAT REALTIME] status', status, { conversationId })
+        }
+
+        if (status === 'SUBSCRIBED' && realtimeSubscribedRef.current) {
+          syncConversationFromServer()
+        } else if (status === 'SUBSCRIBED') {
+          realtimeSubscribedRef.current = true
+        }
+      })
 
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [conversationId, isAuthenticatedChat, markCurrentConversationRead, refreshUnreadCount])
+  }, [conversationId, isAuthenticatedChat, markCurrentConversationRead, refreshUnreadCount, syncConversationFromServer])
 
   const addReplyWithQuickActions = (botMessage) => {
     updateMessages((currentMessages) => [...currentMessages, botMessage])
@@ -1228,6 +1295,12 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
     setIsMaximized(false)
   }
 
+  const handleMessagesScroll = (event) => {
+    const element = event.currentTarget
+    const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight
+    nearBottomRef.current = distanceFromBottom < 80
+  }
+
   useEffect(() => {
     if (!isOpen || !conversationId || !isAuthenticatedChat) {
       return
@@ -1409,7 +1482,16 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
     if (isOpen) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
     }
-  }, [isOpen, messages, quickActionsState])
+  }, [isOpen])
+
+  useEffect(() => {
+    if (!isOpen || !nearBottomRef.current) {
+      return undefined
+    }
+
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    return undefined
+  }, [messages, quickActionsState, isOpen])
 
   const unreadBadgeLabel = unreadCount > 9 ? '9+' : String(unreadCount)
   const launcherAriaLabel =
@@ -1490,7 +1572,7 @@ function Chatbot({ onNavigate, isCustomerAuthenticated = false }) {
           </div>
         </header>
 
-        <div className="chatbot-messages" aria-live="polite">
+        <div className="chatbot-messages" aria-live="polite" onScroll={handleMessagesScroll}>
           <div className="chatbot-date-separator">Today</div>
           {chatLoading ? (
             <div className="chatbot-date-separator">Loading conversation...</div>

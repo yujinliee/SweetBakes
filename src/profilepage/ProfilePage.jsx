@@ -1,26 +1,23 @@
+import { isMissingCustomerSession } from '../auth/customerSession.js'
 import { useEffect, useState } from 'react'
 import { ADMIN_DASHBOARD_ROUTE } from '../admin/adminRouteConstants.js'
 import AutocompleteTextInput from '../cartpage/components/AutocompleteTextInput.jsx'
 import addressData from '../cartpage/data/philippineAddressData.js'
 import { SiteTopbar } from '../landingpage/LandingPage.jsx'
 import { supabase } from '../lib/supabase.js'
+import { ToastNotification } from '../components/ToastNotification.jsx'
+import DeleteAddressModal from '../components/DeleteAddressModal.jsx'
+import {
+  createCustomerAddress,
+  deleteCustomerAddress,
+  fetchCustomerAddresses,
+  setDefaultCustomerAddress,
+  updateCustomerAddress,
+} from '../services/customerAddressService.js'
+import { formatPhoneDisplay, isValidPhoneNumber, sanitizePhoneNumber, normalizePhoneNumber, handlePhonePaste } from '../utils/phoneNumber.js'
 import './ProfilePage.css'
 
 const PROFILE_SELECT = 'id, email, first_name, last_name, role, created_at, updated_at'
-const ADDRESS_SELECT = `
-  id,
-  user_id,
-  province,
-  city_municipality,
-  barangay,
-  postal_code,
-  address,
-  apartment_unit,
-  landmark,
-  is_default,
-  created_at,
-  updated_at
-`
 
 const emptyAddressDraft = {
   province: 'Cavite',
@@ -30,6 +27,7 @@ const emptyAddressDraft = {
   address: '',
   apartmentUnit: '',
   landmark: '',
+  phoneNumber: '',
 }
 
 const provinceOptions = addressData.map((province) => province.province)
@@ -70,14 +68,21 @@ function ProfilePage({
   const [draft, setDraft] = useState({ firstName: '', lastName: '' })
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [toastMessage, setToastMessage] = useState('')
+  const [toastNonce, setToastNonce] = useState(0)
   const [isSaving, setIsSaving] = useState(false)
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [addresses, setAddresses] = useState([])
   const [addressError, setAddressError] = useState('')
-  const [isAddressModalOpen, setIsAddressModalOpen] = useState(false)
+  const [isAddressFormOpen, setIsAddressFormOpen] = useState(false)
+  const [editingAddressId, setEditingAddressId] = useState(null)
   const [addressDraft, setAddressDraft] = useState(emptyAddressDraft)
   const [addressFormErrors, setAddressFormErrors] = useState({})
   const [isSavingAddress, setIsSavingAddress] = useState(false)
+  const [isDeletingAddressId, setIsDeletingAddressId] = useState(null)
+  const [pendingDeleteAddress, setPendingDeleteAddress] = useState(null)
+  const [isDeletingAddress, setIsDeletingAddress] = useState(false)
+  const [isSettingDefaultId, setIsSettingDefaultId] = useState(null)
   const selectedProvince =
     addressData.find(
       (province) => province.province.toLowerCase() === addressDraft.province.trim().toLowerCase(),
@@ -88,6 +93,11 @@ function ProfilePage({
       (city) => city.name.toLowerCase() === addressDraft.cityMunicipality.trim().toLowerCase(),
     ) || null
   const barangayOptions = selectedCity?.barangays || []
+
+  const notify = (text) => {
+    setToastMessage(text)
+    setToastNonce((current) => current + 1)
+  }
 
   useEffect(() => {
     let isMounted = true
@@ -137,26 +147,20 @@ function ProfilePage({
           })
         }
 
-        const { data: addressRows, error: addressLoadError } = await supabase
-          .from('customer_addresses')
-          .select(ADDRESS_SELECT)
-          .eq('user_id', user.id)
-          .order('is_default', { ascending: false })
-          .order('created_at', { ascending: false })
+        try {
+          const { addresses: addressRows } = await fetchCustomerAddresses()
 
-        if (addressLoadError) {
+          if (isMounted) {
+            setAddresses(addressRows || [])
+            setAddressError('')
+          }
+        } catch (addressLoadError) {
           console.error('[PROFILE] address load error:', addressLoadError)
 
           if (isMounted) {
             setAddresses([])
             setAddressError('Addresses are temporarily unavailable.')
           }
-          return
-        }
-
-        if (isMounted) {
-          setAddresses(addressRows || [])
-          setAddressError('')
         }
       } catch (loadError) {
         console.error('[PROFILE] load error:', loadError)
@@ -284,18 +288,48 @@ function ProfilePage({
     setAddressError('')
   }
 
-  const handleOpenAddressModal = () => {
+  const sortAddresses = (list) =>
+    [...list].sort((a, b) => {
+      const aDefault = Boolean(a.is_default)
+      const bDefault = Boolean(b.is_default)
+
+      if (aDefault !== bDefault) return aDefault ? -1 : 1
+
+      return new Date(b.created_at || 0) - new Date(a.created_at || 0)
+    })
+
+  const handleOpenAddressForm = () => {
+    setEditingAddressId(null)
     setAddressDraft(emptyAddressDraft)
     setAddressFormErrors({})
     setAddressError('')
-    setIsAddressModalOpen(true)
+    setIsAddressFormOpen(true)
   }
 
-  const handleCloseAddressModal = () => {
+  const handleEditAddress = (address) => {
+    setEditingAddressId(address.id)
+    setAddressDraft({
+      province: address.province || 'Cavite',
+      cityMunicipality: address.city_municipality || '',
+      barangay: address.barangay || '',
+      postalCode: address.postal_code || '',
+      address: address.address || '',
+      apartmentUnit: address.apartment_unit || '',
+      landmark: address.landmark || '',
+      phoneNumber: sanitizePhoneNumber(normalizePhoneNumber(address.phone_number)),
+    })
+    setAddressFormErrors({})
+    setAddressError('')
+    setIsAddressFormOpen(true)
+  }
+
+  const handleCloseAddressForm = () => {
     if (isSavingAddress) return
 
-    setIsAddressModalOpen(false)
+    setIsAddressFormOpen(false)
+    setEditingAddressId(null)
     setAddressFormErrors({})
+    setAddressError('')
   }
 
   const validateAddressDraft = () => {
@@ -306,6 +340,7 @@ function ProfilePage({
     if (!addressDraft.barangay.trim()) nextErrors.barangay = 'Barangay is required.'
     if (!addressDraft.postalCode.trim()) nextErrors.postalCode = 'Postal code is required.'
     if (!addressDraft.address.trim()) nextErrors.address = 'Address is required.'
+    if (!isValidPhoneNumber(addressDraft.phoneNumber)) nextErrors.phoneNumber = 'Enter a valid 11-digit phone number.'
 
     return nextErrors
   }
@@ -324,20 +359,7 @@ function ProfilePage({
       setIsSavingAddress(true)
       setAddressError('')
 
-      const { data: userData, error: userError } = await supabase.auth.getUser()
-
-      if (userError || !userData?.user) {
-        console.error('[PROFILE] address save aborted - no valid auth session:', {
-          message: userError?.message || 'Missing Supabase session user.',
-          status: userError?.status,
-          name: userError?.name,
-        })
-        setAddressError('Your session has expired. Please sign in and try again.')
-        return
-      }
-
       const payload = {
-        user_id: userData.user.id,
         province: addressDraft.province.trim(),
         city_municipality: addressDraft.cityMunicipality.trim(),
         barangay: addressDraft.barangay.trim(),
@@ -345,25 +367,32 @@ function ProfilePage({
         address: addressDraft.address.trim(),
         apartment_unit: addressDraft.apartmentUnit.trim() || null,
         landmark: addressDraft.landmark.trim() || null,
-        is_default: addresses.length === 0,
-        updated_at: new Date().toISOString(),
+        phone_number: addressDraft.phoneNumber.trim(),
       }
 
-      const { data, error: insertError } = await supabase
-        .from('customer_addresses')
-        .insert(payload)
-        .select(ADDRESS_SELECT)
-        .single()
+      let data
+      let statusMessage
 
-      if (insertError) {
-        throw insertError
+      if (editingAddressId) {
+        data = await updateCustomerAddress(editingAddressId, payload)
+        statusMessage = 'Address updated successfully.'
+      } else {
+        data = await createCustomerAddress(payload)
+        statusMessage = 'Address added successfully.'
       }
 
-      setAddresses((current) => [data, ...current])
-      setIsAddressModalOpen(false)
+      setAddresses((current) =>
+        sortAddresses(
+          editingAddressId
+            ? current.map((address) => (address.id === data.id ? data : address))
+            : [data, ...current],
+        ),
+      )
+      setIsAddressFormOpen(false)
+      setEditingAddressId(null)
       setAddressDraft(emptyAddressDraft)
       setAddressFormErrors({})
-      setMessage('Address added successfully.')
+      notify(statusMessage)
     } catch (saveAddressError) {
       console.error('[PROFILE] address save error:', {
         message: saveAddressError?.message,
@@ -371,11 +400,83 @@ function ProfilePage({
         details: saveAddressError?.details,
         hint: saveAddressError?.hint,
         status: saveAddressError?.status,
-        raw: saveAddressError,
       })
-      setAddressError('Unable to save address. Please try again.')
+      setAddressError(isMissingCustomerSession(saveAddressError)
+        ? 'Your session has expired. Please sign in and try again.'
+        : 'Unable to save address. Please try again.')
     } finally {
       setIsSavingAddress(false)
+    }
+  }
+
+  const handleRequestDeleteAddress = (address) => {
+    setAddressError('')
+    setPendingDeleteAddress(address)
+  }
+
+  const handleCancelDeleteAddress = () => {
+    if (isDeletingAddress) return
+    setPendingDeleteAddress(null)
+  }
+
+  const handleConfirmDeleteAddress = async () => {
+    if (!pendingDeleteAddress || isDeletingAddress) return
+
+    const address = pendingDeleteAddress
+
+    try {
+      setIsDeletingAddress(true)
+      setIsDeletingAddressId(address.id)
+      setAddressError('')
+
+      await deleteCustomerAddress(address.id)
+
+      const remaining = addresses.filter((addressEntry) => addressEntry.id !== address.id)
+      let next = remaining
+
+      if (address.is_default && remaining.length > 0) {
+        const promoted = sortAddresses(remaining)[0]
+        await setDefaultCustomerAddress(promoted.id)
+        next = remaining.map((addressEntry) => ({
+          ...addressEntry,
+          is_default: addressEntry.id === promoted.id,
+        }))
+      }
+
+      setAddresses(sortAddresses(next))
+      setPendingDeleteAddress(null)
+      notify('Address deleted successfully.')
+    } catch (deleteAddressError) {
+      console.error('[PROFILE] address delete error:', deleteAddressError)
+      setAddressError(isMissingCustomerSession(deleteAddressError)
+        ? 'Your session has expired. Please sign in and try again.'
+        : 'Unable to delete address. Please try again.')
+    } finally {
+      setIsDeletingAddressId(null)
+      setIsDeletingAddress(false)
+    }
+  }
+
+  const handleSetDefaultAddress = async (address) => {
+    if (address.is_default || isSettingDefaultId) return
+
+    try {
+      setIsSettingDefaultId(address.id)
+      setAddressError('')
+
+      await setDefaultCustomerAddress(address.id)
+
+      setAddresses((current) =>
+        sortAddresses(current.map((addressEntry) => ({ ...addressEntry, is_default: addressEntry.id === address.id }))),
+      )
+      notify('Default address updated.')
+    } catch (setDefaultError) {
+      console.error('[PROFILE] set default error:', setDefaultError)
+      setAddressError(isMissingCustomerSession(setDefaultError)
+        ? 'Your session has expired. Please sign in and try again.'
+        : 'Unable to update default address. Please try again.')
+    } finally {
+      setIsSettingDefaultId(null)
     }
   }
 
@@ -483,12 +584,123 @@ function ProfilePage({
               <ProfileSection
                 title="Addresses"
                 action={
-                  <button className="profile-link-button" type="button" onClick={handleOpenAddressModal}>
+                  <button
+                    className="profile-link-button"
+                    type="button"
+                    onClick={handleOpenAddressForm}
+                    disabled={isAddressFormOpen}
+                  >
                     Add
                   </button>
                 }
               >
-                {addressError ? (
+                {isAddressFormOpen ? (
+                  <form className="profile-address-form" onSubmit={handleSaveAddress}>
+                    <div className="profile-address-form-heading">
+                      <h3>{editingAddressId ? 'Edit Address' : 'Add Address'}</h3>
+                    </div>
+
+                    <label className="profile-address-form-wide">
+                      <span>Phone Number</span>
+                      <input
+                        type="tel"
+                        value={addressDraft.phoneNumber}
+                        inputMode="numeric"
+                        maxLength={11}
+                        placeholder="09123456789"
+                        onPaste={(event) => handlePhonePaste(event, (value) => updateAddressDraft('phoneNumber', value))}
+                        onChange={(event) => updateAddressDraft('phoneNumber', sanitizePhoneNumber(event.target.value))}
+                      />
+                      {addressFormErrors.phoneNumber ? <small>{addressFormErrors.phoneNumber}</small> : null}
+                    </label>
+
+                    <label>
+                      <span>Province</span>
+                      <AutocompleteTextInput
+                        options={provinceOptions}
+                        value={addressDraft.province}
+                        placeholder="Enter province"
+                        onChange={(value) => updateAddressDraft('province', value)}
+                      />
+                      {addressFormErrors.province ? <small>{addressFormErrors.province}</small> : null}
+                    </label>
+
+                    <label>
+                      <span>City / Municipality</span>
+                      <AutocompleteTextInput
+                        options={cityOptions.map((city) => city.name)}
+                        value={addressDraft.cityMunicipality}
+                        placeholder="Enter city or municipality"
+                        onChange={(value) => updateAddressDraft('cityMunicipality', value)}
+                      />
+                      {addressFormErrors.cityMunicipality ? <small>{addressFormErrors.cityMunicipality}</small> : null}
+                    </label>
+
+                    <label>
+                      <span>Barangay</span>
+                      <AutocompleteTextInput
+                        options={barangayOptions}
+                        value={addressDraft.barangay}
+                        placeholder="Enter barangay"
+                        onChange={(value) => updateAddressDraft('barangay', value)}
+                      />
+                      {addressFormErrors.barangay ? <small>{addressFormErrors.barangay}</small> : null}
+                    </label>
+
+                    <label>
+                      <span>Postal Code</span>
+                      <input
+                        type="text"
+                        value={addressDraft.postalCode}
+                        placeholder="Postal code"
+                        onChange={(event) => updateAddressDraft('postalCode', event.target.value)}
+                      />
+                      {addressFormErrors.postalCode ? <small>{addressFormErrors.postalCode}</small> : null}
+                    </label>
+
+                    <label className="profile-address-form-wide">
+                      <span>Address</span>
+                      <input
+                        type="text"
+                        value={addressDraft.address}
+                        placeholder="House no., street, subdivision"
+                        onChange={(event) => updateAddressDraft('address', event.target.value)}
+                      />
+                      {addressFormErrors.address ? <small>{addressFormErrors.address}</small> : null}
+                    </label>
+
+                    <label>
+                      <span>Apartment / Suite / Unit <em>Optional</em></span>
+                      <input
+                        type="text"
+                        value={addressDraft.apartmentUnit}
+                        placeholder="Unit, floor, building"
+                        onChange={(event) => updateAddressDraft('apartmentUnit', event.target.value)}
+                      />
+                    </label>
+
+                    <label>
+                      <span>Landmark <em>Optional</em></span>
+                      <input
+                        type="text"
+                        value={addressDraft.landmark}
+                        placeholder="Nearby landmark"
+                        onChange={(event) => updateAddressDraft('landmark', event.target.value)}
+                      />
+                    </label>
+
+                    {addressError ? <p className="profile-address-form-error">{addressError}</p> : null}
+
+                    <div className="profile-address-form-actions">
+                      <button className="profile-secondary-button" type="button" onClick={handleCloseAddressForm}>
+                        Cancel
+                      </button>
+                      <button className="profile-primary-button" type="submit" disabled={isSavingAddress}>
+                        {isSavingAddress ? 'Saving...' : editingAddressId ? 'Save Changes' : 'Save Address'}
+                      </button>
+                    </div>
+                  </form>
+                ) : addressError ? (
                   <p className="profile-address-error">{addressError}</p>
                 ) : addresses.length === 0 ? (
                   <div className="profile-empty-row">
@@ -512,35 +724,88 @@ function ProfilePage({
                   </div>
                 ) : (
                   <div className="profile-address-list">
-                    {addresses.map((address) => (
-                      <div className="profile-address-item" key={address.id}>
-                        <span className="profile-empty-icon" aria-hidden="true">
-                          <svg viewBox="0 0 24 24" fill="none">
-                            <path
-                              d="M12 21s7-5.1 7-11a7 7 0 1 0-14 0c0 5.9 7 11 7 11Z"
-                              stroke="currentColor"
-                              strokeWidth="1.7"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                            <path d="M12 12.2a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4Z" stroke="currentColor" strokeWidth="1.7" />
-                          </svg>
-                        </span>
-                        <div className="profile-address-copy">
-                          <div>
-                            <strong>{address.address}</strong>
-                            {address.is_default ? <span className="profile-address-badge">Default Address</span> : null}
+                    {addresses.map((address) => {
+                      const isBusy =
+                        isSavingAddress || Boolean(isDeletingAddressId) || Boolean(isSettingDefaultId)
+
+                      return (
+                        <div className="profile-address-item" key={address.id}>
+                          <span className="profile-address-item-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none">
+                              <path
+                                d="M12 21s7-5.1 7-11a7 7 0 1 0-14 0c0 5.9 7 11 7 11Z"
+                                stroke="currentColor"
+                                strokeWidth="1.7"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                              <path
+                                d="M12 12.2a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4Z"
+                                stroke="currentColor"
+                                strokeWidth="1.7"
+                              />
+                            </svg>
+                          </span>
+                          <div className="profile-address-item-body">
+                            <div className="profile-address-item-copy">
+                              <p className="profile-address-item-line profile-address-item-line--primary">
+                                <strong>{address.address}</strong>
+                              </p>
+                              {address.apartment_unit ? (
+                                <p className="profile-address-item-line">{address.apartment_unit}</p>
+                              ) : null}
+                              <p className="profile-address-item-line">
+                                {[address.barangay, address.city_municipality].filter(Boolean).join(', ')}
+                              </p>
+                              <p className="profile-address-item-line">
+                                {[address.province, address.postal_code].filter(Boolean).join(', ')}
+                              </p>
+                              {address.phone_number ? (
+                                <p className="profile-address-item-line">{formatPhoneDisplay(address.phone_number)}</p>
+                              ) : null}
+                              {address.landmark ? (
+                                <p className="profile-address-item-line">Landmark: {address.landmark}</p>
+                              ) : null}
+                            </div>
+                            <div className="profile-address-item-actions">
+                              <div className="profile-address-item-links">
+                                <button
+                                  className="profile-address-link"
+                                  type="button"
+                                  disabled={isBusy}
+                                  onClick={() => handleEditAddress(address)}
+                                >
+                                  Edit
+                                </button>
+                                <span className="profile-address-link-separator" aria-hidden="true">
+                                  |
+                                </span>
+                                <button
+                                  className="profile-address-link profile-address-link--danger"
+                                  type="button"
+                                  disabled={isBusy}
+                                  onClick={() => handleRequestDeleteAddress(address)}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                              {address.is_default ? (
+                                <span className="profile-address-badge">Default Address</span>
+                              ) : (
+                                <button
+                                  className="profile-default-address-button"
+                                  type="button"
+                                  disabled={isBusy || isSettingDefaultId === address.id}
+                                  onClick={() => handleSetDefaultAddress(address)}
+                                >
+                                  {isSettingDefaultId === address.id ? 'Setting...' : 'Set as Default'}
+                                </button>
+                              )}
+                            </div>
                           </div>
-                          <p>
-                            {[address.apartment_unit, address.barangay, address.city_municipality]
-                              .filter(Boolean)
-                              .join(', ')}
-                          </p>
-                          <p>{[address.province, address.postal_code].filter(Boolean).join(', ')}</p>
-                          {address.landmark ? <p>Landmark: {address.landmark}</p> : null}
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
               </ProfileSection>
@@ -561,116 +826,22 @@ function ProfilePage({
         </section>
       </div>
 
-      {isAddressModalOpen ? (
-        <div className="profile-address-modal-backdrop" role="presentation" onMouseDown={handleCloseAddressModal}>
-          <section
-            className="profile-address-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="add-address-title"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <div className="profile-address-modal-header">
-              <h2 id="add-address-title">Add Address</h2>
-              <button
-                className="profile-address-modal-close"
-                type="button"
-                onClick={handleCloseAddressModal}
-                aria-label="Close add address"
-              >
-                ×
-              </button>
-            </div>
+      {toastMessage ? (
+        <ToastNotification
+          key={toastNonce}
+          nonce={toastNonce}
+          message={toastMessage}
+          onClose={() => setToastMessage('')}
+        />
+      ) : null}
 
-            <form className="profile-address-form" onSubmit={handleSaveAddress}>
-              <label>
-                <span>Province</span>
-                <AutocompleteTextInput
-                  options={provinceOptions}
-                  value={addressDraft.province}
-                  placeholder="Enter province"
-                  onChange={(value) => updateAddressDraft('province', value)}
-                />
-                {addressFormErrors.province ? <small>{addressFormErrors.province}</small> : null}
-              </label>
-
-              <label>
-                <span>City / Municipality</span>
-                <AutocompleteTextInput
-                  options={cityOptions.map((city) => city.name)}
-                  value={addressDraft.cityMunicipality}
-                  placeholder="Enter city or municipality"
-                  onChange={(value) => updateAddressDraft('cityMunicipality', value)}
-                />
-                {addressFormErrors.cityMunicipality ? <small>{addressFormErrors.cityMunicipality}</small> : null}
-              </label>
-
-              <label>
-                <span>Barangay</span>
-                <AutocompleteTextInput
-                  options={barangayOptions}
-                  value={addressDraft.barangay}
-                  placeholder="Enter barangay"
-                  onChange={(value) => updateAddressDraft('barangay', value)}
-                />
-                {addressFormErrors.barangay ? <small>{addressFormErrors.barangay}</small> : null}
-              </label>
-
-              <label>
-                <span>Postal Code</span>
-                <input
-                  type="text"
-                  value={addressDraft.postalCode}
-                  placeholder="Postal code"
-                  onChange={(event) => updateAddressDraft('postalCode', event.target.value)}
-                />
-                {addressFormErrors.postalCode ? <small>{addressFormErrors.postalCode}</small> : null}
-              </label>
-
-              <label className="profile-address-form-wide">
-                <span>Address</span>
-                <input
-                  type="text"
-                  value={addressDraft.address}
-                  placeholder="House no., street, subdivision"
-                  onChange={(event) => updateAddressDraft('address', event.target.value)}
-                />
-                {addressFormErrors.address ? <small>{addressFormErrors.address}</small> : null}
-              </label>
-
-              <label>
-                <span>Apartment / Suite / Unit <em>Optional</em></span>
-                <input
-                  type="text"
-                  value={addressDraft.apartmentUnit}
-                  placeholder="Unit, floor, building"
-                  onChange={(event) => updateAddressDraft('apartmentUnit', event.target.value)}
-                />
-              </label>
-
-              <label>
-                <span>Landmark <em>Optional</em></span>
-                <input
-                  type="text"
-                  value={addressDraft.landmark}
-                  placeholder="Nearby landmark"
-                  onChange={(event) => updateAddressDraft('landmark', event.target.value)}
-                />
-              </label>
-
-              {addressError ? <p className="profile-address-form-error">{addressError}</p> : null}
-
-              <div className="profile-address-form-actions">
-                <button className="profile-secondary-button" type="button" onClick={handleCloseAddressModal}>
-                  Cancel
-                </button>
-                <button className="profile-primary-button" type="submit" disabled={isSavingAddress}>
-                  {isSavingAddress ? 'Saving...' : 'Save Address'}
-                </button>
-              </div>
-            </form>
-          </section>
-        </div>
+      {pendingDeleteAddress ? (
+        <DeleteAddressModal
+          address={pendingDeleteAddress}
+          isDeleting={isDeletingAddress}
+          onCancel={handleCancelDeleteAddress}
+          onConfirm={handleConfirmDeleteAddress}
+        />
       ) : null}
     </main>
   )

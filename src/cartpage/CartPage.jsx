@@ -1,3 +1,6 @@
+import SavedAddressSelector from '../components/SavedAddressSelector.jsx'
+import { useSavedAddressSelection } from '../hooks/useSavedAddressSelection.js'
+import { isValidPhoneNumber as validateLocalPhone, sanitizePhoneNumber, handlePhonePaste } from '../utils/phoneNumber.js'
 import { useTrackOrder } from '../trackorder/trackOrderContext.js'
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { SiteTopbar } from '../landingpage/LandingPage.jsx'
@@ -19,18 +22,22 @@ import { assertCanAcceptOrderForDate } from '../admin/services/availabilityServi
 import { supabase } from '../lib/supabase.js'
 import { getCheckoutSession, reusableCartOrder, getCartOrderReference, assertCartOrderReference } from './cartOrderOwnership.js'
 import { fetchAuthenticatedCustomerProfile } from '../services/customerProfileService.js'
+import { normalizePhoneNumber } from '../utils/phoneNumber.js'
 import { startPaymentReturn } from './paymentReturnController.js'
 import { requestGuestPaymentStatus, createGuestRpcClient } from './guestPaymentStatus.js'
 import PaymentReturnStatus from './PaymentReturnStatus.jsx'
 import PaymentSuccessModal from '../components/PaymentSuccessModal.jsx'
 import { CART_PAYMENT_RETURN_STORAGE_KEY, loadGuestConfirmation, loadConfirmedItems, isVerifiedPayment, logPaymentReturn, savePaymentReturnContext, shouldConsumePaymentReturn } from './paymentConfirmation.js'
-import chocolateCakeImage from '../assets/othersweettreats/regular_chocolate.jpg'
-import redVelvetCakeImage from '../assets/othersweettreats/regular_redvelvet.png'
-import cheesecakeImage from '../assets/othersweettreats/halfordozen_cheesecake.png'
-import ubeImage from '../assets/othersweettreats/ube.png'
-import grahamImage from '../assets/othersweettreats/graham de leche.png'
-import lecheFlanImage from '../assets/othersweettreats/leche_flan.png'
-import putoImage from '../assets/othersweettreats/puto.jpg'
+import { fetchAvailableCartRewards, calculateCartRewardDiscount, formatCartRewardValue } from './cartRewards.js'
+import { RewardsTagIcon, RewardsHeader, RewardsReveal, RewardsEmpty } from '../components/RewardsAccordion.jsx'
+import '../components/rewardsAccordion.css'
+import chocolateCakeImage from '../assets/othersweettreats/regular_chocolate.webp'
+import redVelvetCakeImage from '../assets/othersweettreats/regular_redvelvet.webp'
+import cheesecakeImage from '../assets/othersweettreats/halfordozen_cheesecake.webp'
+import ubeImage from '../assets/othersweettreats/ube.webp'
+import grahamImage from '../assets/othersweettreats/graham de leche.webp'
+import lecheFlanImage from '../assets/othersweettreats/leche_flan.webp'
+import putoImage from '../assets/othersweettreats/puto.webp'
 import './CartPage.css'
 
 const PRODUCT_PRICES = {
@@ -80,9 +87,8 @@ const resolveFallbackImage = (productName) => {
 const formatPrice = (value) => `₱${value.toLocaleString('en-PH')}`
 
 const optionalLabel = <span className="cake-optional-label">Optional</span>
-const contactNumberPattern = /^\d{11}$/
 
-const normalizeContactNumber = (value) => value.replace(/\D/g, '').slice(0, 11)
+const normalizeContactNumber = sanitizePhoneNumber
 
 const mapProductType = (productName) => {
   const normalizedName = productName.toLowerCase()
@@ -183,6 +189,61 @@ function CartSummaryThumb({ product }) {
   )
 }
 
+function CouponsRewardsRow({ isAuthenticated, appliedReward, isExpanded, onToggle, onRemove, loading, error, rewards, onApply }) {
+  if (appliedReward) {
+    return (
+      <div className="rewards-card rewards-card--active">
+        <RewardsTagIcon />
+        <div className="rewards-applied">
+          <span className="rewards-applied-title">{appliedReward.title}</span>
+          <span className="rewards-applied-sub">{appliedReward.description || 'Reward applied to this order.'}</span>
+        </div>
+        <span className="cart-rewards-value">{formatCartRewardValue(appliedReward)}</span>
+        <button
+          type="button"
+          className="rewards-remove"
+          onClick={onRemove}
+          aria-label={`Remove ${appliedReward.title}`}
+        >
+          ×
+        </button>
+      </div>
+    )
+  }
+  return (
+    <div className="rewards-card rewards-dropdown">
+      <RewardsHeader
+        isExpanded={isExpanded}
+        onClick={onToggle}
+        label={isAuthenticated ? 'View available rewards' : 'Sign in to view rewards'}
+        ariaControls="cart-rewards-panel"
+      />
+      <RewardsReveal id="cart-rewards-panel" isOpen={isExpanded}>
+        {loading ? (
+          <p className="rewards-note">Loading your rewards...</p>
+        ) : error ? (
+          <p className="rewards-note rewards-note--error">{error}</p>
+        ) : rewards.length === 0 ? (
+          <RewardsEmpty title="No rewards available yet." sub="Complete eligible orders to unlock future rewards." />
+        ) : (
+          <ul className="cart-rewards-list">
+            {rewards.map((reward) => (
+              <li className="cart-rewards-item" key={reward.id || reward.code}>
+                <div className="cart-rewards-item-copy">
+                  <span className="cart-rewards-item-title">{reward.title}</span>
+                  <span className="cart-rewards-item-description">{reward.description}</span>
+                </div>
+                <span className="cart-rewards-item-value">{formatCartRewardValue(reward)}</span>
+                <button type="button" className="rewards-apply" onClick={() => onApply(reward)}>Apply</button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </RewardsReveal>
+    </div>
+  )
+}
+
 function CartPage({
   onNavigate,
   onCustomerLogout,
@@ -206,6 +267,11 @@ function CartPage({
   const guestPaymentStatus = new URLSearchParams(window.location.search).get('payment')
   const pendingOrderIdRef = useRef(null)
   const profileUserIdRef = useRef(null)
+  const [availableRewards, setAvailableRewards] = useState([])
+  const [appliedReward, setAppliedReward] = useState(null)
+  const [isRewardsExpanded, setIsRewardsExpanded] = useState(false)
+  const [rewardsLoading, setRewardsLoading] = useState(false)
+  const [rewardsError, setRewardsError] = useState('')
   const items = useSyncExternalStore(subscribeCart, getCartItems)
   const availability = useAvailability({ active: true })
   const serviceHoursLabel = availability.serviceHoursLabel || 'Loading...'
@@ -289,11 +355,17 @@ function CartPage({
           Object.entries({
             customerLastName: profile.lastName,
             customerFirstName: profile.firstName,
-            contactNumber: profile.contactNumber,
             email: profile.email,
           }).filter(([field, value]) => value && !String(current[field] || '').trim()),
         ),
       }))
+
+      if (isMounted) {
+        setCustomerInfo((current) => {
+          if (String(current.contactNumber || '').trim()) return current
+          return profile.contactNumber ? { ...current, contactNumber: sanitizePhoneNumber(normalizePhoneNumber(profile.contactNumber)) } : current
+        })
+      }
     }
 
     loadCustomerProfile().catch((error) => {
@@ -303,7 +375,7 @@ function CartPage({
     return () => {
       isMounted = false
     }
-  }, [isCustomerAuthenticated])
+  }, [isCustomerAuthenticated, orderMethod])
 
   useEffect(() => {
     if (isCustomerAuthenticated) return
@@ -322,6 +394,8 @@ function CartPage({
     return () => window.clearTimeout(resetId)
   }, [isCustomerAuthenticated])
 
+  const savedAddresses = useSavedAddressSelection({ enabled: isCustomerAuthenticated && orderMethod === 'delivery', details: customerInfo, onDetailsChange: setCustomerInfo })
+
   const provinceOptions = addressData.map((province) => province.province)
   const exactProvince = addressData.find(
     (province) =>
@@ -334,13 +408,14 @@ function CartPage({
   )
   const citySelection = selectedCity ?? exactCity ?? null
   const barangayOptions = citySelection?.barangays ?? []
-  const postalCode = citySelection?.postalCode ?? ''
+  const postalCode = customerInfo.postalCode || citySelection?.postalCode || ''
 
   const selectProvince = (value) => {
     setSelectedProvince(addressData.find((province) => province.province === value) ?? null)
     setSelectedCity(null)
     setCustomerInfo((current) => ({
       ...current,
+      postalCode: '',
       province: value,
       city: '',
       barangay: '',
@@ -349,7 +424,7 @@ function CartPage({
 
   const selectCity = (value) => {
     setSelectedCity(cityOptions.find((city) => city.name === value) ?? null)
-    setCustomerInfo((current) => ({ ...current, city: value, barangay: '' }))
+    setCustomerInfo((current) => ({ ...current, postalCode: '', city: value, barangay: '' }))
   }
 
   const updateDeliveryField = (field, value) => {
@@ -359,6 +434,7 @@ function CartPage({
       setCustomerInfo((current) => ({
         ...current,
         [field]: value,
+        postalCode: '',
         ...(field === 'province' ? { city: '', barangay: '' } : { barangay: '' }),
       }))
       return
@@ -400,8 +476,8 @@ function CartPage({
 
     if (!customerInfo.contactNumber.trim()) {
       nextErrors.contactNumber = 'Please enter your contact number.'
-    } else if (!contactNumberPattern.test(customerInfo.contactNumber)) {
-      nextErrors.contactNumber = 'Please enter an 11-digit contact number.'
+    } else if (!validateLocalPhone(customerInfo.contactNumber)) {
+      nextErrors.contactNumber = 'Enter a valid 11-digit phone number.'
     }
 
     if (!customerInfo.email.trim() || !emailPattern.test(customerInfo.email.trim())) {
@@ -434,8 +510,8 @@ function CartPage({
         }
         if (!customerInfo.recipientContact.trim()) {
           nextErrors.recipientContact = 'Please enter the recipient contact number.'
-        } else if (!contactNumberPattern.test(customerInfo.recipientContact)) {
-          nextErrors.recipientContact = 'Please enter an 11-digit recipient contact number.'
+        } else if (!validateLocalPhone(customerInfo.recipientContact)) {
+          nextErrors.recipientContact = 'Enter a valid 11-digit phone number.'
         }
       }
     }
@@ -549,7 +625,7 @@ function CartPage({
           ? customerInfo.preferredPickupTime
           : customerInfo.preferredDeliveryTime
       const deliveryFee = 0
-      const total = subtotal + deliveryFee
+      const total = cartTotal
       const recipientName = customerInfo.deliverDifferentRecipient
         ? `${customerInfo.recipientFirstName} ${customerInfo.recipientLastName}`.trim()
         : null
@@ -678,6 +754,35 @@ function CartPage({
     event.stopPropagation()
   }
 
+  const handleToggleRewards = async () => {
+    if (!isCustomerAuthenticated) {
+      onNavigate?.(`/login?redirect=${encodeURIComponent('/cart')}`, { replace: true })
+      return
+    }
+    const nextExpanded = !isRewardsExpanded
+    setIsRewardsExpanded(nextExpanded)
+    if (!nextExpanded) return
+    setRewardsError('')
+    setRewardsLoading(true)
+    try {
+      const rewards = await fetchAvailableCartRewards(supabase)
+      setAvailableRewards(rewards)
+    } catch {
+      setRewardsError('Unable to load your rewards. Please try again.')
+    } finally {
+      setRewardsLoading(false)
+    }
+  }
+
+  const handleApplyReward = (reward) => {
+    setAppliedReward(reward)
+    setIsRewardsExpanded(false)
+  }
+
+  const handleRemoveReward = () => {
+    setAppliedReward(null)
+  }
+
   const cartProducts = Object.entries(items).map(([name, quantity]) => {
     const metadata = getCartItemMetadata(name)
     const metadataPrice = Number(metadata?.unitPrice)
@@ -709,6 +814,8 @@ function CartPage({
   })
 
   const subtotal = cartProducts.reduce((total, product) => total + product.lineTotal, 0)
+  const discountAmount = appliedReward ? calculateCartRewardDiscount(appliedReward, subtotal) : 0
+  const cartTotal = Math.max(0, subtotal - discountAmount)
 
   const changeQuantity = (productName, delta) => {
     setCartQuantity(productName, (items[productName] ?? 1) + delta)
@@ -831,9 +938,10 @@ function CartPage({
                         type="tel"
                         inputMode="numeric"
                         maxLength={11}
-                        pattern="\d{11}"
+                        pattern="09[0-9]{9}"
                         placeholder="09123456789"
                         value={customerInfo.contactNumber}
+                        onPaste={(event) => handlePhonePaste(event, (value) => updateInfo('contactNumber', value))}
                         onBlur={() => markTouched('contactNumber')}
                         onChange={(event) => updateInfo('contactNumber', event.target.value)}
                       />
@@ -937,7 +1045,11 @@ function CartPage({
 
                   {orderMethod === 'delivery' ? (
 <fieldset className="cake-option-group cake-customer-section cart-section">
-                  <legend>Delivery Details</legend>
+                  <SavedAddressSelector {...savedAddresses} onSelect={(address) => {
+                    setSelectedProvince(null)
+                    setSelectedCity(null)
+                    savedAddresses.onSelect(address)
+                  }} />
                     <label className="cake-field">
                       <span>Province</span>
                       <AutocompleteTextInput
@@ -1087,9 +1199,10 @@ function CartPage({
                             type="tel"
                             inputMode="numeric"
                             maxLength={11}
-                            pattern="\d{11}"
+                            pattern="09[0-9]{9}"
                             placeholder="09123456789"
                             value={customerInfo.recipientContact}
+                            onPaste={(event) => handlePhonePaste(event, (value) => updateInfo('recipientContact', value))}
                             onBlur={() => markTouched('recipientContact')}
                             onChange={(event) =>
                               updateInfo('recipientContact', event.target.value)
@@ -1198,18 +1311,42 @@ function CartPage({
                   ))}
                 </div>
 
+                <section
+                  className={`cart-rewards-section${isRewardsExpanded ? ' is-expanded' : ''}`}
+                  aria-label="Coupons and rewards"
+                >
+                  <h3 className="cart-rewards-heading">Coupons &amp; Rewards</h3>
+                  <CouponsRewardsRow
+                    isAuthenticated={isCustomerAuthenticated}
+                    appliedReward={appliedReward}
+                    isExpanded={isRewardsExpanded}
+                    onToggle={handleToggleRewards}
+                    onRemove={handleRemoveReward}
+                    loading={rewardsLoading}
+                    error={rewardsError}
+                    rewards={availableRewards}
+                    onApply={handleApplyReward}
+                  />
+                </section>
+
               <div className="cart-price-summary">
                 <div className="cart-price-row">
                   <span>Subtotal</span>
                   <span>{formatPrice(subtotal)}</span>
                 </div>
+                {appliedReward && discountAmount > 0 ? (
+                  <div className="cart-price-row cart-price-row--discount">
+                    <span>Discount ({appliedReward.title})</span>
+                    <span>−{formatPrice(discountAmount)}</span>
+                  </div>
+                ) : null}
                 <div className="cart-price-row">
                   <span>Delivery Fee</span>
                   <span>{orderMethod === 'pickup' ? 'FREE' : 'To be calculated'}</span>
                 </div>
                 <div className="cart-total-row">
                   <span>Total</span>
-                  <span>{formatPrice(subtotal)}</span>
+                  <span>{formatPrice(cartTotal)}</span>
                 </div>
               </div>
                 </div>

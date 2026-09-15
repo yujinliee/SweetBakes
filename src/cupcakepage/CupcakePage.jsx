@@ -1,3 +1,4 @@
+import { isValidPhoneNumber as validateLocalPhone } from '../utils/phoneNumber.js'
 import { useEffect, useRef, useState } from 'react'
 import { SiteFooter, SiteTopbar } from '../landingpage/LandingPage.jsx'
 import CupcakeAvailabilityCalendar from './components/CupcakeAvailabilityCalendar.jsx'
@@ -29,7 +30,6 @@ import {
 import './CupcakePage.css'
 
 const cupcakeRequestsStorageKey = 'sweetbakes:cake-requests'
-const contactNumberPattern = /^\d{11}$/
 
 const defaultSelections = {
   flavor: '',
@@ -328,7 +328,7 @@ function CupcakePage({
         designDetails.cupcakeTheme &&
         (designDetails.cupcakeTheme !== 'Other' || designDetails.cupcakeOtherTheme.trim()) &&
         customerInfo.fullName.trim() &&
-        contactNumberPattern.test(customerInfo.contactNumber) &&
+        validateLocalPhone(customerInfo.contactNumber) &&
         emailPattern.test(customerInfo.email.trim()) &&
         customerInfo.fulfillment &&
         customerInfo.preferredDate &&

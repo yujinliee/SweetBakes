@@ -1,0 +1,190 @@
+/* Shared presentational accordion used by the Cart "Coupons & Rewards" section
+   and the My Orders custom-order loyalty reward card. Both surfaces must stay
+   visually identical: same white card, subtle border, #AF719D accent, and the
+   same 0fr -> 1fr expand/collapse motion. */
+
+.rewards-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d8ccc6;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(58, 46, 46, 0.06);
+}
+
+.rewards-card--active {
+  flex-wrap: wrap;
+}
+
+.rewards-dropdown {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+}
+
+.rewards-dropdown .rewards-launch {
+  padding: 10px 12px;
+}
+
+.rewards-launch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #3a2e2e;
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rewards-tag-icon {
+  flex: none;
+  color: #AF719D;
+}
+
+.rewards-launch-label {
+  flex: 1 1 auto;
+}
+
+.rewards-caret {
+  flex: none;
+  color: #AF719D;
+  transition: transform 220ms ease;
+}
+
+.rewards-launch.is-expanded .rewards-caret {
+  transform: rotate(180deg);
+}
+
+.rewards-applied {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.rewards-applied-title {
+  color: #3a2e2e;
+  font-family: 'Poppins', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.rewards-applied-sub {
+  color: #8a7b78;
+  font-family: 'Poppins', sans-serif;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.rewards-remove {
+  flex: none;
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #a29692;
+  font-family: 'Poppins', sans-serif;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 160ms ease, background-color 160ms ease;
+}
+
+.rewards-remove:hover {
+  color: #3a2e2e;
+  background: #f7f0ff;
+}
+
+.rewards-reveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    grid-template-rows 260ms ease,
+    opacity 200ms ease,
+    visibility 0s linear 260ms;
+}
+
+.rewards-reveal.is-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+.rewards-reveal-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.rewards-reveal-body {
+  border-top: 1px solid #efe6e0;
+  padding: 12px 14px 14px;
+}
+
+.rewards-note {
+  margin: 0;
+  color: #8a7b78;
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.rewards-note--error {
+  color: #b33a2c;
+}
+
+.rewards-empty {
+  padding: 0;
+}
+
+.rewards-empty-title {
+  margin: 0;
+  color: #3a2e2e;
+  font-family: 'Poppins', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.rewards-empty-sub {
+  margin: 6px 0 0;
+  color: #8a7b78;
+  font-family: 'Poppins', sans-serif;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.rewards-apply {
+  flex: none;
+  padding: 7px 14px;
+  border: 1px solid #AF719D;
+  border-radius: 8px;
+  background: transparent;
+  color: #AF719D;
+  font-family: 'Poppins', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.rewards-apply:hover {
+  background: #AF719D;
+  color: #ffffff;
+}

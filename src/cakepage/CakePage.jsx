@@ -1,3 +1,4 @@
+import { isValidPhoneNumber as validateLocalPhone } from '../utils/phoneNumber.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { SiteFooter, SiteTopbar } from '../landingpage/LandingPage.jsx'
 import { CUSTOM_CAKE_PREVIEW_IMAGES as cakePreviewMap } from '../components/customOrderPreviewImages.js'
@@ -32,7 +33,6 @@ import {
 } from '../services/customDraftService.js'
 import './CakePage.css'
 
-const contactNumberPattern = /^\d{11}$/
 
 const defaultSelections = {
   flavor: '',
@@ -323,7 +323,7 @@ function CakePage({
     return {
       ...(!customerInfo.customerLastName.trim() ? { customerLastName: true } : {}),
       ...(!customerInfo.customerFirstName.trim() ? { customerFirstName: true } : {}),
-      ...(!customerInfo.contactNumber.trim() || !contactNumberPattern.test(customerInfo.contactNumber)
+      ...(!customerInfo.contactNumber.trim() || !validateLocalPhone(customerInfo.contactNumber)
         ? { contactNumber: true }
         : {}),
       ...(!customerInfo.email.trim() || !emailPattern.test(customerInfo.email.trim())
@@ -371,7 +371,7 @@ function CakePage({
       ...(customerInfo.fulfillment === 'delivery' &&
       customerInfo.deliverDifferentRecipient &&
       (!customerInfo.recipientContact.trim() ||
-        !contactNumberPattern.test(customerInfo.recipientContact))
+        !validateLocalPhone(customerInfo.recipientContact))
         ? { recipientContact: true }
         : {}),
       ...(!customerInfo.agreement ? { agreement: true } : {}),

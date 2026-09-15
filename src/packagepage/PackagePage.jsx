@@ -1,3 +1,4 @@
+import { isValidPhoneNumber as validateLocalPhone } from '../utils/phoneNumber.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CUSTOM_PACKAGE_PREVIEW_IMAGES as packagePreviewMap } from '../components/customOrderPreviewImages.js'
 import CakeTabs from '../cakepage/components/CakeTabs.jsx'
@@ -29,7 +30,6 @@ import {
 import './PackagePage.css'
 
 const packageRequestsStorageKey = 'sweetbakes:cake-requests'
-const contactNumberPattern = /^\d{11}$/
 
 const defaultPackageSelection = {
   selectedPackage: '',
@@ -354,7 +354,7 @@ function PackagePage({
     return {
       ...(!packageCustomerInfo.fullName.trim() ? { fullName: true } : {}),
       ...(!packageCustomerInfo.contactNumber.trim() ||
-      !contactNumberPattern.test(packageCustomerInfo.contactNumber)
+      !validateLocalPhone(packageCustomerInfo.contactNumber)
         ? { contactNumber: true }
         : {}),
       ...(!packageCustomerInfo.email.trim() ||
@@ -405,7 +405,7 @@ function PackagePage({
       ...(packageCustomerInfo.fulfillment === 'delivery' &&
       packageCustomerInfo.deliverDifferentRecipient &&
       (!packageCustomerInfo.recipientContact.trim() ||
-        !contactNumberPattern.test(packageCustomerInfo.recipientContact))
+        !validateLocalPhone(packageCustomerInfo.recipientContact))
         ? { recipientContact: true }
         : {}),
       ...(!packageCustomerInfo.agreement ? { agreement: true } : {}),

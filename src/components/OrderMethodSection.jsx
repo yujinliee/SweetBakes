@@ -1,3 +1,6 @@
+import SavedAddressSelector from './SavedAddressSelector.jsx'
+import { useSavedAddressSelection } from '../hooks/useSavedAddressSelection.js'
+import { sanitizePhoneNumber, handlePhonePaste } from '../utils/phoneNumber.js'
 import { useState } from 'react'
 import AutocompleteTextInput from '../cartpage/components/AutocompleteTextInput'
 import addressData from '../cartpage/data/philippineAddressData'
@@ -13,6 +16,7 @@ const optionalLabel = <span className="cake-optional-label">Optional</span>
 
 function OrderMethodSection({
   method,
+  autofillReady = true,
   details,
   onMethodChange,
   onDetailsChange,
@@ -23,6 +27,7 @@ function OrderMethodSection({
   methodError,
   className = 'cake-option-group cake-customer-section',
 }) {
+  const savedAddresses = useSavedAddressSelection({ enabled: autofillReady && method === 'delivery', details, onDetailsChange })
   const availability = useAvailability()
   const serviceHoursLabel = availability.serviceHoursLabel || 'Loading...'
   const [selectedProvince, setSelectedProvince] = useState(null)
@@ -41,13 +46,13 @@ function OrderMethodSection({
   )
   const citySelection = selectedCity ?? exactCity ?? null
   const barangayOptions = citySelection?.barangays ?? []
-  const postalCode = citySelection?.postalCode ?? ''
+  const postalCode = details?.postalCode || citySelection?.postalCode || ''
 
   const handleDetailsChange = (field, value) => {
     let next = {}
     const normalizedValue =
       field === 'recipientContact'
-        ? value.replace(/\D/g, '').slice(0, 11)
+        ? sanitizePhoneNumber(value)
         : value
 
     next[field] = normalizedValue
@@ -57,12 +62,14 @@ function OrderMethodSection({
     }
 
     if (field === 'province') {
+      next.postalCode = ''
       next.city = ''
       next.barangay = ''
       setSelectedCity(null)
     }
 
     if (field === 'city') {
+      next.postalCode = ''
       next.barangay = ''
       setSelectedCity(null)
     }
@@ -78,6 +85,7 @@ function OrderMethodSection({
     setSelectedCity(null)
     onDetailsChange((current) => ({
       ...current,
+      postalCode: '',
       province: value,
       city: '',
       barangay: '',
@@ -88,6 +96,7 @@ function OrderMethodSection({
     setSelectedCity(cityOptions.find((city) => city.name === value) ?? null)
     onDetailsChange((current) => ({
       ...current,
+      postalCode: '',
       city: value,
       barangay: '',
     }))
@@ -174,7 +183,11 @@ function OrderMethodSection({
 
       {method === 'delivery' ? (
         <fieldset className={className}>
-          <legend>Delivery Details</legend>
+          <SavedAddressSelector {...savedAddresses} onSelect={(address) => {
+            setSelectedProvince(null)
+            setSelectedCity(null)
+            savedAddresses.onSelect(address)
+          }} />
           <label className="cake-field">
             <span>Province</span>
             <AutocompleteTextInput
@@ -316,9 +329,10 @@ function OrderMethodSection({
                   type="tel"
                   inputMode="numeric"
                   maxLength={11}
-                  pattern="\d{11}"
+                  pattern="09[0-9]{9}"
                   placeholder="09123456789"
                   value={details?.recipientContact ?? ''}
+                  onPaste={(event) => handlePhonePaste(event, (value) => handleDetailsChange('recipientContact', value))}
                   onBlur={() => markTouched('recipientContact')}
                   onChange={(event) => handleDetailsChange('recipientContact', event.target.value)}
                 />

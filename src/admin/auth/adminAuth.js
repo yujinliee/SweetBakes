@@ -68,7 +68,7 @@ export async function getAdminAuthStatus() {
     const { role, error: profileError } = await getAdminProfileRole(user.id)
 
     if (profileError || role !== 'admin') {
-      await supabase.auth.signOut()
+      // An authorization check must not revoke a customer's valid session.
       return {
         status: 'unauthorized',
         isAuthenticated: false,

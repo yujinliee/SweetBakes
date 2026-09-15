@@ -15,18 +15,18 @@ import textureBackground from '../assets/landingpage/texture_background.svg'
 import mapsImage from '../assets/landingpage/maps.png'
 import footerMark from '../assets/landingpage/sweetbakes_footer.svg'
 import footerChecker from '../assets/landingpage/footer_checker.png'
-import chocolateCakeImage from '../assets/othersweettreats/regular_chocolate.jpg'
-import redVelvetCakeImage from '../assets/othersweettreats/regular_redvelvet.png'
-import halfDozenCheesecakeImage from '../assets/othersweettreats/halfordozen_cheesecake.png'
-import wholeBlueberryImage from '../assets/othersweettreats/whole_blueberry_cheesecake.png'
-import wholeMangoImage from '../assets/othersweettreats/whole_mango_cheesecake.png'
-import wholeStrawberryImage from '../assets/othersweettreats/whole_strawberry_cheesecake.png'
-import wholeOreoImage from '../assets/othersweettreats/whole_oreo_cheesecake.png'
-import ubeImage from '../assets/othersweettreats/ube.png'
-import grahamImage from '../assets/othersweettreats/graham de leche.png'
-import lecheFlanImage from '../assets/othersweettreats/leche_flan.png'
-import putoImage from '../assets/othersweettreats/puto.jpg'
-import Chatbot from '../components/Chatbot/Chatbot.jsx'
+import chocolateCakeImage from '../assets/othersweettreats/regular_chocolate.webp'
+import redVelvetCakeImage from '../assets/othersweettreats/regular_redvelvet.webp'
+import halfDozenCheesecakeImage from '../assets/othersweettreats/halfordozen_cheesecake.webp'
+import wholeBlueberryImage from '../assets/othersweettreats/whole_blueberry_cheesecake.webp'
+import wholeMangoImage from '../assets/othersweettreats/whole_mango_cheesecake.webp'
+import wholeStrawberryImage from '../assets/othersweettreats/whole_strawberry_cheesecake.webp'
+import wholeOreoImage from '../assets/othersweettreats/whole_oreo_cheesecake.webp'
+import ubeImage from '../assets/othersweettreats/ube.webp'
+import grahamImage from '../assets/othersweettreats/graham de leche.webp'
+import lecheFlanImage from '../assets/othersweettreats/leche_flan.webp'
+import putoImage from '../assets/othersweettreats/puto.webp'
+import treatPlaceholder from '../assets/othersweettreats/treat-placeholder.svg'
 import { ADMIN_DASHBOARD_ROUTE } from '../admin/adminRouteConstants.js'
 import { isCustomerCustomizationRoute, setAuthReturnTo } from '../auth/authReturnTo.js'
 import { supabase } from '../lib/supabase.js'
@@ -834,23 +834,42 @@ const formatTreatPrice = (value) => {
   return Number.isFinite(numericValue) ? formatPeso(numericValue) : '—'
 }
 
-const getTreatImage = (product) =>
-  product.image_url || product.imageUrl || LOCAL_TREAT_IMAGE_FALLBACKS[product.slug] || null
+const OPTIMIZED_TREAT_IMAGE_PARAMS = 'width=480&quality=80&format=webp&resize=contain'
 
-const mapSupabaseTreatProduct = (product) => ({
-  id: product.id,
-  name: product.product || product.name,
-  slug: product.slug,
-  category: product.category,
-  description: product.description || '',
-  unitPrice:
-    product.base_price === null || product.base_price === undefined || product.base_price === ''
-      ? null
-      : Number(product.base_price),
-  price: formatTreatPrice(product.base_price ?? product.price),
-  image: getTreatImage(product),
-  image_url: product.image_url || product.imageUrl || '',
-})
+const optimizeStorageImageUrl = (url) => {
+  if (!url) return ''
+
+  const marker = '/object/public/'
+  const markerIndex = url.indexOf(marker)
+
+  if (markerIndex === -1) return url
+
+  const path = url.slice(markerIndex + marker.length).split('?')[0]
+  return `${url.slice(0, markerIndex)}/render/image/public/${path}?${OPTIMIZED_TREAT_IMAGE_PARAMS}`
+}
+
+const getTreatImage = (product) =>
+  optimizeStorageImageUrl(product.image_url || product.imageUrl) ||
+  LOCAL_TREAT_IMAGE_FALLBACKS[product.slug] ||
+  null
+
+const mapSupabaseTreatProduct = (product) => {
+  const imageUrl = optimizeStorageImageUrl(product.image_url || product.imageUrl)
+  return {
+    id: product.id,
+    name: product.product || product.name,
+    slug: product.slug,
+    category: product.category,
+    description: product.description || '',
+    unitPrice:
+      product.base_price === null || product.base_price === undefined || product.base_price === ''
+        ? null
+        : Number(product.base_price),
+    price: formatTreatPrice(product.base_price ?? product.price),
+    image: getTreatImage(product),
+    image_url: imageUrl,
+  }
+}
 
 const buildTreatProductsByCategory = (products) =>
   products.reduce((groups, product) => {
@@ -876,6 +895,36 @@ const getProductImageByLabel = (product, label) =>
 const emptyCheesecakeAssortment = () =>
   Object.fromEntries(CHEESECAKE_FLAVORS.map((flavor) => [flavor.id, 0]))
 
+function TreatImage({ src, alt, fallbackUrl = treatPlaceholder, eager = false }) {
+  const [state, setState] = useState(src ? 'loading' : 'error')
+
+  if (!src || state === 'error') {
+    return (
+      <img
+        className="is-loaded"
+        src={fallbackUrl}
+        alt={alt}
+        draggable="false"
+        loading={eager ? 'eager' : 'lazy'}
+        decoding="async"
+      />
+    )
+  }
+
+  return (
+    <img
+      className={state === 'loaded' ? 'is-loaded' : 'is-loading'}
+      src={src}
+      alt={alt}
+      draggable="false"
+      loading={eager ? 'eager' : 'lazy'}
+      decoding="async"
+      onLoad={() => setState('loaded')}
+      onError={() => setState('error')}
+    />
+  )
+}
+
 function CheesecakeTreatCard({ product }) {
   const [size, setSize] = useState(null)
   const [flavorType, setFlavorType] = useState(null)
@@ -893,6 +942,23 @@ function CheesecakeTreatCard({ product }) {
     },
     [],
   )
+
+  useEffect(() => {
+    const preloadWholeCheesecakes = () => {
+      ;[wholeBlueberryImage, wholeMangoImage, wholeStrawberryImage, wholeOreoImage].forEach((url) => {
+        const image = new Image()
+        image.src = url
+      })
+    }
+
+    if (typeof window.requestIdleCallback === 'function') {
+      const idleId = window.requestIdleCallback(preloadWholeCheesecakes, { timeout: 2500 })
+      return () => window.cancelIdleCallback(idleId)
+    }
+
+    const timeoutId = window.setTimeout(preloadWholeCheesecakes, 1500)
+    return () => window.clearTimeout(timeoutId)
+  }, [])
 
   const sizeConfig = CHEESECAKE_SIZES.find((option) => option.id === size) ?? null
   const halfDozenVariant = getVariantByLabel(product, 'Half Dozen')
@@ -1196,7 +1262,7 @@ function CheesecakeTreatCard({ product }) {
         </div>
       </div>
       <div className="treats-item-image">
-        <img src={cheesecakeImage} alt={cheesecakeAlt} draggable="false" />
+        <TreatImage key={cheesecakeImage} src={cheesecakeImage} alt={cheesecakeAlt} />
       </div>
     </article>
   )
@@ -1383,7 +1449,7 @@ function MoreTreatsSection() {
                     </div>
                   </div>
                   <div className="treats-item-image">
-                    <img src={product.image} alt={product.name} draggable="false" />
+                    <TreatImage key={product.image || product.name} src={product.image} alt={product.name} />
                   </div>
                 </article>
               ))
@@ -1733,10 +1799,6 @@ useEffect(() => {
       </main>
 
       <SiteFooter />
-      <Chatbot
-        onNavigate={onNavigate}
-        isCustomerAuthenticated={isCustomerAuthenticated}
-      />
     </div>
   )
 }

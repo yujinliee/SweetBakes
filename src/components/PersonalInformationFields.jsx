@@ -1,3 +1,4 @@
+import { handlePhonePaste } from '../utils/phoneNumber.js'
 function PersonalInformationFields({ details, onChange, hasError, showError, markTouched }) {
   return (
     <fieldset className="cake-option-group cake-customer-section">
@@ -42,10 +43,11 @@ function PersonalInformationFields({ details, onChange, hasError, showError, mar
             type="tel"
             inputMode="numeric"
             maxLength={11}
-            pattern="\d{11}"
+            pattern="09[0-9]{9}"
             placeholder="09123456789"
             value={details.contactNumber ?? ''}
             onBlur={() => markTouched('contactNumber')}
+            onPaste={(event) => handlePhonePaste(event, (value) => onChange('contactNumber', value))}
             onChange={(event) => onChange('contactNumber', event.target.value)}
           />
           {showError('contactNumber')}

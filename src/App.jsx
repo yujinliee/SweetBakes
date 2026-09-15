@@ -10,6 +10,7 @@ import {
 } from './auth/authReturnTo.js'
 import { getCustomerAuthStatus } from './auth/customerAuth.js'
 import CartPage from './cartpage/CartPage.jsx'
+import Chatbot from './components/Chatbot/Chatbot.jsx'
 import CustomizationPage from './customization/CustomizationPage.jsx'
 import ForgotPasswordPage from './loginpage/ForgotPasswordPage.jsx'
 import LandingPage from './landingpage/LandingPage.jsx'
@@ -28,9 +29,6 @@ const getCurrentLocationKey = () =>
 
 const getPathnameFromLocationKey = (currentLocationKey) => currentLocationKey.split(/[?#]/)[0]
 
-const getCustomerAuthenticated = () =>
-  window.localStorage.getItem(customerAuthStorageKey) === 'true'
-
 const scrollToPageTop = () => {
   window.scrollTo({
     top: 0,
@@ -47,7 +45,7 @@ const logNavigationDebug = (...values) => {
 
 function App() {
   const [locationKey, setLocationKey] = useState(getCurrentLocationKey)
-  const [isCustomerAuthenticated, setIsCustomerAuthenticated] = useState(getCustomerAuthenticated)
+  const [isCustomerAuthenticated, setIsCustomerAuthenticated] = useState(false)
   const [customerRouteCheckedKey, setCustomerRouteCheckedKey] = useState('')
 
   useEffect(() => {
@@ -65,15 +63,11 @@ function App() {
   }, [locationKey])
 
   const navigate = useCallback((href, options = {}) => {
-    let nextUrl = new URL(href, window.location.origin)
-    let nextLocationKey = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`
+    const nextUrl = new URL(href, window.location.origin)
+    const nextLocationKey = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`
     const isSamePage = nextLocationKey === getCurrentLocationKey()
 
-    if (isCustomerCustomizationRoute(nextLocationKey) && !getCustomerAuthenticated()) {
-      const returnTo = setAuthReturnTo(nextLocationKey)
-      nextUrl = new URL(`/login?redirect=${encodeURIComponent(returnTo || nextLocationKey)}`, window.location.origin)
-      nextLocationKey = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`
-    }
+    // The route effect checks the restored Supabase session before allowing access.
 
     logNavigationDebug('from:', getCurrentLocationKey())
     logNavigationDebug('to:', nextLocationKey)
@@ -107,7 +101,6 @@ function App() {
 
   useEffect(() => {
     if (!isCustomerCustomizationRoute(locationKey)) {
-      setCustomerRouteCheckedKey('')
       return undefined
     }
 
@@ -153,14 +146,34 @@ function App() {
   }, [locationKey, navigate])
 
   useEffect(() => {
-    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT' || !session) {
+    let active = true
+    let revision = 0
+    let timer
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      const currentRevision = ++revision
+      window.clearTimeout(timer)
+      if (!session?.user) {
         clearAuthReturnTo()
         window.localStorage.removeItem(customerAuthStorageKey)
         setIsCustomerAuthenticated(false)
+        setCustomerRouteCheckedKey('')
+        return
       }
+      // Query outside the auth callback so it does not hold the SDK auth lock.
+      timer = window.setTimeout(async () => {
+        const status = await getCustomerAuthStatus()
+        if (!active || currentRevision !== revision) return
+        const authenticated = status.status === 'customer'
+        setIsCustomerAuthenticated(authenticated)
+        if (authenticated) window.localStorage.setItem(customerAuthStorageKey, 'true')
+        else window.localStorage.removeItem(customerAuthStorageKey)
+      }, 0)
     })
-    return () => listener.subscription.unsubscribe()
+    return () => {
+      active = false
+      window.clearTimeout(timer)
+      listener.subscription.unsubscribe()
+    }
   }, [])
 
   const handleCustomerLogin = (targetHref = '/', options = {}) => {
@@ -278,6 +291,9 @@ function App() {
   return (
     <>
       {page}
+      {!currentPathname.startsWith('/admin') && currentPathname !== '/auth/callback' ? (
+        <Chatbot onNavigate={navigate} isCustomerAuthenticated={isCustomerAuthenticated} />
+      ) : null}
     </>
   )
 }

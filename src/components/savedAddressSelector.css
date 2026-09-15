@@ -1,0 +1,13 @@
+.saved-address-legend { width: 100%; box-sizing: border-box; padding: 0; }
+.saved-address-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; width: 100%; text-align: left; }
+.saved-address-actions { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; flex-shrink: 0; white-space: nowrap; font-size: 13px; font-weight: 500; line-height: 1.4; }
+.saved-address-status { color: #af719d; font-weight: 400; }
+.saved-address-separator { color: #b9adb5; font-weight: 400; }
+.saved-address-copy { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; overflow-wrap: anywhere; font-size: 13px; line-height: 1.5; text-align: left; }
+.saved-address-badge { background: #af719d12; color: #af719d; border-radius: 999px; padding: 2px 8px; font-size: 12px; margin-bottom: 4px; }
+.saved-address-change { color: #af719d; background: transparent; border: 0; padding: 4px 0; font: inherit; cursor: pointer; flex-shrink: 0; }
+.saved-address-change:hover { color: #925882; text-decoration: underline; text-underline-offset: 3px; }
+.saved-address-options { display: grid; gap: 8px; margin-bottom: 16px; max-height: 320px; overflow-y: auto; min-width: 0; }
+.saved-address-option { display: flex; align-items: flex-start; gap: 10px; width: 100%; border: 1px solid #e7dce3; border-radius: 10px; padding: 10px; color: inherit; background: #fff; text-align: left; font: inherit; cursor: pointer; }
+.saved-address-option[aria-pressed="true"] { border-color: #af719d; }
+.saved-address-option:focus-visible, .saved-address-change:focus-visible { outline: 2px solid #af719d; outline-offset: 2px; }

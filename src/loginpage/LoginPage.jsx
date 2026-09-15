@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import './LoginPage.css'
 import { ADMIN_DASHBOARD_ROUTE } from '../admin/adminRouteConstants.js'
-import { signInAdmin } from '../admin/auth/adminAuth.js'
 import { clearAuthReturnTo } from '../auth/authReturnTo.js'
 import { getCustomerRedirect, googleOAuthErrorMessage, startGoogleOAuth } from '../auth/googleOAuth.js'
 import { SiteTopbar } from '../landingpage/LandingPage.jsx'
@@ -64,21 +63,6 @@ function LoginPage({
 
     if (trimmedEmail && password) {
       setIsSubmitting(true)
-      const adminResult = await signInAdmin(trimmedEmail, password)
-
-      if (adminResult.success) {
-        clearAuthReturnTo()
-
-        if (import.meta.env.DEV) {
-          console.log('[NAVIGATION] from /login admin auth ->', ADMIN_DASHBOARD_ROUTE)
-        }
-
-        setError('')
-        setIsSubmitting(false)
-        onNavigate?.(ADMIN_DASHBOARD_ROUTE, { replace: true })
-        return
-      }
-
       const { data, error: customerAuthError } = await supabase.auth.signInWithPassword({
         email: trimmedEmail,
         password,
@@ -95,6 +79,14 @@ function LoginPage({
         .select('role')
         .eq('id', data.user.id)
         .maybeSingle()
+
+      if (!profileError && profile?.role === 'admin') {
+        clearAuthReturnTo()
+        setError('')
+        setIsSubmitting(false)
+        onNavigate?.(ADMIN_DASHBOARD_ROUTE, { replace: true })
+        return
+      }
 
       if (profileError || profile?.role !== 'customer') {
         await supabase.auth.signOut()

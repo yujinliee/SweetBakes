@@ -13,6 +13,8 @@ import { ORDER_TABS, EMPTY_MESSAGES, attachOrderReviews, getOrderTabCounts, matc
 import { attachCatalogImages, itemImage, itemFallback } from './orderHistoryImages.js'
 import { formatDisplayTime } from '../components/timeUtils.js'
 import { calculateLoyaltyReward, getCustomDownPaymentState } from './loyaltyReward.js'
+import { RewardsTagIcon, RewardsHeader, RewardsReveal, RewardsEmpty } from '../components/RewardsAccordion.jsx'
+import '../components/rewardsAccordion.css'
 import './MyOrdersPage.css'
 
 const ORDER_SELECT = `id, order_number, customer_id, first_name, last_name, email, order_method, province, city_municipality, barangay, postal_code, address, apartment_unit, landmark, different_recipient, recipient_name, recipient_contact, preferred_date, preferred_time, subtotal, delivery_fee, total, required_down_payment, amount_paid, loyalty_reward_applied, loyalty_discount_percent, loyalty_discount_amount, payment_amount_due, order_status, payment_status, payment_method, created_at, updated_at`
@@ -44,10 +46,28 @@ function StatusProgress({ order }) {
 function PaymentPanel({ order, completedOrdersCount = 0 }) {
   const [isCreatingPayment, setIsCreatingPayment] = useState(false)
   const [paymentError, setPaymentError] = useState('')
-  const [voucherPreview, setVoucherPreview] = useState(false)
+  const [isRewardsExpanded, setIsRewardsExpanded] = useState(false)
+  const [rewardAppliedLocally, setRewardAppliedLocally] = useState(false)
+  const [completedOrderCount, setCompletedOrderCount] = useState(completedOrdersCount)
+  const [eligibilityStatus, setEligibilityStatus] = useState('pending')
 
-  const reward = getCustomDownPaymentState(order, completedOrdersCount)
-  const previewReward = calculateLoyaltyReward(reward.originalDownPayment, completedOrdersCount)
+  const reward = getCustomDownPaymentState(order, completedOrderCount)
+  const previewReward = calculateLoyaltyReward(reward.originalDownPayment, completedOrderCount)
+
+  useEffect(() => {
+    let isMounted = true
+    supabase.rpc('get_customer_completed_order_count')
+      .then(({ data, error }) => {
+        if (!isMounted) return
+        if (!error && Number.isFinite(Number(data))) {
+          setCompletedOrderCount(Number(data))
+          setEligibilityStatus('ready')
+        } else {
+          setEligibilityStatus('error')
+        }
+      })
+    return () => { isMounted = false }
+  }, [])
 
   const canPay = String(order.order_status || '').toLowerCase() === 'confirmed'
     && ['pending', 'unpaid'].includes(String(order.payment_status || '').toLowerCase())
@@ -58,20 +78,31 @@ function PaymentPanel({ order, completedOrdersCount = 0 }) {
       <div className="my-orders-paid-summary">
         <strong className="my-orders-paid-label">Down Payment Paid</strong>
         {reward.rewardApplied ? <>
-          <div className="my-orders-voucher-row"><span>Original Down Payment</span><strong>{formatCurrency(reward.originalDownPayment)}</strong></div>
-          <div className="my-orders-voucher-row my-orders-voucher-row--discount"><span>Loyalty Discount</span><strong>{formatCurrency(-reward.discountAmount)}</strong></div>
+          <div className="my-orders-breakdown-row"><span>Original Down Payment</span><strong>{formatCurrency(reward.originalDownPayment)}</strong></div>
+          <div className="my-orders-breakdown-row my-orders-breakdown-row--discount"><span>Loyalty Discount</span><strong>{formatCurrency(-reward.discountAmount)}</strong></div>
         </> : null}
-        <div className="my-orders-voucher-row"><span>Amount Paid</span><strong>{formatCurrency(reward.amountPaid)}</strong></div>
-        <div className="my-orders-voucher-row my-orders-voucher-row--final"><span>Remaining Balance</span><strong>{formatCurrency(reward.remainingBalance)}</strong></div>
+        <div className="my-orders-breakdown-row"><span>Amount Paid</span><strong>{formatCurrency(reward.amountPaid)}</strong></div>
+        <div className="my-orders-breakdown-row my-orders-breakdown-row--final"><span>Remaining Balance</span><strong>{formatCurrency(reward.remainingBalance)}</strong></div>
       </div>
     </div>
   }
   if (!canPay) return null
 
-  const previewingVoucher = reward.eligible && !reward.rewardApplied && !reward.hasPersistedSession && voucherPreview
-  const usingVoucher = reward.hasPersistedSession ? Boolean(reward.rewardApplied) : previewingVoucher
-  const displayDiscount = reward.hasPersistedSession ? reward.discountAmount : (usingVoucher ? previewReward.discountAmount : 0)
-  const displayPayable = reward.hasPersistedSession ? reward.payableAmount : (usingVoucher ? previewReward.payableAmount : reward.originalDownPayment)
+  const hasPersistedSession = reward.hasPersistedSession
+  const hasApplied = reward.rewardApplied || (!hasPersistedSession && reward.eligible && rewardAppliedLocally)
+  const displayDiscount = hasPersistedSession ? reward.discountAmount : (hasApplied ? previewReward.discountAmount : 0)
+  const displayPayable = hasPersistedSession ? reward.payableAmount : (hasApplied ? previewReward.payableAmount : reward.originalDownPayment)
+
+  const handleToggleRewards = () => setIsRewardsExpanded((current) => !current)
+  const handleApplyReward = () => {
+    if (hasPersistedSession) return
+    setRewardAppliedLocally(true)
+    setIsRewardsExpanded(false)
+  }
+  const handleRemoveReward = () => {
+    if (hasPersistedSession) return
+    setRewardAppliedLocally(false)
+  }
 
   const handlePayDownPayment = async () => {
     if (isCreatingPayment || !canPay) return
@@ -90,11 +121,11 @@ function PaymentPanel({ order, completedOrdersCount = 0 }) {
         orderId: order.id,
         paymentType: 'custom_down_payment',
       }
-      if (usingVoucher) {
+      if (hasApplied) {
         body.appliedVoucher = true
         body.amount = displayPayable
       }
-      console.log('[XENDIT ORDER ID]', { orderId: order?.id, orderNumber: order?.order_number, usingVoucher, displayPayable })
+      console.log('[XENDIT ORDER ID]', { orderId: order?.id, orderNumber: order?.order_number, hasApplied, displayPayable })
       const invokeResult = await supabase.functions.invoke('create-xendit-payment', {
         body,
         headers: { Authorization: `Bearer ${session.access_token}` },
@@ -126,22 +157,57 @@ function PaymentPanel({ order, completedOrdersCount = 0 }) {
     }
   }
 
-  return <div className="my-orders-detail-payment-action">
-    <button type="button" className="my-orders-pay-button" onClick={handlePayDownPayment} disabled={isCreatingPayment}>{isCreatingPayment ? 'Creating Payment...' : `Pay Down Payment: ${formatCurrency(displayPayable)}`}</button>
+  return <section className="my-orders-payment-section" aria-label="Payment">
+    <h4 className="my-orders-payment-label">Payment</h4>
+    <p className="my-orders-rewards-heading">Coupons &amp; Rewards</p>
+
+    {hasApplied ? (
+      <div className="rewards-card rewards-dropdown">
+        <div className="my-orders-rewards-applied">
+          <RewardsTagIcon />
+          <div className="rewards-applied">
+            <span className="rewards-applied-title">Loyalty Reward</span>
+            <span className="rewards-applied-sub">20% OFF Down Payment</span>
+          </div>
+          {!hasPersistedSession ? (
+            <button type="button" className="rewards-remove" onClick={handleRemoveReward} aria-label="Remove loyalty reward">×</button>
+          ) : null}
+        </div>
+        <RewardsReveal id="my-orders-reward-breakdown" isOpen>
+          <div className="my-orders-rewards-breakdown">
+            <div className="my-orders-breakdown-row"><span>Original Down Payment</span><strong>{formatCurrency(reward.originalDownPayment)}</strong></div>
+            <div className="my-orders-breakdown-row my-orders-breakdown-row--discount"><span>Reward Discount</span><strong>{formatCurrency(-displayDiscount)}</strong></div>
+            <div className="my-orders-breakdown-row my-orders-breakdown-row--final"><span>Final Down Payment</span><strong>{formatCurrency(displayPayable)}</strong></div>
+          </div>
+        </RewardsReveal>
+      </div>
+    ) : (
+      <div className="rewards-card rewards-dropdown">
+        <RewardsHeader isExpanded={isRewardsExpanded} label="View available rewards" onClick={handleToggleRewards} ariaControls="my-orders-rewards-panel" />
+        <RewardsReveal id="my-orders-rewards-panel" isOpen={isRewardsExpanded}>
+          {eligibilityStatus === 'pending' ? (
+            <p className="rewards-note">Checking your rewards...</p>
+          ) : (eligibilityStatus === 'error' || !reward.eligible) ? (
+            <RewardsEmpty title="No rewards available yet." sub="Complete 2 eligible orders to unlock this reward." />
+          ) : (
+            <div className="my-orders-rewards-offer">
+              <div className="my-orders-rewards-offer-copy">
+                <span className="my-orders-rewards-offer-title">Loyalty Reward</span>
+                <span className="my-orders-rewards-offer-sub">20% OFF Down Payment</span>
+                <span className="my-orders-rewards-offer-eligibility">Earned after 2 completed orders</span>
+              </div>
+              <button type="button" className="rewards-apply" onClick={handleApplyReward}>Apply</button>
+            </div>
+          )}
+        </RewardsReveal>
+      </div>
+    )}
+
+    <button type="button" className="my-orders-pay-button" onClick={handlePayDownPayment} disabled={isCreatingPayment}>
+      {isCreatingPayment ? 'Preparing Payment...' : `Pay Down Payment · ${formatCurrency(displayPayable)}`}
+    </button>
     {paymentError ? <p className="my-orders-payment-error" role="alert">{paymentError}</p> : null}
-    <div className="my-orders-voucher-section">
-      {reward.eligible ? <button type="button" className={`my-orders-voucher-toggle${usingVoucher ? ' is-active' : ''}`} onClick={() => { if (!reward.hasPersistedSession) setVoucherPreview((current) => !current) }}>
-        <span className="my-orders-voucher-icon" aria-hidden="true">{usingVoucher ? '\u2713' : '\uD83C\uDF9F'}</span>
-        <span className="my-orders-voucher-label">Loyalty Reward: 20% OFF Down Payment</span>
-        <span className="my-orders-voucher-sublabel">Earned after 2 completed orders</span>
-      </button> : <div className="my-orders-voucher-locked"><span className="my-orders-voucher-icon" aria-hidden="true">{'\uD83D\uDD12'}</span><span>Complete 2 previous orders to unlock a 20% Down Payment Discount on your next order.</span></div>}
-      {usingVoucher ? <div className="my-orders-voucher-breakdown">
-        <div className="my-orders-voucher-row"><span>Original Down Payment</span><strong>{formatCurrency(reward.originalDownPayment)}</strong></div>
-        <div className="my-orders-voucher-row my-orders-voucher-row--discount"><span>Loyalty Discount</span><strong>{formatCurrency(-displayDiscount)}</strong></div>
-        <div className="my-orders-voucher-row my-orders-voucher-row--final"><span>Amount Due Now</span><strong>{formatCurrency(displayPayable)}</strong></div>
-      </div> : null}
-    </div>
-  </div>
+  </section>
 }
 
 function RegularPaymentPanel({ order }) {

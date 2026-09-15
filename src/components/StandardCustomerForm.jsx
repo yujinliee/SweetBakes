@@ -1,12 +1,12 @@
+import { isValidPhoneNumber as validateLocalPhone, sanitizePhoneNumber } from '../utils/phoneNumber.js'
 import { useMemo, useState } from 'react'
 import PersonalInformationFields from './PersonalInformationFields.jsx'
 import OrderMethodSection from './OrderMethodSection.jsx'
 import { useAvailability } from '../hooks/useAvailability.js'
 import { useCustomerProfileAutofill } from '../hooks/useCustomerProfileAutofill.js'
 
-const contactNumberPattern = /^\d{11}$/
 
-const normalizeContactNumber = (value) => value.replace(/\D/g, '').slice(0, 11)
+const normalizeContactNumber = sanitizePhoneNumber
 
 function StandardCustomerForm({
   title,
@@ -53,10 +53,6 @@ function StandardCustomerForm({
             recipientFirstName: '',
             recipientLastName: '',
             recipientContact: '',
-            deliveryAddress: '',
-            address: '',
-            apartment: '',
-            landmark: '',
             preferredDeliveryTime: '',
           }
         : {}),
@@ -79,8 +75,8 @@ function StandardCustomerForm({
     if (!details.customerFirstName?.trim()) nextErrors.customerFirstName = 'Please enter your first name.'
     if (!details.contactNumber?.trim()) {
       nextErrors.contactNumber = 'Please enter your contact number.'
-    } else if (!contactNumberPattern.test(details.contactNumber)) {
-      nextErrors.contactNumber = 'Please enter an 11-digit contact number.'
+    } else if (!validateLocalPhone(details.contactNumber)) {
+      nextErrors.contactNumber = 'Enter a valid 11-digit phone number.'
     }
     if (!details.email?.trim() || !emailPattern.test(details.email.trim())) {
       nextErrors.email = 'Please enter a valid email address.'
@@ -118,8 +114,8 @@ function StandardCustomerForm({
         }
         if (!details.recipientContact?.trim()) {
           nextErrors.recipientContact = 'Please enter the recipient contact number.'
-        } else if (!contactNumberPattern.test(details.recipientContact)) {
-          nextErrors.recipientContact = 'Please enter an 11-digit recipient contact number.'
+        } else if (!validateLocalPhone(details.recipientContact)) {
+          nextErrors.recipientContact = 'Enter a valid 11-digit phone number.'
         }
       }
     }
@@ -202,6 +198,7 @@ function StandardCustomerForm({
           markTouched={markTouched}
         />
         <OrderMethodSection
+          autofillReady={autofillReady}
           method={details.fulfillment}
           details={details}
           onMethodChange={(value) => updateDetail('fulfillment', value)}

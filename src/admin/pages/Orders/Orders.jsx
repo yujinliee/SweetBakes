@@ -6,13 +6,13 @@ import {
 } from '../../services/orderService.js'
 import { getAdminAuthStatus } from '../../auth/adminAuth.js'
 import { getOrderProgressStages, getOrderProgressStage, isRegularProgressOrder } from '../../../services/orderStatusDisplay.js'
-import chocolateCakeImage from '../../../assets/othersweettreats/regular_chocolate.jpg'
-import redVelvetCakeImage from '../../../assets/othersweettreats/regular_redvelvet.png'
-import cheesecakeImage from '../../../assets/othersweettreats/halfordozen_cheesecake.png'
-import ubeImage from '../../../assets/othersweettreats/ube.png'
-import grahamImage from '../../../assets/othersweettreats/graham de leche.png'
-import lecheFlanImage from '../../../assets/othersweettreats/leche_flan.png'
-import putoImage from '../../../assets/othersweettreats/puto.jpg'
+import chocolateCakeImage from '../../../assets/othersweettreats/regular_chocolate.webp'
+import redVelvetCakeImage from '../../../assets/othersweettreats/regular_redvelvet.webp'
+import cheesecakeImage from '../../../assets/othersweettreats/halfordozen_cheesecake.webp'
+import ubeImage from '../../../assets/othersweettreats/ube.webp'
+import grahamImage from '../../../assets/othersweettreats/graham de leche.webp'
+import lecheFlanImage from '../../../assets/othersweettreats/leche_flan.webp'
+import putoImage from '../../../assets/othersweettreats/puto.webp'
 import {
   CUSTOM_CAKE_PREVIEW_IMAGES,
   CUSTOM_CUPCAKE_PREVIEW_IMAGES,

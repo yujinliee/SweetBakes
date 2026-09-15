@@ -1595,6 +1595,13 @@ main {
   height: 100%;
   object-fit: cover;
   object-position: center;
+  background: #fbf3ef;
+  opacity: 0;
+  transition: opacity 240ms ease;
+}
+
+.treats-item-image img.is-loaded {
+  opacity: 1;
 }
 
 @media (max-width: 900px) {
