@@ -875,6 +875,11 @@
     width: 48px;
     height: 48px;
   }
+
+  .cart-checkout-actions { grid-column:1; width:100%; margin:0; padding:0 20px 24px; box-sizing:border-box; }
+  .cart-pay-button { width:100%; min-height:52px; margin-top:20px; }
+  .cart-price-row, .cart-total-row { display:flex; justify-content:space-between; gap:16px; min-width:0; }
+  .cart-price-row > span:last-child, .cart-total-row > span:last-child { flex:0 0 auto; white-space:nowrap; }
 }
 .cart-guest-order-id > span { display:block; margin-bottom:5px; font-size:11px; font-weight:600; }
 .cart-payment-return-panel {
@@ -891,3 +896,13 @@
   text-align: left;
 }
 .cart-payment-return-panel p { font-size: 14px; line-height: 1.6; }
+
+@media (max-width: 640px) {
+  .cart-form .cart-order-method-toggle { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:4px; width:100%; min-width:0; min-height:76px; padding:4px; }
+  .cart-form .cart-order-method-active { display:none; }
+  .cart-form .cake-order-method-option { width:100%; min-width:0; min-height:68px; padding:10px 8px; border-radius:10px; align-items:center; justify-content:center; text-align:center; }
+  .cart-form .cake-order-method-option--selected { background:#e9ddf3; }
+  .cart-form .cake-order-method-heading { gap:6px; }
+  .cart-form .cake-order-method-title { font-size:15px; }
+  .cart-form .cake-order-method-description { font-size:12px; line-height:1.3; }
+}

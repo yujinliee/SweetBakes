@@ -1216,7 +1216,8 @@ function CartPage({
                   ) : null}
                 </div>
 
-                <div className="cart-checkout-actions">
+                {/* Payment action is rendered after the summary in the cart layout. */}
+                {isSubmittingOrder && !isSubmittingOrder ? (<div className="cart-checkout-actions">
                   {!isCustomerAuthenticated && guestPaymentStatus === 'cancelled' ? (
                     <p className="cart-payment-placeholder" role="status">
                       Payment was not completed. Your cart is still available if you&apos;d like to try again.
@@ -1242,7 +1243,7 @@ function CartPage({
                       coming soon.
                     </p>
                   */}
-                </div>
+                </div>) : null}
               </form>
             </section>
 
@@ -1351,6 +1352,22 @@ function CartPage({
               </div>
                 </div>
             </aside>
+            <div className="cart-checkout-actions">
+              {!isCustomerAuthenticated && guestPaymentStatus === 'cancelled' ? (
+                <p className="cart-payment-placeholder" role="status">
+                  Payment was not completed. Your cart is still available if you&apos;d like to try again.
+                </p>
+              ) : null}
+              <button
+                className="cart-pay-button"
+                type="button"
+                onClick={handlePayNow}
+                disabled={isSubmittingOrder || guestPaymentStatus === 'success'}
+              >
+                {isSubmittingOrder ? 'Processing...' : 'Pay Now'}
+              </button>
+              {orderSubmissionError ? <p className="cake-field-error">* {orderSubmissionError}</p> : null}
+            </div>
           </div>
         </div>
       </main>
