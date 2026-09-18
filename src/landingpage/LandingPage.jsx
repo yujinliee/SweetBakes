@@ -401,6 +401,14 @@ const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
     setIsAccountMenuOpen(false)
   }, [isCustomerAuthenticated, currentPathname])
 
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow
+    if (isMobileMenuOpen) document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [isMobileMenuOpen])
+
   return (
     <header
       className={`topbar${topbarIsScrolled ? ' topbar--scrolled' : ''}${topbarMotion ? ` ${topbarMotion}` : ''}`}
@@ -564,7 +572,7 @@ const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
           <button
             type="button"
             className="hamburger-menu"
-            aria-label="Open mobile menu"
+            aria-label="Open navigation"
             aria-expanded={isMobileMenuOpen}
             onClick={() => setIsMobileMenuOpen((current) => !current)}
           >
@@ -574,8 +582,15 @@ const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
           </button>
         </div>
       </div>
-      {isMobileMenuOpen ? (
-        <div className="mobile-menu-panel" role="dialog" aria-label="Mobile navigation">
+      <div
+        className={`mobile-menu-panel${isMobileMenuOpen ? ' mobile-menu-panel--open' : ''}`}
+        role="dialog"
+        aria-label="Mobile navigation"
+        aria-hidden={!isMobileMenuOpen}
+      >
+        <button type="button" className="mobile-menu-close" aria-label="Close navigation" onClick={closeMobileMenu}>
+          <span aria-hidden="true">×</span>
+        </button>
           <nav className="mobile-nav" aria-label="Mobile primary">
             <a className="mobile-nav-link" href={homeHref} onClick={closeMobileMenu}>Home</a>
             <button
@@ -599,8 +614,7 @@ const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
             <a className="mobile-nav-link" href="/track-order" onClick={(event) => { event.preventDefault(); closeMobileMenu(); openTrackOrderDrawer() }}>Track Order</a>
             {isAccountMenuEnabled ? <a className="mobile-nav-link" href={profileHref} onClick={closeMobileMenu}>Profile</a> : null}
           </nav>
-        </div>
-      ) : null}
+      </div>
     </header>
   )
 }
@@ -704,13 +718,28 @@ export function SiteFooter() {
 function GalleryNav({ pages }) {
   const scrollRef = useRef(null)
   const [page, setPage] = useState(0)
-  const maxPage = pages.length - 1
+  const [isMobile, setIsMobile] = useState(false)
+  const mobilePages = buildPages(pages.flat(), 3)
+  const visiblePages = isMobile ? mobilePages : pages
+  const maxPage = visiblePages.length - 1
   const isPointerDown = useRef(false)
   const isDragging = useRef(false)
   const startX = useRef(0)
   const startScrollLeft = useRef(0)
   const dragMoved = useRef(false)
   const DRAG_THRESHOLD = 5
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 640px)')
+    const sync = () => {
+      setIsMobile(media.matches)
+      setPage(0)
+      scrollRef.current?.scrollTo({ left: 0, behavior: 'auto' })
+    }
+    sync()
+    media.addEventListener?.('change', sync)
+    return () => media.removeEventListener?.('change', sync)
+  }, [])
 
   // Sync page index from scroll position
   useEffect(() => {
@@ -812,7 +841,7 @@ function GalleryNav({ pages }) {
         onPointerCancel={onPointerCancel}
         onClickCapture={onClickCapture}
       >
-        {pages.map((pageItems, pi) => (
+        {visiblePages.map((pageItems, pi) => (
           <div
             key={pi}
             className="gallery-page"
@@ -823,7 +852,18 @@ function GalleryNav({ pages }) {
                 key={item.title}
                 className={`gallery-item gallery-item--pos-${idx} gallery-item--visible`}
               >
-                <img src={item.image} alt={item.title} draggable="false" />
+                <a
+                  className="gallery-card-link"
+                  href={item.facebookUrl ?? '#'}
+                  target={item.facebookUrl ? '_blank' : undefined}
+                  rel={item.facebookUrl ? 'noopener noreferrer' : undefined}
+                  aria-label={`View details for ${item.title}`}
+                  onClick={(event) => {
+                    if (!item.facebookUrl) event.preventDefault()
+                  }}
+                >
+                  <img src={item.image} alt={item.title} draggable="false" />
+                </a>
                 <div className="gallery-overlay">
                   <h3>{item.title}</h3>
                   {item.facebookUrl ? (
