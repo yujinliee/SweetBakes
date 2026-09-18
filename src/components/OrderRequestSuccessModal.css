@@ -60,6 +60,13 @@
   transition: background-color 180ms ease, color 180ms ease;
 }
 
+.order-success-close::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: inherit;
+}
+
 .order-success-close:hover {
   background: #f7f0f5;
   color: #3a2e2e;

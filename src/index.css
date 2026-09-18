@@ -1,3 +1,41 @@
+/* Global box-model foundation — replaces the scattered per-component
+   `box-sizing: border-box` declarations with one consistent default. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/*
+  RESPONSIVE FOUNDATION (Phase 1)
+  ===============================
+  Canonical breakpoints for all future responsive work:
+
+    480px    small phone
+    640px    large phone
+    760px    tablet portrait
+    900px    topbar wrap / hero restack
+    1024px   desktop small
+    1200px   desktop mid
+
+  Legacy page-level media queries (400, 420, 520, 540, 560, 600, 700,
+  980, 1000, 1100) may remain in place; migrate them to these canonical
+  widths incrementally during their respective page phases.
+
+  Layout tokens are introduced as the shared convention. Adoption is
+  intentionally limited this phase; pages migrate in later phases only
+  where it produces no visual change at the approved 1440px baseline.
+
+  --topbar-h: actual public navbar height (SiteTopbar).
+    Derived from the real CSS geometry (LandingPage.css):
+      >= 901px : brand lockup 82px wide renders 48px tall (104x61 SVG),
+                 topbar vertical padding 4px+4px  -> 56px total.
+      <= 900px : navbar wraps to a second row (flex-wrap on .nav),
+                 topbar padding 12px+12px + brand row (48px) + row gap
+                 8px + nav row(s). Representative max ~128px, matching
+                 the existing tuned offsets (hero --topbar-space 130/132,
+                 cart 128px, my-orders 130px).
+*/
 :root {
   --text: #6b6375;
   --text-h: #08060d;
@@ -30,6 +68,16 @@
   @media (max-width: 1024px) {
     font-size: 16px;
   }
+
+  /* Shared layout / header tokens (convention for later phases). */
+  --page-max-width: 1120px;
+  --page-gutter: clamp(16px, 2vw, 28px);
+  --topbar-h: 56px;
+
+  /* <= 900px the SiteTopbar is a compact single-row mobile header. */
+  @media (max-width: 900px) {
+    --topbar-h: 72px;
+  }
 }
 
 html {
@@ -52,7 +100,6 @@ body {
   max-width: 100%;
   margin: 0;
   padding: 0;
-  text-align: center;
   min-height: 100svh;
   box-sizing: border-box;
 }

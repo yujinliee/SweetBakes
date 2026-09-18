@@ -675,7 +675,9 @@ main {
   --hero-image-y: 48%;
   --topbar-space: 104px;
   height: 100vh;
+  height: 100svh;
   min-height: 740px;
+  min-height: min(740px, 100svh);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -716,6 +718,7 @@ main {
   margin: 0 auto;
   padding: var(--topbar-space) 0 0;
   min-height: calc(100vh - var(--topbar-space));
+  min-height: calc(100svh - var(--topbar-space));
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -792,7 +795,7 @@ main {
 }
 
 .hero h1 {
-  font-size: 78px;
+  font-size: clamp(46px, 7.3vw, 78px);
   line-height: 0.92;
   letter-spacing: -5px;
   color: #fffdfd;
@@ -830,7 +833,7 @@ main {
   position: relative;
   z-index: 1;
   font-family: 'Allura', cursive;
-  font-size: 90px;
+  font-size: clamp(52px, 8.4vw, 90px);
   font-weight: 400;
   line-height: 0.84;
   color: #f3a6b6;
@@ -1147,7 +1150,7 @@ main {
   justify-content: center;
   gap: 9px;
   margin-top: 22px;
-  min-height: 40px;
+  min-height: 44px;
   padding: 10px 22px;
   border: 1px solid #e8e3e3;
   border-radius: 6px;
@@ -1214,7 +1217,7 @@ main {
 }
 
 #sweet-treats {
-  scroll-margin-top: 80px;
+  scroll-margin-top: calc(var(--topbar-h) + 24px);
 }
 
 .treats-heading {
@@ -1452,7 +1455,7 @@ main {
 .treats-add-to-cart {
   width: 100%;
   max-width: 340px;
-  height: 40px;
+  height: 44px;
   border: 1px solid #3a2e2e;
   border-radius: 2px;
   background: transparent;
@@ -1530,6 +1533,22 @@ main {
   .treats-qty {
     opacity: 1;
     pointer-events: auto;
+  }
+}
+
+/* Coarse pointers get larger, easier tap targets. Desktop visuals are untouched. */
+@media (hover: none), (pointer: coarse) {
+  .treats-tab {
+    min-height: 44px;
+  }
+
+  .treats-qty-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .treats-cc-chip {
+    min-height: 38px;
   }
 }
 
@@ -2107,22 +2126,45 @@ main {
   transition: color 240ms ease, transform 300ms ease;
 }
 
-.gallery-item:hover .gallery-overlay a {
-  color: #fffaf9;
+/* Hover reveal is pointer-fine only: on touch there is no hover state, so the
+   overlay would otherwise stay invisible and the "View Details" link would be
+   undiscoverable. */
+@media (hover: hover) and (pointer: fine) {
+  .gallery-item:hover .gallery-overlay a {
+    color: #fffaf9;
+  }
+
+  .gallery-item:hover img {
+    transform: scale(1.03);
+  }
+
+  .gallery-item:hover .gallery-overlay {
+    opacity: 1;
+  }
+
+  .gallery-item:hover .gallery-overlay h3,
+  .gallery-item:hover .gallery-overlay strong,
+  .gallery-item:hover .gallery-overlay a {
+    transform: translateY(0);
+  }
 }
 
-.gallery-item:hover img {
-  transform: scale(1.03);
-}
+/* Touch / coarse pointers: show the label + link permanently so every card is
+   readable and tappable without a hover. */
+@media (hover: none), (pointer: coarse) {
+  .gallery-overlay {
+    opacity: 1;
+  }
 
-.gallery-item:hover .gallery-overlay {
-  opacity: 1;
-}
+  .gallery-overlay h3,
+  .gallery-overlay strong,
+  .gallery-overlay a {
+    transform: translateY(0);
+  }
 
-.gallery-item:hover .gallery-overlay h3,
-.gallery-item:hover .gallery-overlay strong,
-.gallery-item:hover .gallery-overlay a {
-  transform: translateY(0);
+  .gallery-item img {
+    transition: none;
+  }
 }
 
 .gallery-arrow {
@@ -2167,6 +2209,14 @@ main {
   pointer-events: none;
 }
 
+/* Expand the tappable area to ~44px even though the visible circle stays 36px. */
+.gallery-arrow::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+}
+
 @keyframes dividerPathReveal {
   from {
     opacity: 0;
@@ -2201,15 +2251,21 @@ main {
   color: #3a2e2e;
 }
 
-/* Keep the fixed topbar from covering these targets when smooth-scrolling to them. */
-#location,
+/* Keep the fixed topbar from covering these targets when smooth-scrolling to them.
+   The public navbar is 56px (>=901) or 128px (<=900) tall, so a fixed 80px was
+   hiding section tops behind the taller mobile topbar. */
 #contact {
-  scroll-margin-top: 80px;
+  scroll-margin-top: calc(var(--topbar-h) + 24px);
+}
+
+/* The location section pulls itself up (top: -130px) over the section above it,
+   so it needs extra clearance to land below the fixed topbar. */
+#location {
+  scroll-margin-top: calc(var(--topbar-h) + 90px);
 }
 
 .location-section {
-  position: relative;
-  top: -130px;
+  position: static;
   overflow: hidden;
   padding: 0;
   background: #fff;
@@ -2270,7 +2326,7 @@ main {
   align-items: center;
   justify-content: center;
   gap: 7px;
-  min-height: 34px;
+  min-height: 44px;
   margin-top: 18px;
   padding: 0 14px;
   border: 1px solid #e8e3e3;
@@ -2578,13 +2634,16 @@ main {
     --hero-image-y: 50%;
     --topbar-space: 130px;
     height: 100vh;
+    height: 100svh;
     min-height: 680px;
+    min-height: min(680px, 100svh);
   }
 
   .hero-frame {
     width: calc(100% - 24px);
     padding: var(--topbar-space) 0 0;
     min-height: calc(100vh - var(--topbar-space));
+    min-height: calc(100svh - var(--topbar-space));
     transform: translateY(-80px);
   }
 
@@ -2662,12 +2721,12 @@ main {
   }
 
   .hero h1 {
-    font-size: 76px;
+    font-size: clamp(48px, 7.3vw, 76px);
     letter-spacing: -3.8px;
   }
 
   .hero-script {
-    font-size: 87px;
+    font-size: clamp(48px, 8.5vw, 87px);
   }
 
   .section-heading h2 {
@@ -2732,7 +2791,12 @@ main {
   }
 
   .location-details {
-    max-width: 340px;
+    position: relative;
+    top: auto;
+    left: auto;
+    width: 100%;
+    max-width: none;
+    transform: none;
   }
 
   .location-map-wrapper {
@@ -2746,7 +2810,7 @@ main {
   }
 
   .location-directions {
-    min-height: 36px;
+    min-height: 44px;
     margin-top: 22px;
     font-size: 13px;
   }
@@ -2756,7 +2820,9 @@ main {
   .hero {
     --topbar-space: 132px;
     height: 100vh;
+    height: 100svh;
     min-height: 620px;
+    min-height: min(620px, 100svh);
   }
 
   .hero-frame {
@@ -2765,13 +2831,13 @@ main {
   }
 
   .hero h1 {
-    font-size: 46px;
+    font-size: clamp(40px, 11vw, 46px);
     line-height: 0.97;
     letter-spacing: -2.3px;
   }
 
   .hero-script {
-    font-size: 52px;
+    font-size: clamp(48px, 11vw, 52px);
   }
 
   .hero-title-line--second {
@@ -2829,12 +2895,16 @@ main {
     height: 30px;
   }
 
+  .gallery-arrow::before {
+    inset: -7px;
+  }
+
   .gallery-arrow--left {
-    left: -15px;
+    left: -10px;
   }
 
   .gallery-arrow--right {
-    right: -15px;
+    right: -10px;
   }
 
   .offer-showcase--reverse .offer-showcase-media {
@@ -2880,7 +2950,7 @@ main {
   }
 
   .location-directions {
-    min-height: 36px;
+    min-height: 44px;
     margin-top: 22px;
     font-size: 13px;
   }
@@ -2922,6 +2992,34 @@ main {
   }
 }
 
+/* Below 480px the two "nowrap" hero title lines can no longer sit on one line
+   each without clipping, so let them wrap naturally (text-wrap: balance keeps
+   the two-line title even). */
+@media (max-width: 480px) {
+  .hero h1 {
+    letter-spacing: -1.5px;
+  }
+
+  .hero-title-line,
+  .hero-title-line--second {
+    white-space: normal;
+  }
+
+  .hero-title-line--second {
+    flex-wrap: wrap;
+  }
+}
+
+/* On phones in portrait the two-row topbar is ~128px tall; the mobile hero's
+   negative translate (tuned for short/landscape screens) would tuck the copy
+   under it. Taller viewports keep the copy below the bar. Short landscape keeps
+   the upward nudge so the CTA stays on-screen. */
+@media (max-width: 900px) and (min-height: 640px) {
+  .hero-frame {
+    transform: translateY(0);
+  }
+}
+
 @media (max-width: 900px) and (max-height: 800px) {
   .hero {
     --hero-image-y: 54%;
@@ -2939,13 +3037,100 @@ main {
   .topbar-inner { width:90%; }
   .topbar .nav { gap:20px; }
 }
+/* Real rendered geometry keeps the centered one-row nav clear of the brand and
+   the login/cart actions down to 901px. This guard tightens it a touch more in
+   the narrowest desktop band so the gap can't collapse even with heavier fonts. */
+@media (min-width:901px) and (max-width:1080px) {
+  .topbar .nav { gap:16px; }
+  .topbar .nav > a,
+  .topbar .nav-dropdown-toggle { font-size:13px; }
+  .topbar .topbar-actions { gap:12px; }
+}
 @media (max-width:900px) {
-  .topbar { box-sizing:border-box; }
-  .topbar-inner { width:100%; flex-wrap:wrap; row-gap:8px; }
-  .topbar .topbar-actions { width:auto; justify-content:flex-end; }
-  .topbar .nav { position:static; transform:none; order:3; width:100%; flex-wrap:wrap; justify-content:center; gap:10px 18px; }
+  .topbar { box-sizing:border-box; min-height:var(--topbar-h); padding:4px 16px; }
+  .topbar-inner { width:100%; min-height:64px; flex-wrap:nowrap; }
+  .topbar .brand img { width:clamp(90px, 27vw, 110px); height:auto; }
+  .topbar .topbar-actions { width:auto; margin-left:auto; justify-content:flex-end; gap:4px; }
+  .topbar .nav { display:none; }
+  .topbar-account, .topbar-cart, .hamburger-menu { width:44px; height:44px; }
+  .hamburger-menu { display:inline-flex; align-items:center; justify-content:center; flex-direction:column; background:transparent; color:#3a2e2e; }
+  .hamburger-bar { display:block; width:22px; height:2px; margin:3px 0; background:currentColor; }
+  .mobile-menu-panel { position:absolute; top:100%; left:0; right:0; z-index:19; background:#fff; border-top:1px solid rgba(58,46,46,.1); box-shadow:0 8px 16px rgba(58,46,46,.08); }
+  .mobile-nav { padding:8px 0 12px; }
+  .mobile-nav-link { display:flex; align-items:center; justify-content:space-between; box-sizing:border-box; width:100%; min-height:48px; margin:0; padding:12px 20px; border:0; background:#fff; color:#3a2e2e; font:500 15px/1.3 Poppins,sans-serif; text-align:left; text-decoration:none; }
+  .mobile-nav-link:hover, .mobile-nav-link:focus-visible { background:#faf5f5; }
+  .mobile-nav-submenu { padding:0 0 6px 20px; }
+  .mobile-nav-submenu a { display:block; min-height:44px; box-sizing:border-box; padding:12px 20px; color:#6e5f5f; font:400 15px/1.3 Poppins,sans-serif; text-decoration:none; }
 }
 @media (max-width:400px) {
   .topbar .nav { column-gap:12px; }
   .topbar .nav > a,.topbar .nav-dropdown-toggle { font-size:12px; }
+}
+@media (min-width:901px) { .hamburger-menu { display:none; } }
+
+@media (max-width:640px) {
+  .hero { --topbar-space:var(--topbar-h); min-height:620px; }
+  .hero-frame { padding-top:var(--topbar-space); transform:none; }
+  .hero h1 { font-size:clamp(42px, 11vw, 50px); }
+  .hero-script { font-size:clamp(48px, 13vw, 54px); }
+  .offer-showcases { gap:56px; padding-inline:0; }
+  .offer-showcase, .offer-showcase--reverse { gap:24px; }
+  .offer-showcase-media, .offer-showcase--reverse .offer-showcase-media { padding:0; }
+  .offer-showcase-texture { display:none; }
+  .offer-showcase-image-frame img, .offer-showcase--reverse .offer-showcase-image-frame img { width:100%; height:auto; aspect-ratio:4 / 3; object-fit:contain; }
+  .treats-section { padding-bottom:84px; }
+  .treats-catalog { padding-inline:0; }
+  .treats-tabs { justify-content:flex-start; flex-wrap:nowrap; gap:24px; overflow-x:auto; margin-inline:-20px; padding:0 20px 8px; scroll-padding-inline:20px; }
+  .treats-tab { flex:0 0 auto; white-space:nowrap; }
+  .treats-list { grid-template-columns:1fr; padding-inline:0; }
+  .treats-item { grid-template-columns:minmax(0,1fr) auto; gap:14px; padding:24px 0; }
+  .treats-item-image { width:72px; height:72px; }
+  .treats-add-to-cart { min-height:44px; }
+  .gallery-grid { height:auto; overflow:visible; }
+  .gallery-page { grid-template-columns:1fr; grid-template-rows:none; gap:14px; }
+  .gallery-item, .gallery-item--pos-0, .gallery-item--pos-1, .gallery-item--pos-2, .gallery-item--pos-3, .gallery-item--pos-4 { grid-column:1; grid-row:auto; aspect-ratio:16 / 10; }
+  .gallery-overlay { padding:16px; }
+  .gallery-overlay h3 { font-size:clamp(22px, 7vw, 28px); }
+  .gallery-arrow { width:44px; height:44px; }
+}
+
+/* Phase 3.3: one deterministic mobile shell for every viewport <= 900px. */
+@media (max-width:900px) {
+  .topbar { height:var(--topbar-h); min-height:var(--topbar-h); padding:4px 16px; }
+  .topbar-inner { display:flex; width:100%; height:64px; min-height:64px; flex:0 0 auto; flex-wrap:nowrap; align-items:center; justify-content:space-between; gap:12px; }
+  .topbar .brand { flex:0 1 auto; min-width:0; }
+  .topbar .brand img { display:block; width:clamp(88px, 25vw, 100px); max-width:100%; height:auto; flex-shrink:0; }
+  .topbar .nav { display:none; position:static; width:0; height:0; overflow:hidden; }
+  .topbar .topbar-actions { display:flex; flex:0 0 auto; width:auto; height:44px; min-width:0; margin:0 0 0 auto; align-items:center; justify-content:flex-end; gap:4px; }
+  .topbar-account, .topbar-cart, .hamburger-menu { display:inline-flex; flex:0 0 44px; width:44px; height:44px; min-width:44px; min-height:44px; align-items:center; justify-content:center; }
+  .topbar-login, .topbar-login-link, .topbar-cart { width:44px; height:44px; display:inline-flex; align-items:center; justify-content:center; }
+  .topbar-icon-stack { width:24px; height:24px; }
+  .topbar-actions button img, .topbar-icon, .topbar-login-icon { width:24px; height:24px; }
+  .hamburger-menu { padding:0; border:0; background:transparent; color:#3a2e2e; }
+  .hamburger-bar { display:block; width:22px; height:2px; margin:3px 0; background:currentColor; }
+  .mobile-menu-panel { top:100%; width:100%; max-width:100%; overflow-x:clip; }
+  .hero { --topbar-space:var(--topbar-h); min-height:min(680px, 100svh); }
+  .hero-frame { width:calc(100% - 32px); min-height:calc(100svh - var(--topbar-h)); padding:0; transform:none; justify-content:center; }
+  .hero-copy { width:100%; max-width:100%; }
+  .hero-copy > .eyebrow { margin-top:0; font-size:clamp(11px, 2.9vw, 12px); letter-spacing:clamp(1.6px, 0.8vw, 3px); white-space:nowrap; }
+  .hero h1 { font-size:clamp(42px, 11.5vw, 46px); letter-spacing:-2px; }
+  .hero-title-line { max-width:100%; white-space:normal; }
+  .hero-title-line--second { gap:6px; flex-wrap:wrap; }
+  .hero-script-wrap { max-width:100%; margin-left:0; }
+  .hero-script { font-size:clamp(46px, 12.5vw, 50px); }
+  .hero-script-line { max-width:100%; }
+  .hero-text { width:min(100%, 340px); margin:18px auto 0; font-size:14px; line-height:1.55; }
+  .hero-actions { width:100%; margin-top:22px; }
+  .hero-actions .button { width:calc(100% - 32px); max-width:340px; min-height:50px; margin-inline:auto; }
+}
+
+@media (max-width:360px) {
+  .topbar-inner { gap:4px; }
+  .topbar .brand img { width:88px; }
+  .topbar .topbar-actions { gap:0; }
+  .hero-copy > .eyebrow { letter-spacing:1.2px; }
+}
+
+@media (min-width:901px) {
+  .hamburger-menu { display:none; }
 }

@@ -1,6 +1,6 @@
 .sb-toast {
   position: fixed;
-  top: 120px;
+  top: calc(var(--topbar-h) + 16px);
   left: 50%;
   z-index: 90;
   display: flex;
@@ -74,7 +74,6 @@
 
 @media (max-width: 700px) {
   .sb-toast {
-    top: 146px;
     width: auto;
   }
 }

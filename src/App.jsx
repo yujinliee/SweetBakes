@@ -11,6 +11,7 @@ import {
 import { getCustomerAuthStatus } from './auth/customerAuth.js'
 import CartPage from './cartpage/CartPage.jsx'
 import Chatbot from './components/Chatbot/Chatbot.jsx'
+import CinematicWelcome from './components/CinematicWelcome/CinematicWelcome.jsx'
 import CustomizationPage from './customization/CustomizationPage.jsx'
 import ForgotPasswordPage from './loginpage/ForgotPasswordPage.jsx'
 import LandingPage from './landingpage/LandingPage.jsx'
@@ -294,6 +295,7 @@ function App() {
       {!currentPathname.startsWith('/admin') && currentPathname !== '/auth/callback' ? (
         <Chatbot onNavigate={navigate} isCustomerAuthenticated={isCustomerAuthenticated} />
       ) : null}
+      {currentPathname === '/' ? <CinematicWelcome /> : null}
     </>
   )
 }

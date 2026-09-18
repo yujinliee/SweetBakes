@@ -1,0 +1,656 @@
+/* =========================================================
+   CinematicWelcome — premium video overlay for Sweet Bakes
+   Pure opacity/scale transitions only. No geometry morphs.
+   ========================================================= */
+
+.cw-wrap {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  pointer-events: none;
+
+  /* small bottom-left elements (mini-player + pill) */
+  --cw-l: 28px;
+  --cw-b: 28px;
+  --cw-w: 260px;
+  --cw-h: 146px;
+  --cw-r: 16px;
+
+  /* large cinematic stage geometry */
+  --cw-stage-w: min(calc(100vw - 64px), 1200px);
+  --cw-stage-h: min(calc(100vh - 64px), 800px);
+}
+
+/* ---------- backdrop ---------- */
+.cw-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: rgba(8, 6, 13, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.4s ease, visibility 0.4s ease;
+}
+
+.cw--cinematic .cw-backdrop {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+/* ---------- large cinematic stage ----------
+   A separate, always-centered element. It only fades + scales;
+   it never travels across the viewport. */
+.cw-stage {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--cw-stage-w);
+  height: var(--cw-stage-h);
+  border-radius: 22px;
+  overflow: hidden;
+  background: #000;
+  box-shadow:
+    0 25px 60px rgba(8, 6, 13, 0.45),
+    0 8px 20px rgba(8, 6, 13, 0.25);
+  transform: translate(-50%, -50%) scale(0.97);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 1;
+  will-change: opacity, transform;
+  transition:
+    opacity 0.4s ease,
+    transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  cursor: default;
+}
+
+.cw--cinematic .cw-stage {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+  pointer-events: auto;
+}
+
+/* ---------- video ---------- */
+.cw-switch-frame {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.cw-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+/* story-switch: subtle directional slide-in/out */
+.cw--slide-next .cw-switch-frame {
+  animation: cw-in-next 0.16s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cw--slide-prev .cw-switch-frame {
+  animation: cw-in-prev 0.16s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cw--slide-out.cw--slide-next .cw-switch-frame {
+  animation: cw-out-next 0.12s ease forwards;
+}
+
+.cw--slide-out.cw--slide-prev .cw-switch-frame {
+  animation: cw-out-prev 0.12s ease forwards;
+}
+
+@keyframes cw-in-next {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes cw-in-prev {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes cw-out-next {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+}
+
+@keyframes cw-out-prev {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+
+/* ---------- ready / poster state ---------- */
+.cw-ready {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 6, 13, 0.4);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s ease, visibility 0.25s ease;
+}
+
+.cw--cinematic.cw--ready .cw-ready {
+  opacity: 1;
+  visibility: visible;
+}
+
+.cw-ready:hover .cw-ready-play {
+  transform: scale(1.06);
+}
+
+.cw-ready-play {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  color: #2f1722;
+  font-size: 28px;
+  box-shadow: 0 6px 24px rgba(8, 6, 13, 0.3);
+  transition: transform 0.2s ease;
+}
+
+/* ---------- controls (top-right) ---------- */
+.cw-controls {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 18px;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(8, 6, 13, 0.38) 0%,
+    transparent 100%
+  );
+}
+
+.cw--cinematic .cw-controls {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ---------- button base ---------- */
+.cw-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  font-family: var(--sans);
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+  /* the wrap disables pointer-events; buttons re-enable */
+  pointer-events: auto;
+}
+
+.cw-btn:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+/* ---------- close (X) ---------- */
+.cw-close {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(8, 6, 13, 0.52);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 20px;
+  line-height: 1;
+  transition: background 0.2s ease;
+}
+
+.cw-close:hover {
+  background: rgba(8, 6, 13, 0.74);
+}
+
+/* ---------- sound toggle ---------- */
+.cw-sound {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 18px;
+  background: rgba(8, 6, 13, 0.52);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  gap: 6px;
+  transition: background 0.2s ease;
+  white-space: nowrap;
+}
+
+.cw-sound:hover {
+  background: rgba(8, 6, 13, 0.74);
+}
+
+.cw-sound-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* ---------- RED playback progress bar (attached to video bottom) ---------- */
+.cw-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 5px;
+  z-index: 3;
+  cursor: pointer;
+}
+
+.cw-progress-track {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.26);
+}
+
+.cw-progress-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 0;
+  background: #e85d4a;
+  border-radius: 0 999px 999px 0;
+  transition: width 0.18s linear;
+}
+
+/* ---------- previous / next ---------- */
+.cw-nav {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.cw-nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(8, 6, 13, 0.45);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: #fff;
+  transition: background 0.2s ease;
+}
+
+.cw-nav-btn:hover {
+  background: rgba(8, 6, 13, 0.66);
+}
+
+.cw-nav-prev {
+  left: 14px;
+}
+
+.cw-nav-next {
+  right: 14px;
+}
+
+/* ---------- WHITE story navigation (below the video) ----------
+   One indicator per STORIES entry.
+   Active = long white line, inactive = small dot. */
+.cw-story-nav {
+  position: absolute;
+  left: 50%;
+  top: calc((100vh + var(--cw-stage-h)) * 0.5 + 20px);
+  transform: translateX(-50%);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease 0.15s, visibility 0.3s ease 0.15s;
+}
+
+.cw--cinematic .cw-story-nav {
+  opacity: 1;
+  visibility: visible;
+}
+
+.cw-story-dot {
+  width: 6px;
+  height: 6px;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.6);
+  transition:
+    width 0.25s ease,
+    height 0.25s ease,
+    border-radius 0.25s ease,
+    background 0.25s ease;
+}
+
+.cw-story-dot--active {
+  width: 78px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+}
+
+/* ---------- mini-player (bottom-left, separate element) ---------- */
+.cw-mini {
+  position: absolute;
+  left: calc(var(--cw-l) + env(safe-area-inset-left, 0px));
+  bottom: calc(var(--cw-b) + env(safe-area-inset-bottom, 0px));
+  width: var(--cw-w);
+  height: var(--cw-h);
+  border-radius: var(--cw-r);
+  overflow: hidden;
+  background: #0e0a12;
+  box-shadow:
+    0 10px 30px rgba(8, 6, 13, 0.4),
+    0 4px 10px rgba(8, 6, 13, 0.2);
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(0.96);
+  z-index: 2;
+  pointer-events: none;
+  transition:
+    opacity 0.35s ease,
+    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0.35s ease;
+}
+
+.cw--minimizing .cw-mini,
+.cw--mini .cw-mini,
+.cw--collapsing .cw-mini {
+  opacity: 1;
+  visibility: visible;
+  transform: scale(1);
+}
+
+.cw-mini-frame {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+}
+
+.cw-mini-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: linear-gradient(
+    to bottom,
+    rgba(8, 6, 13, 0.08) 0%,
+    rgba(8, 6, 13, 0.58) 100%
+  );
+}
+
+.cw--mini .cw-mini-overlay {
+  pointer-events: auto;
+}
+
+.cw--minimizing .cw-mini .cw-btn,
+.cw--collapsing .cw-mini .cw-btn {
+  pointer-events: none;
+}
+
+.cw-mini-play {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  color: #2f1722;
+  font-size: 18px;
+}
+
+.cw-mini-label {
+  color: #fff;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+.cw-mini-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(8, 6, 13, 0.55);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* ---------- "Our Story" pill (bottom-left, separate element) ---------- */
+.cw-pill {
+  position: absolute;
+  left: calc(var(--cw-l) + env(safe-area-inset-left, 0px));
+  bottom: calc(var(--cw-b) + env(safe-area-inset-bottom, 0px));
+  z-index: 2;
+  height: 42px;
+  padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(171, 113, 157, 0.22);
+  border-radius: 21px;
+  background: rgba(255, 253, 249, 0.97);
+  box-shadow:
+    0 2px 10px rgba(91, 34, 64, 0.08),
+    0 1px 3px rgba(91, 34, 64, 0.05);
+  color: #2f1722;
+  font-family: var(--sans);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(6px) scale(0.96);
+  transition:
+    opacity 0.3s ease,
+    visibility 0.3s ease,
+    transform 0.3s ease;
+}
+
+.cw--collapsing .cw-pill,
+.cw--pill .cw-pill {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+}
+
+.cw-pill:hover {
+  background: #fff;
+  box-shadow:
+    0 4px 14px rgba(91, 34, 64, 0.1),
+    0 1px 4px rgba(91, 34, 64, 0.06);
+}
+
+.cw-pill:focus-visible {
+  outline: 2px solid #af719d;
+  outline-offset: 2px;
+}
+
+.cw-pill-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #af719d;
+  color: #fff;
+  font-size: 10px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 640px) {
+  .cw-wrap {
+    --cw-l: 16px;
+    --cw-b: 16px;
+    --cw-w: 180px;
+    --cw-h: 101px;
+    --cw-r: 12px;
+    --cw-stage-w: calc(100vw - 32px);
+    --cw-stage-h: calc(100vh - 112px);
+  }
+
+  .cw-stage {
+    border-radius: 16px;
+  }
+
+  .cw-controls {
+    padding: 12px 14px;
+  }
+
+  .cw-close {
+    width: 38px;
+    height: 38px;
+    font-size: 18px;
+  }
+
+  .cw-sound {
+    height: 34px;
+    padding: 0 12px;
+    font-size: 12px;
+  }
+
+  .cw-ready-play {
+    width: 60px;
+    height: 60px;
+    font-size: 24px;
+  }
+
+  .cw-progress {
+    height: 4px;
+  }
+
+  .cw-nav-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .cw-nav-prev {
+    left: 10px;
+  }
+
+  .cw-nav-next {
+    right: 10px;
+  }
+
+  .cw-story-nav {
+    top: calc((100vh + var(--cw-stage-h)) * 0.5 + 12px);
+    gap: 10px;
+  }
+
+  .cw-story-dot--active {
+    width: 58px;
+  }
+
+  .cw-mini-play {
+    width: 34px;
+    height: 34px;
+    font-size: 14px;
+  }
+
+  .cw-mini-label {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 400px) {
+  .cw-wrap {
+    --cw-w: 150px;
+    --cw-h: 84px;
+    --cw-l: 12px;
+    --cw-b: 12px;
+    --cw-r: 10px;
+    --cw-stage-h: calc(100vh - 104px);
+  }
+
+  .cw-stage {
+    border-radius: 14px;
+  }
+}
+
+@media (max-width: 640px) {
+  .cw-wrap { --cw-l:12px; --cw-b:12px; --cw-w:min(180px, calc(100vw - 176px)); }
+  .cw-mini, .cw-pill { max-width:calc(100vw - 176px); }
+}
+
+/* =========================================================
+   REDUCED MOTION
+   ========================================================= */
+@media (prefers-reduced-motion: reduce) {
+  .cw-backdrop,
+  .cw-stage,
+  .cw-switch-frame,
+  .cw-ready,
+  .cw-controls,
+  .cw-progress-fill,
+  .cw-story-nav,
+  .cw-story-dot,
+  .cw-mini,
+  .cw-pill,
+  .cw-nav-btn {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

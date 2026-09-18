@@ -55,6 +55,7 @@
 }
 
 .legal-modal-close {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -68,6 +69,13 @@
   cursor: pointer;
   font-size: 28px;
   line-height: 1;
+}
+
+.legal-modal-close::before {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: inherit;
 }
 
 .legal-modal-close:hover {

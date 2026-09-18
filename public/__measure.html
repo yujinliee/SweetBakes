@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>measure</title>
+    <style>
+      html, body { margin: 0; padding: 0; }
+      #f { position: fixed; inset: 0; width: 100vw; height: 100vh; border: 0; }
+      #out { position: fixed; top: 0; left: 0; z-index: 9; background: #fff; font: 12px monospace; white-space: pre; margin: 0; }
+    </style>
+  </head>
+  <body>
+    <pre id="out">pending</pre>
+    <iframe id="f" src="/"></iframe>
+    <script>
+      const SELECTORS = [
+        'body',
+        'main',
+        '.hero',
+        '.hero-frame',
+        '.hero-copy',
+        '.order-section',
+        '.offer-showcases',
+        '.treats-section',
+        '.gallery-section',
+        '.gallery-grid',
+        '.creations-bottom-divider',
+        '.location-section',
+        '.location-container',
+        '.location-details',
+        '.location-map-wrapper',
+        '.footer-decoration',
+        '.footer',
+        '.footer-body',
+        '.footer-grid'
+      ]
+
+      function measure(win, doc) {
+        const rows = []
+        rows.push(`WIDTH=${win.innerWidth} HEIGHT=${win.innerHeight}`)
+        rows.push(`docH=${doc.documentElement.scrollHeight}`)
+        for (const sel of SELECTORS) {
+          const el = doc.querySelector(sel)
+          if (!el) { rows.push(`${sel} :: MISSING`); continue }
+          const r = el.getBoundingClientRect()
+          const cs = win.getComputedStyle(el)
+          const top = Math.round(r.top + win.scrollY)
+          rows.push(
+            `${sel} :: top=${top} height=${Math.round(r.height)} ` +
+            `mt=${cs.marginTop} mb=${cs.marginBottom} pt=${cs.paddingTop} pb=${cs.paddingBottom} ` +
+            `pos=${cs.position} top_css=${cs.top}`
+          )
+        }
+        return rows.join('\n')
+      }
+
+      const f = document.getElementById('f')
+      function run() {
+        try {
+          document.getElementById('out').textContent = measure(f.contentWindow, f.contentDocument)
+        } catch (e) {
+          document.getElementById('out').textContent = 'ERROR ' + e.message
+        }
+      }
+      f.onload = () => setTimeout(run, 3500)
+      setTimeout(() => {
+        if (document.getElementById('out').textContent === 'pending') run()
+      }, 8000)
+    </script>
+  </body>
+</html>

@@ -192,6 +192,7 @@
 }
 
 .chatbot-icon-button {
+  position: relative;
   display: grid;
   flex: 0 0 auto;
   place-items: center;
@@ -205,6 +206,13 @@
   transition:
     transform 200ms ease,
     background 200ms ease;
+}
+
+.chatbot-icon-button::before {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  border-radius: inherit;
 }
 
 .chatbot-icon-button:hover {
@@ -424,6 +432,13 @@
   transition:
     transform 200ms ease,
     background 200ms ease;
+}
+
+.chatbot-input-wrapper button::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
 }
 
 .chatbot-input-wrapper button:hover {

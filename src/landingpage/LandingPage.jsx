@@ -161,6 +161,7 @@ export function SiteTopbar({
   const isScrolledRef = useRef(forceScrolled || getIsTopbarScrolled())
   const topbarMotionTimeoutRef = useRef(null)
   const topbarIsScrolled = forceScrolled || isScrolled
+const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const cartCount = useSyncExternalStore(subscribeCart, getCartCount)
   const cartActivityVersion = useSyncExternalStore(
     subscribeCartActivity,
@@ -293,6 +294,7 @@ export function SiteTopbar({
 
     event.preventDefault()
     setIsShopOpen(false)
+    setIsMobileMenuOpen(false)
 
     const target = document.getElementById(sectionId)
 
@@ -314,6 +316,16 @@ export function SiteTopbar({
     // router so the Home page mounts and then glides to the section.
     window.history.pushState({ scrollTo: sectionId }, '', '/')
     window.dispatchEvent(new PopStateEvent('popstate'))
+  }
+
+  const closeMobileMenu = () => {
+    setIsMobileMenuOpen(false)
+    setIsShopOpen(false)
+  }
+
+  const handleMobileShopNavigation = (event, href) => {
+    handleShopNavigation(event, href)
+    closeMobileMenu()
   }
 
   useEffect(() => {
@@ -374,6 +386,7 @@ export function SiteTopbar({
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
         setIsAccountMenuOpen(false)
+        closeMobileMenu()
       }
     }
 
@@ -547,8 +560,47 @@ export function SiteTopbar({
               </span>
             ) : null}
           </a>
+          {/* Hamburger menu button - visible on mobile */}
+          <button
+            type="button"
+            className="hamburger-menu"
+            aria-label="Open mobile menu"
+            aria-expanded={isMobileMenuOpen}
+            onClick={() => setIsMobileMenuOpen((current) => !current)}
+          >
+            <span className="hamburger-bar" aria-hidden="true" />
+            <span className="hamburger-bar" aria-hidden="true" />
+            <span className="hamburger-bar" aria-hidden="true" />
+          </button>
         </div>
       </div>
+      {isMobileMenuOpen ? (
+        <div className="mobile-menu-panel" role="dialog" aria-label="Mobile navigation">
+          <nav className="mobile-nav" aria-label="Mobile primary">
+            <a className="mobile-nav-link" href={homeHref} onClick={closeMobileMenu}>Home</a>
+            <button
+              type="button"
+              className="mobile-nav-link mobile-nav-shop-toggle"
+              aria-expanded={isShopOpen}
+              onClick={() => setIsShopOpen((current) => !current)}
+            >
+              <span>Shop</span><span aria-hidden="true">{isShopOpen ? '⌃' : '⌄'}</span>
+            </button>
+            {isShopOpen ? (
+              <div className="mobile-nav-submenu">
+                <a href={cakesHref} onClick={(event) => handleMobileShopNavigation(event, cakesHref)}>Cakes</a>
+                <a href={cupcakesHref} onClick={(event) => handleMobileShopNavigation(event, cupcakesHref)}>Cupcakes</a>
+                <a href={packagesHref} onClick={(event) => handleMobileShopNavigation(event, packagesHref)}>Party Packages</a>
+                <a href="#sweet-treats" onClick={(event) => { handleSectionScroll(event, 'sweet-treats'); closeMobileMenu() }}>Sweet Treats</a>
+              </div>
+            ) : null}
+            <a className="mobile-nav-link" href={locationHref} onClick={(event) => handleSectionScroll(event, 'location')}>Location</a>
+            <a className="mobile-nav-link" href={contactHref} onClick={(event) => handleSectionScroll(event, 'contact')}>Contact</a>
+            <a className="mobile-nav-link" href="/track-order" onClick={(event) => { event.preventDefault(); closeMobileMenu(); openTrackOrderDrawer() }}>Track Order</a>
+            {isAccountMenuEnabled ? <a className="mobile-nav-link" href={profileHref} onClick={closeMobileMenu}>Profile</a> : null}
+          </nav>
+        </div>
+      ) : null}
     </header>
   )
 }

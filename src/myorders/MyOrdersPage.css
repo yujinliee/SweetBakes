@@ -19,7 +19,8 @@ html:has(.my-orders-page), body:has(.my-orders-page) { background:#ffffff; }
 .my-orders-state--error { color:#b43b4a; }
 .my-orders-history-header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding-bottom:15px; margin-bottom:18px; border-bottom:1px solid #f0ebef; }
 .my-orders-number { color:#6e6172; font-size:12px; font-weight:700; letter-spacing:.025em; overflow-wrap:anywhere; }
-.my-orders-view-details { flex-shrink:0; border:0; padding:5px 0; background:transparent; color:#8052a9; font:inherit; font-size:12px; font-weight:600; cursor:pointer; }
+.my-orders-view-details { flex-shrink:0; position:relative; border:0; padding:5px 0; background:transparent; color:#8052a9; font:inherit; font-size:12px; font-weight:600; cursor:pointer; }
+.my-orders-view-details::before { content:''; position:absolute; inset:-12px -6px; border-radius:inherit; }
 .my-orders-view-details span { margin-left:6px; }
 .my-orders-history-body { display:grid; grid-template-columns:minmax(0,1fr) 152px; align-items:start; gap:24px; }
 .my-orders-products { display:grid; gap:18px; min-width:0; }
@@ -68,7 +69,8 @@ html:has(.my-orders-page), body:has(.my-orders-page) { background:#ffffff; }
 .my-orders-detail-header { flex-shrink:0; }
 .my-orders-detail-header>div { min-width:0; text-align:left; }
 .my-orders-detail-header h2 { overflow-wrap:anywhere; }
-.my-orders-detail-header>button { flex-shrink:0; }
+.my-orders-detail-header>button { flex-shrink:0; position:relative; }
+.my-orders-detail-header>button::before { content:''; position:absolute; inset:-5px; border-radius:inherit; }
 .my-orders-detail-scroll { align-content:start; min-height:0; flex:1; overscroll-behavior:contain; }
 .my-orders-detail-card,.my-orders-detail-card h3 { text-align:left; }
 .my-orders-detail-products { display:grid; gap:20px; }
