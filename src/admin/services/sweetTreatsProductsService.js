@@ -38,6 +38,11 @@ const mapCategoryRow = (row) => ({
   sort_order: row.sort_order ?? 100,
 })
 
+const getRelatedCategory = (row) => {
+  const category = row.product_categories
+  return Array.isArray(category) ? category[0] : category
+}
+
 const getFallbackCategories = ({ activeOnly = false } = {}) =>
   SWEET_TREATS_CATEGORY_OPTIONS.map((option, index) => ({
     id: option.value,
@@ -194,6 +199,8 @@ const mapProductRow = (
   optionsByProductId = {},
   productImagesByProductId = {},
 ) => {
+  const category = getRelatedCategory(row)
+  const categorySlug = category?.slug || ''
   const variants = (variantsByProductId[row.id] || [])
     .map((variant) => ({
       id: variant.id,
@@ -225,8 +232,11 @@ const mapProductRow = (
     product: row.name,
     name: row.name,
     slug: row.slug,
-    category: row.category,
-    categoryLabel: SWEET_TREATS_CATEGORY_LABELS[row.category] || row.category,
+    category: categorySlug,
+    categoryId: row.category_id,
+    categoryName: category?.name || '',
+    categorySlug,
+    categoryLabel: category?.name || SWEET_TREATS_CATEGORY_LABELS[categorySlug] || categorySlug,
     description: row.description || '',
     base_price: row.base_price === null || row.base_price === undefined ? null : Number(row.base_price),
     price: row.base_price === null || row.base_price === undefined ? null : Number(row.base_price),
@@ -248,19 +258,22 @@ const mapProductRow = (
 
 export async function getSweetTreatsProducts({ activeOnly = false } = {}) {
   const categories = await getSweetTreatsCategories()
-  const categoryValues = Array.from(
+  const categorySlugs = Array.from(
     new Set([
       ...categories.map((category) => category.value),
       ...Object.keys(CATEGORY_VALUE_ALIASES),
     ]),
   )
+  const categoryIds = categories
+    .filter((category) => categorySlugs.includes(category.value))
+    .map((category) => category.id)
 
   let query = supabase
     .from('products')
     .select(
-      'id, name, slug, category, description, base_price, image_url, is_active, sort_order, created_at, updated_at',
+      'id, name, slug, category_id, product_categories ( id, name, slug ), description, base_price, image_url, is_active, sort_order, created_at, updated_at',
     )
-    .in('category', categoryValues)
+    .in('category_id', categoryIds)
     .order('sort_order', { ascending: true })
 
   if (activeOnly) {
@@ -474,6 +487,11 @@ const normalizeFlavorsForSave = (draft) => {
 export async function upsertSweetTreatsProduct(draft) {
   const name = String(draft.product || draft.name || '').trim()
   const category = normalizeSweetTreatsCategory(draft.category)
+  const categories = await getSweetTreatsCategories()
+  const selectedCategory = categories.find((item) => item.value === category)
+  if (!selectedCategory?.id) {
+    throw new Error(`Product category "${category}" could not be resolved.`)
+  }
   const rawBasePrice = draft.base_price ?? draft.price
   const basePrice = rawBasePrice === '' || rawBasePrice === null || rawBasePrice === undefined
     ? category === 'cheesecake' || draft.id
@@ -512,7 +530,7 @@ export async function upsertSweetTreatsProduct(draft) {
   const productPayload = {
     name,
     slug,
-    category,
+    category_id: selectedCategory.id,
     description: String(draft.description || '').trim(),
     base_price: basePrice,
     is_active: draft.active !== false,
@@ -620,6 +638,7 @@ export async function upsertSweetTreatsProduct(draft) {
   return {
     ...mapProductRow({
       ...savedProduct,
+      product_categories: selectedCategory,
       image_url: nextImageUrl,
     }),
   }

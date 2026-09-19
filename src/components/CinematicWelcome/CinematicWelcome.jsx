@@ -14,8 +14,6 @@ const STORIES = [
   },
 ]
 
-const SESSION_KEY = 'sweetbakes:cinematic-welcome-seen'
-const INTRO_DELAY = 420
 const MINIMIZE_MS = 400
 const COLLAPSE_MS = 280
 const MINI_HOLD_DESKTOP = 5500
@@ -31,16 +29,8 @@ const PHASE = {
   PILL: 'pill',
 }
 
-const readSeenFlag = () => {
-  try {
-    return window.sessionStorage.getItem(SESSION_KEY) === '1'
-  } catch {
-    return false
-  }
-}
-
 function CinematicWelcome() {
-  const [phase, setPhase] = useState(() => (readSeenFlag() ? PHASE.PILL : PHASE.IDLE))
+  const [phase, setPhase] = useState(PHASE.PILL)
   const [muted, setMuted] = useState(true)
   const [ready, setReady] = useState(true)
   const [activeIndex, setActiveIndex] = useState(0)
@@ -76,28 +66,8 @@ function CinematicWelcome() {
     reducedMotion.current = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     isMobile.current = window.matchMedia('(max-width: 640px)').matches
 
-    if (readSeenFlag()) {
-      return clearTimers
-    }
-
-    setTimer('intro', () => {
-      try {
-        window.sessionStorage.setItem(SESSION_KEY, '1')
-      } catch {
-        /* sessionStorage unavailable — proceed regardless */
-      }
-      setPhase(PHASE.CINEMATIC)
-      const video = videoRef.current
-      if (video) {
-        const attempt = video.play()
-        if (attempt && attempt.catch) {
-          attempt.catch(() => setReady(true))
-        }
-      }
-    }, INTRO_DELAY)
-
     return clearTimers
-  }, [setTimer, clearTimers])
+  }, [clearTimers])
 
   useEffect(() => {
     mutedRef.current = muted
@@ -396,7 +366,6 @@ function CinematicWelcome() {
             className="cw-video"
             src={activeStory.src}
             preload="auto"
-            autoPlay
             muted={muted}
             playsInline
             disablePictureInPicture
