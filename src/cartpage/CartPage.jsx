@@ -1245,6 +1245,22 @@ function CartPage({
                   */}
                 </div>) : null}
               </form>
+              <div className="cart-checkout-actions">
+                {!isCustomerAuthenticated && guestPaymentStatus === 'cancelled' ? (
+                  <p className="cart-payment-placeholder" role="status">
+                    Payment was not completed. Your cart is still available if you&apos;d like to try again.
+                  </p>
+                ) : null}
+                <button
+                  className="cart-pay-button"
+                  type="button"
+                  onClick={handlePayNow}
+                  disabled={isSubmittingOrder || guestPaymentStatus === 'success'}
+                >
+                  {isSubmittingOrder ? 'Processing...' : 'Pay Now'}
+                </button>
+                {orderSubmissionError ? <p className="cake-field-error">* {orderSubmissionError}</p> : null}
+              </div>
             </section>
 
             <aside className="cart-summary-pane" aria-label="Order summary">
@@ -1352,22 +1368,6 @@ function CartPage({
               </div>
                 </div>
             </aside>
-            <div className="cart-checkout-actions">
-              {!isCustomerAuthenticated && guestPaymentStatus === 'cancelled' ? (
-                <p className="cart-payment-placeholder" role="status">
-                  Payment was not completed. Your cart is still available if you&apos;d like to try again.
-                </p>
-              ) : null}
-              <button
-                className="cart-pay-button"
-                type="button"
-                onClick={handlePayNow}
-                disabled={isSubmittingOrder || guestPaymentStatus === 'success'}
-              >
-                {isSubmittingOrder ? 'Processing...' : 'Pay Now'}
-              </button>
-              {orderSubmissionError ? <p className="cake-field-error">* {orderSubmissionError}</p> : null}
-            </div>
           </div>
         </div>
       </main>

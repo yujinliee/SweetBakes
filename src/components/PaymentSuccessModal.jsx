@@ -18,6 +18,6 @@ export default function PaymentSuccessModal({ order, guest = false, onClose, onP
     <p>{guest ? 'Your payment has been confirmed.' : 'Your payment has been confirmed. You can follow the order status in My Orders.'}</p>
     <div className="payment-success-reference"><span>Order ID</span><strong>{order.order_number || order.id}</strong></div>
     {guest ? <p className="payment-success-note">Save your Order ID. You&apos;ll need it together with your email address to track your order.</p> : null}
-    <div className="payment-success-actions"><button type="button" onClick={onPrimary}>{guest ? 'Track Order' : 'View My Orders'}</button><button type="button" onClick={onContinue}>Continue Shopping</button></div>
+    <div className="payment-success-actions"><button type="button" onClick={onContinue}>Continue Shopping</button><button type="button" onClick={onPrimary}>{guest ? 'Track Order' : 'View My Orders'}</button></div>
   </dialog>
 }
