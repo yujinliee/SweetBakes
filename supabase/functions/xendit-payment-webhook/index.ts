@@ -380,7 +380,8 @@ export default {
       if (expiredStatus !== "EXPIRED" || !referenceId || !paymentSessionId) {
         return jsonResponse({ received: true, result: "ignored_expired_invalid_payload" });
       }
-      const expiredReference = referenceId.endsWith("DP") ? referenceId.slice(0, -2) : null;
+      const isRegularExpired = referenceId.endsWith("FULL");
+      const expiredReference = isRegularExpired ? referenceId.slice(0, -4) : referenceId.endsWith("DP") ? referenceId.slice(0, -2) : null;
       if (!expiredReference) {
         return jsonResponse({ received: true, result: "ignored_expired_regular_payment" });
       }
@@ -487,7 +488,14 @@ export default {
       return jsonResponse({ received: true, result: "ignored_order_state", orderId: order.id });
     }
 
-    if (isRegularPayment) {
+    if (isRegularPayment && order.customer_id !== null && order.loyalty_reward_applied) {
+      const { data: completion, error: completionError } = await supabaseAdmin.rpc("complete_customer_loyalty_payment", {
+        p_order_id: order.id, p_session_id: paymentSessionId, p_amount: Math.round(amount * 100) / 100,
+        p_paid_at: typeof session.updated === "string" ? session.updated : new Date().toISOString(),
+      }) as { data: { result?: string; reward_consumed?: boolean } | null; error: { message?: string } | null };
+      if (completionError) return jsonResponse({ error: "Unable to finalize the payment." }, 500);
+      if (completion?.result === "stale_session") return jsonResponse({ received: true, result: "ignored_stale_session", orderId: order.id });
+    } else if (isRegularPayment) {
       const { error: updateError } = await supabaseAdmin
         .from("orders")
         .update({

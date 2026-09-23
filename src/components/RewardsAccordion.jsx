@@ -18,7 +18,7 @@ export function RewardsTagIcon() {
   )
 }
 
-export function RewardsHeader({ isExpanded = false, label, onClick, ariaControls }) {
+export function RewardsHeader({ isExpanded = false, label, onClick, ariaControls, badgeCount = 0 }) {
   return (
     <button
       type="button"
@@ -29,6 +29,7 @@ export function RewardsHeader({ isExpanded = false, label, onClick, ariaControls
     >
       <RewardsTagIcon />
       <span className="rewards-launch-label">{label}</span>
+      {badgeCount > 0 ? <span className="rewards-count-badge" aria-label={`${badgeCount} available reward${badgeCount === 1 ? '' : 's'}`}>{badgeCount}</span> : null}
       <svg
         className="rewards-caret"
         width="14"
@@ -45,6 +46,12 @@ export function RewardsHeader({ isExpanded = false, label, onClick, ariaControls
       </svg>
     </button>
   )
+}
+
+export function LoyaltyRewardOption({ availableRewards, selected = false, disabled = false, onClick, onDeselect, title = '20% Off Reward', description = 'Get 20% off this payment.' }) {
+  const content = <><span className="loyalty-reward-option-copy"><strong>{title}</strong><span>{description}</span></span><span className="loyalty-reward-status">{selected ? <><span className="loyalty-reward-selected-label">Selected</span><span className="loyalty-reward-dismiss" role="button" tabIndex={0} aria-label="Deselect reward" onClick={(event) => { event.stopPropagation(); onDeselect?.() }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); onDeselect?.() } }}>×</span></> : `${availableRewards} available`}</span></>
+  if (disabled) return <div className="loyalty-reward-option loyalty-reward-option--disabled">{content}</div>
+  return <button type="button" className={`loyalty-reward-option${selected ? ' is-selected' : ''}`} aria-pressed={selected} onClick={onClick}>{content}</button>
 }
 
 export function RewardsReveal({ id, isOpen = false, children }) {

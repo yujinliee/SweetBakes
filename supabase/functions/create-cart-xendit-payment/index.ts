@@ -3,6 +3,7 @@ import { withSupabase } from "@supabase/server";
 import { createClient } from "@supabase/supabase-js";
 
 const XENDIT_SESSIONS_URL = "https://api.xendit.co/sessions";
+const XENDIT_CANCEL_SESSION_URL = (id: string) => `https://api.xendit.co/sessions/${encodeURIComponent(id)}/cancel`;
 const DEPLOYED_ORIGIN = "https://sweetbakes-ten.vercel.app";
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": DEPLOYED_ORIGIN,
@@ -28,6 +29,8 @@ type Order = {
   last_name: string | null;
   created_at: string | null;
   total: number | string | null;
+  subtotal: number | string | null;
+  delivery_fee: number | string | null;
   payment_status: string | null;
   order_status: string | null;
 };
@@ -64,9 +67,10 @@ export default {
     if (!supabaseUrl || !supabaseAnonKey) return respond({ error: "Authentication service is not configured." }, 500);
 
     let user: { id: string } | null = null;
+    let customerSupabase: ReturnType<typeof createClient> | null = null;
     if (authorization) {
       if (!authorization.match(/^Bearer\s+\S+$/i)) return respond({ error: "Invalid authorization header." }, 401);
-      const customerSupabase = createClient(supabaseUrl, supabaseAnonKey, {
+      customerSupabase = createClient(supabaseUrl, supabaseAnonKey, {
         auth: { autoRefreshToken: false, persistSession: false },
         global: { headers: { Authorization: authorization } },
       });
@@ -81,18 +85,18 @@ export default {
       return respond({ error: "A non-empty orderId is required." }, 400);
     }
 
-    const request = input as { orderId: string; guestEmail?: unknown; statusOnly?: unknown };
+    const request = input as { orderId: string; guestEmail?: unknown; statusOnly?: unknown; appliedVoucher?: unknown; voucher_applied?: unknown };
     const orderId = request.orderId.trim();
     let order: Order | null = null;
     let orderError: { message?: string; code?: string } | null = null;
     if (user) {
-      const customerSupabase = createClient(supabaseUrl, supabaseAnonKey, {
+      customerSupabase = createClient(supabaseUrl, supabaseAnonKey, {
         auth: { autoRefreshToken: false, persistSession: false },
         global: { headers: { Authorization: authorization as string } },
       });
       const result = await customerSupabase
         .from("orders")
-        .select("id, order_number, customer_id, email, first_name, last_name, created_at, total, payment_status, order_status")
+        .select("id, order_number, customer_id, email, first_name, last_name, created_at, subtotal, delivery_fee, total, payment_status, order_status")
         .eq("id", orderId)
         .eq("customer_id", user.id)
         .maybeSingle() as { data: Order | null; error: { message?: string; code?: string } | null };
@@ -104,7 +108,7 @@ export default {
       }
       const result = await ctx.supabaseAdmin
         .from("orders")
-        .select("id, order_number, customer_id, email, first_name, last_name, created_at, total, payment_status, order_status")
+        .select("id, order_number, customer_id, email, first_name, last_name, created_at, subtotal, delivery_fee, total, payment_status, order_status")
         .eq("id", orderId)
         .is("customer_id", null)
         .maybeSingle() as { data: Order | null; error: { message?: string; code?: string } | null };
@@ -133,7 +137,19 @@ export default {
     if (["cancelled", "canceled", "rejected", "declined", "void", "refunded"].includes(orderStatus)) return respond({ error: "This order cannot be paid." }, 400);
     if (orderStatus !== "pending" || !["unpaid", "pending"].includes(paymentStatus)) return respond({ error: "This order is not eligible for payment yet." }, 400);
 
-    const amount = Number(order.total);
+    const clientWantsVoucher = Boolean(user && (request.appliedVoucher === true || request.voucher_applied === true));
+    let amount = Number(order.total);
+    let discountAmount = 0;
+    let rewardApplied = false;
+    let rewardId: string | null = null;
+    if (clientWantsVoucher) {
+      const { data: reservation, error } = await customerSupabase!.rpc("reserve_customer_loyalty_reward", { p_order_id: order.id }) as { data: { reward_reserved?: boolean; reward_id?: string | null; final_amount?: number | string; discount_amount?: number | string } | null; error: { message?: string } | null };
+      if (error || !reservation) return respond({ error: "Unable to prepare the loyalty reward reservation." }, 500);
+      rewardApplied = reservation.reward_reserved === true;
+      rewardId = reservation.reward_id ?? null;
+      amount = Number(reservation.final_amount ?? amount);
+      discountAmount = Number(reservation.discount_amount ?? 0);
+    }
     if (!Number.isFinite(amount) || amount <= 0) return respond({ error: "This order does not have a valid total." }, 400);
     const normalizedAmount = Math.round(amount * 100) / 100;
     const orderReference = safeName(order.order_number ?? order.id, order.id.replace(/[^a-zA-Z0-9]/g, ""));
@@ -150,6 +166,17 @@ export default {
 
     const secretKey = Deno.env.get("XENDIT_SECRET_KEY");
     if (!secretKey) return respond({ error: "Payment service is not configured." }, 500);
+    if (rewardId) {
+      const { data: activeReservation, error: activeReservationError } = await customerSupabase!.rpc("get_customer_loyalty_reservation", { p_order_id: order.id }) as { data: { reserved?: boolean; session_id?: string | null } | null; error: { message?: string } | null };
+      if (activeReservationError) return respond({ error: "Unable to verify the active payment reservation." }, 500);
+      if (activeReservation?.reserved && activeReservation.session_id) {
+        const existing = await fetch(`https://api.xendit.co/sessions/${encodeURIComponent(activeReservation.session_id)}`, { headers: { Authorization: `Basic ${btoa(`${secretKey}:`)}` } }).catch(() => null);
+        if (!existing?.ok) return respond({ error: "Unable to resume the active payment session." }, 502);
+        const existingBody = await existing.json() as Record<string, unknown>;
+        if (typeof existingBody.payment_link_url !== "string") return respond({ error: "The active payment session has no checkout URL." }, 502);
+        return respond({ paymentId: existingBody.payment_id ?? activeReservation.session_id, referenceId: existingBody.reference_id ?? referenceId, status: existingBody.status ?? "ACTIVE", paymentUrl: existingBody.payment_link_url, amount: Math.round(amount * 100) / 100, discountAmount: Math.round(discountAmount * 100) / 100, rewardApplied: true });
+      }
+    }
     const sessionPayload = {
       reference_id: referenceId,
       session_type: "PAY",
@@ -165,6 +192,7 @@ export default {
       },
       items: [{ reference_id: `I${orderReference}`.slice(0, 64), name: "Sweet Bakes order", type: "PHYSICAL_SERVICE", net_unit_amount: normalizedAmount, quantity: 1, currency: "PHP", category: "BAKERY", description: `Payment for order ${order.order_number ?? order.id}`.slice(0, 255) }],
       capture_method: "AUTOMATIC",
+      expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
       locale: "en",
       description: `Sweet Bakes payment for order ${order.order_number ?? order.id}`.slice(0, 255),
       success_return_url: user
@@ -190,9 +218,24 @@ export default {
     try { body = JSON.parse(responseText) as Record<string, unknown>; } catch { /* provider returned non-JSON */ }
     if (!response.ok) {
       console.error("[CREATE CART XENDIT SESSION ERROR]", { status: response.status, error_code: body.error_code ?? null, message: body.message ?? null });
+      if (rewardId) await ctx.supabaseAdmin.rpc("release_customer_loyalty_reservation", { p_order_id: order.id, p_session_id: null });
       return respond({ error: "Payment service rejected the payment request.", error_code: body.error_code ?? null, message: body.message ?? null }, 502);
     }
-    if (typeof body.payment_link_url !== "string") return respond({ error: "Payment service returned no checkout URL." }, 502);
-    return respond({ paymentId: body.payment_id ?? body.payment_session_id ?? null, referenceId: body.reference_id ?? referenceId, status: body.status ?? "ACTIVE", paymentUrl: body.payment_link_url });
+    const sessionId = typeof body.payment_session_id === "string" ? body.payment_session_id : null;
+    const expiresAt = typeof body.expires_at === "string" ? body.expires_at : null;
+    if (typeof body.payment_link_url !== "string" || (rewardId && (!sessionId || !expiresAt))) {
+      if (rewardId && sessionId) await fetch(XENDIT_CANCEL_SESSION_URL(sessionId), { method: "POST", headers: { Authorization: `Basic ${btoa(`${secretKey}:`)}` } }).catch(() => undefined);
+      if (rewardId) await ctx.supabaseAdmin.rpc("release_customer_loyalty_reservation", { p_order_id: order.id, p_session_id: null });
+      return respond({ error: "Payment service returned an incomplete checkout session." }, 502);
+    }
+    if (rewardId) {
+      const { error } = await ctx.supabaseAdmin.rpc("bind_customer_loyalty_reservation_expiry", { p_order_id: order.id, p_reward_id: rewardId, p_session_id: sessionId, p_expires_at: new Date(Date.parse(expiresAt)).toISOString() });
+      if (error) {
+        await fetch(XENDIT_CANCEL_SESSION_URL(sessionId), { method: "POST", headers: { Authorization: `Basic ${btoa(`${secretKey}:`)}` } }).catch(() => undefined);
+        await ctx.supabaseAdmin.rpc("release_customer_loyalty_reservation", { p_order_id: order.id, p_session_id: null });
+        return respond({ error: "Unable to safely finalize the payment reservation." }, 502);
+      }
+    }
+    return respond({ paymentId: body.payment_id ?? body.payment_session_id ?? null, referenceId: body.reference_id ?? referenceId, status: body.status ?? "ACTIVE", paymentUrl: body.payment_link_url, amount: Math.round(amount * 100) / 100, discountAmount: rewardApplied ? Math.round(discountAmount * 100) / 100 : 0, rewardApplied });
   }),
 };

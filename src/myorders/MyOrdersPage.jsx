@@ -13,7 +13,7 @@ import { ORDER_TABS, EMPTY_MESSAGES, attachOrderReviews, getOrderTabCounts, matc
 import { attachCatalogImages, itemImage, itemFallback } from './orderHistoryImages.js'
 import { formatDisplayTime } from '../components/timeUtils.js'
 import { calculateRewardPreview, getCustomDownPaymentState, normalizeLoyaltyState } from './loyaltyReward.js'
-import { RewardsTagIcon, RewardsHeader, RewardsReveal, RewardsEmpty } from '../components/RewardsAccordion.jsx'
+import { RewardsTagIcon, RewardsHeader, RewardsReveal, RewardsEmpty, LoyaltyRewardOption } from '../components/RewardsAccordion.jsx'
 import '../components/rewardsAccordion.css'
 import './MyOrdersPage.css'
 
@@ -155,7 +155,7 @@ function PaymentPanel({ order, loyaltyState, loyaltyStateStatus = 'loading', onL
 
   return <section className="my-orders-payment-section" aria-label="Payment">
     <h4 className="my-orders-payment-label">Payment</h4>
-    <p className="my-orders-rewards-heading">Coupons &amp; Rewards</p>
+    <p className="my-orders-rewards-heading">Coupons &amp; Rewards {availableRewards > 0 ? <span className="rewards-count-badge" aria-label={`${availableRewards} available reward${availableRewards === 1 ? '' : 's'}`}>{availableRewards}</span> : null}</p>
 
     {hasApplied ? (
       <div className="rewards-card rewards-dropdown">
@@ -188,19 +188,17 @@ function PaymentPanel({ order, loyaltyState, loyaltyStateStatus = 'loading', onL
           ) : availableRewards < 1 ? (
             <RewardsEmpty title="No rewards available right now." sub={`${Math.max(0, (loyaltyState?.threshold || 2) - (loyaltyState?.progress || 0))} more completed order${Math.max(0, (loyaltyState?.threshold || 2) - (loyaltyState?.progress || 0)) === 1 ? '' : 's'} to earn your next reward.`} />
           ) : (
-            <div className="my-orders-rewards-offer">
-              <div className="my-orders-rewards-offer-copy">
-                <span className="my-orders-rewards-offer-title">Loyalty Reward</span>
-                <span className="my-orders-rewards-offer-sub">{discountPercent}% OFF one custom-order down payment</span>
-                <span className="my-orders-rewards-offer-eligibility">{availableRewards} reward{availableRewards === 1 ? '' : 's'} available</span>
-              </div>
-              <button type="button" className="rewards-apply" onClick={handleApplyReward}>Apply</button>
-            </div>
+            <LoyaltyRewardOption availableRewards={availableRewards} selected={rewardAppliedLocally} onClick={() => (rewardAppliedLocally ? handleRemoveReward() : handleApplyReward())} />
           )}
         </RewardsReveal>
       </div>
     )}
 
+    <div className="my-orders-custom-payment-breakdown" aria-live="polite">
+      <div className="my-orders-breakdown-row"><span>Required Down Payment</span><strong>{formatCurrency(reward.originalDownPayment)}</strong></div>
+      {displayDiscount > 0 ? <div className="my-orders-breakdown-row my-orders-breakdown-row--discount"><span>Loyalty Reward ({discountPercent}% Off)</span><strong>-{formatCurrency(displayDiscount)}</strong></div> : null}
+      <div className="my-orders-breakdown-row my-orders-breakdown-row--final"><span>Amount Due</span><strong>{formatCurrency(displayPayable)}</strong></div>
+    </div>
     <button type="button" className="my-orders-pay-button" onClick={handlePayDownPayment} disabled={isCreatingPayment}>
       {isCreatingPayment ? 'Preparing Payment...' : `Pay Down Payment · ${formatCurrency(displayPayable)}`}
     </button>

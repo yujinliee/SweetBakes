@@ -28,8 +28,9 @@ import { requestGuestPaymentStatus, createGuestRpcClient } from './guestPaymentS
 import PaymentReturnStatus from './PaymentReturnStatus.jsx'
 import PaymentSuccessModal from '../components/PaymentSuccessModal.jsx'
 import { CART_PAYMENT_RETURN_STORAGE_KEY, loadGuestConfirmation, loadConfirmedItems, isVerifiedPayment, logPaymentReturn, savePaymentReturnContext, shouldConsumePaymentReturn } from './paymentConfirmation.js'
-import { fetchAvailableCartRewards, calculateCartRewardDiscount, formatCartRewardValue } from './cartRewards.js'
-import { RewardsTagIcon, RewardsHeader, RewardsReveal, RewardsEmpty } from '../components/RewardsAccordion.jsx'
+import { formatCartRewardValue } from './cartRewards.js'
+import { normalizeLoyaltyState } from '../myorders/loyaltyReward.js'
+import { RewardsHeader, RewardsReveal, RewardsEmpty, LoyaltyRewardOption } from '../components/RewardsAccordion.jsx'
 import '../components/rewardsAccordion.css'
 import chocolateCakeImage from '../assets/othersweettreats/regular_chocolate.webp'
 import redVelvetCakeImage from '../assets/othersweettreats/regular_redvelvet.webp'
@@ -189,15 +190,23 @@ function CartSummaryThumb({ product }) {
   )
 }
 
-function CouponsRewardsRow({ isAuthenticated, appliedReward, isExpanded, onToggle, onRemove, loading, error, rewards, onApply }) {
+function CouponsRewardsRow({ isAuthenticated, appliedReward, isExpanded, onToggle, onRemove, loading, error, rewards, onApply, loyaltyState }) {
   if (appliedReward) {
     return (
       <div className="rewards-card rewards-card--active">
-        <RewardsTagIcon />
-        <div className="rewards-applied">
+        <LoyaltyRewardOption
+          availableRewards={loyaltyState?.availableRewards || 1}
+          selected
+          onClick={onRemove}
+          onDeselect={onRemove}
+          title={appliedReward.title}
+          description={appliedReward.description || 'Reward applied to this order.'}
+        />
+        {false && (<>
+          <div className="rewards-applied">
           <span className="rewards-applied-title">{appliedReward.title}</span>
           <span className="rewards-applied-sub">{appliedReward.description || 'Reward applied to this order.'}</span>
-        </div>
+          </div>
         <span className="cart-rewards-value">{formatCartRewardValue(appliedReward)}</span>
         <button
           type="button"
@@ -207,6 +216,7 @@ function CouponsRewardsRow({ isAuthenticated, appliedReward, isExpanded, onToggl
         >
           ×
         </button>
+        </>)}
       </div>
     )
   }
@@ -215,7 +225,7 @@ function CouponsRewardsRow({ isAuthenticated, appliedReward, isExpanded, onToggl
       <RewardsHeader
         isExpanded={isExpanded}
         onClick={onToggle}
-        label={isAuthenticated ? 'View available rewards' : 'Sign in to view rewards'}
+        label={isAuthenticated ? 'Coupons & Rewards' : 'Sign in to view rewards'}
         ariaControls="cart-rewards-panel"
       />
       <RewardsReveal id="cart-rewards-panel" isOpen={isExpanded}>
@@ -223,6 +233,8 @@ function CouponsRewardsRow({ isAuthenticated, appliedReward, isExpanded, onToggl
           <p className="rewards-note">Loading your rewards...</p>
         ) : error ? (
           <p className="rewards-note rewards-note--error">{error}</p>
+        ) : loyaltyState?.availableRewards > 0 ? (
+          <LoyaltyRewardOption availableRewards={loyaltyState.availableRewards} disabled={!isAuthenticated} onClick={() => onApply({ id: 'customer-loyalty-reward', title: '20% Off Reward', description: 'Get 20% off your merchandise subtotal.', discountType: 'percent', percent: 20 })} description="Get 20% off your merchandise subtotal." />
         ) : rewards.length === 0 ? (
           <RewardsEmpty title="No rewards available yet." sub="Complete eligible orders to unlock future rewards." />
         ) : (
@@ -268,6 +280,7 @@ function CartPage({
   const pendingOrderIdRef = useRef(null)
   const profileUserIdRef = useRef(null)
   const [availableRewards, setAvailableRewards] = useState([])
+  const [loyaltyState, setLoyaltyState] = useState(null)
   const [appliedReward, setAppliedReward] = useState(null)
   const [isRewardsExpanded, setIsRewardsExpanded] = useState(false)
   const [rewardsLoading, setRewardsLoading] = useState(false)
@@ -625,7 +638,7 @@ function CartPage({
           ? customerInfo.preferredPickupTime
           : customerInfo.preferredDeliveryTime
       const deliveryFee = 0
-      const total = cartTotal
+      const total = subtotal + deliveryFee
       const recipientName = customerInfo.deliverDifferentRecipient
         ? `${customerInfo.recipientFirstName} ${customerInfo.recipientLastName}`.trim()
         : null
@@ -713,6 +726,7 @@ function CartPage({
         {
           body: {
             orderId,
+            appliedVoucher: Boolean(appliedReward),
             ...(session?.access_token ? {} : { guestEmail: customerInfo.email.trim() }),
           },
           ...(session?.access_token
@@ -724,6 +738,11 @@ function CartPage({
       if (paymentError) {
         console.error('[CREATE CART XENDIT PAYMENT RESPONSE]', await readSafeFunctionErrorBody(paymentError))
         throw paymentError
+      }
+
+      if (appliedReward && paymentData?.rewardApplied !== true) {
+        setAppliedReward(null)
+        setOrderSubmissionError('This reward is no longer available. Your payment amount has been updated.')
       }
 
       if (!paymentData?.paymentUrl || typeof paymentData.paymentUrl !== 'string') {
@@ -765,8 +784,10 @@ function CartPage({
     setRewardsError('')
     setRewardsLoading(true)
     try {
-      const rewards = await fetchAvailableCartRewards(supabase)
-      setAvailableRewards(rewards)
+      const { data, error } = await supabase.rpc('get_customer_loyalty_state')
+      if (error) throw error
+      setLoyaltyState(normalizeLoyaltyState(data))
+      setAvailableRewards([])
     } catch {
       setRewardsError('Unable to load your rewards. Please try again.')
     } finally {
@@ -814,7 +835,7 @@ function CartPage({
   })
 
   const subtotal = cartProducts.reduce((total, product) => total + product.lineTotal, 0)
-  const discountAmount = appliedReward ? calculateCartRewardDiscount(appliedReward, subtotal) : 0
+  const discountAmount = appliedReward ? Math.round(subtotal * 0.2 * 100) / 100 : 0
   const cartTotal = Math.max(0, subtotal - discountAmount)
 
   const changeQuantity = (productName, delta) => {
@@ -1332,7 +1353,7 @@ function CartPage({
                   className={`cart-rewards-section${isRewardsExpanded ? ' is-expanded' : ''}`}
                   aria-label="Coupons and rewards"
                 >
-                  <h3 className="cart-rewards-heading">Coupons &amp; Rewards</h3>
+                  <h3 className="cart-rewards-heading">Coupons &amp; Rewards {loyaltyState?.availableRewards > 0 ? <span className="rewards-count-badge" aria-label={`${loyaltyState.availableRewards} available reward${loyaltyState.availableRewards === 1 ? '' : 's'}`}>{loyaltyState.availableRewards}</span> : null}</h3>
                   <CouponsRewardsRow
                     isAuthenticated={isCustomerAuthenticated}
                     appliedReward={appliedReward}
@@ -1343,6 +1364,7 @@ function CartPage({
                     error={rewardsError}
                     rewards={availableRewards}
                     onApply={handleApplyReward}
+                    loyaltyState={loyaltyState}
                   />
                 </section>
 

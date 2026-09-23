@@ -57,6 +57,8 @@
   flex: 1 1 auto;
 }
 
+.rewards-count-badge { flex: none; min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 999px; background: #f4e6f2; color: #75456c; font-size: 11px; font-weight: 700; line-height: 20px; text-align: center; }
+
 .rewards-caret {
   flex: none;
   color: #AF719D;
@@ -197,3 +199,17 @@
   background: #AF719D;
   color: #ffffff;
 }
+
+.loyalty-reward-option { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px; border: 1px solid #dfd2dc; border-radius: 10px; background: #fff; color: #3a2e2e; text-align: left; cursor: pointer; transition: border-color 160ms ease, background-color 160ms ease; }
+.loyalty-reward-option:hover, .loyalty-reward-option:focus-visible { border-color: #AF719D; outline: none; }
+.loyalty-reward-option.is-selected { border-color: #AF719D; background: #fcf5fb; }
+.loyalty-reward-option--disabled { cursor: default; opacity: .82; }
+.loyalty-reward-option-copy { display: flex; flex: 1 1 auto; min-width: 0; flex-direction: column; gap: 2px; }
+.loyalty-reward-option-copy strong { font-size: 12px; font-weight: 700; }
+.loyalty-reward-option-copy span, .loyalty-reward-available { color: #8a7b78; font-size: 11px; line-height: 1.4; }
+.loyalty-reward-status { display: inline-flex; align-items: center; flex: none; gap: 8px; color: #75456c; font-size: 11px; line-height: 1.4; }
+.loyalty-reward-selected-label { color: #AF719D; font-weight: 700; }
+.loyalty-reward-dismiss { color: #756b70; cursor: pointer; font-size: 15px; font-weight: 500; line-height: 1; }
+.loyalty-reward-dismiss:hover, .loyalty-reward-dismiss:focus-visible { color: #AF719D; outline: none; }
+.loyalty-reward-available { flex: none; text-align: right; }
+.loyalty-reward-option.is-selected .loyalty-reward-option-copy strong, .loyalty-reward-option.is-selected .loyalty-reward-available { color: #75456c; }
