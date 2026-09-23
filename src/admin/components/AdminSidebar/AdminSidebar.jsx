@@ -22,6 +22,7 @@ const adminNavItems = [
   { key: 'inventory', label: 'Inventory', href: '/admin/inventory', icon: 'inventory' },
   { key: 'availability', label: 'Availability', href: '/admin/availability', icon: 'availability' },
   { key: 'customers', label: 'Customers', href: '/admin/customers', icon: 'customers' },
+  { key: 'loyalty-rewards', label: 'Loyalty Rewards', href: '/admin/loyalty-rewards', icon: 'loyalty' },
   { key: 'settings', label: 'Settings', href: '/admin/settings', icon: 'settings' },
 ]
 
@@ -43,6 +44,7 @@ const iconPaths = {
   custom: 'M5 5h14v10H8l-3 3V5Zm4 4h6M9 12h4',
   customers: 'M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm7-1a2.5 2.5 0 1 0 0-5M4 19a5 5 0 0 1 10 0M14 19a4 4 0 0 1 6 0',
   settings: 'M12 15.4a3.4 3.4 0 1 0 0-6.8 3.4 3.4 0 0 0 0 6.8Zm7.4-2.3a8.3 8.3 0 0 0 0-2.2l2-1.5-2-3.4-2.4 1a7.6 7.6 0 0 0-1.9-1.1L14.8 3H9.2l-.3 2.9A7.6 7.6 0 0 0 7 7L4.6 6l-2 3.4 2 1.5a8.3 8.3 0 0 0 0 2.2l-2 1.5 2 3.4L7 17a7.6 7.6 0 0 0 1.9 1.1l.3 2.9h5.6l.3-2.9A7.6 7.6 0 0 0 17 17l2.4 1 2-3.4-2-1.5Z',
+  loyalty: 'M12 3 14.8 8.7 21 9.6l-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2l1.1-6.2L3 9.6l6.2-.9L12 3Z',
   logout: 'M10 5H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4M14 8l4 4-4 4M18 12H9',
 }
 

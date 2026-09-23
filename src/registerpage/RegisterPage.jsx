@@ -428,11 +428,7 @@ function RegisterPage({
                   aria-invalid={errors.firstName ? 'true' : undefined}
                   aria-describedby={errors.firstName ? 'firstName-error' : undefined}
                 />
-                {errors.firstName ? (
-                  <span id="firstName-error" className="register-field-error">
-                    {errors.firstName}
-                  </span>
-                ) : null}
+                {errors.firstName ? <span id="firstName-error" className="register-field-error" role="alert">{errors.firstName}</span> : null}
               </label>
 
               <label className="login-field-group">
@@ -449,11 +445,7 @@ function RegisterPage({
                   aria-invalid={errors.lastName ? 'true' : undefined}
                   aria-describedby={errors.lastName ? 'lastName-error' : undefined}
                 />
-                {errors.lastName ? (
-                  <span id="lastName-error" className="register-field-error">
-                    {errors.lastName}
-                  </span>
-                ) : null}
+                {errors.lastName ? <span id="lastName-error" className="register-field-error" role="alert">{errors.lastName}</span> : null}
               </label>
             </div>
 
@@ -471,11 +463,7 @@ function RegisterPage({
                 aria-invalid={errors.email ? 'true' : undefined}
                 aria-describedby={errors.email ? 'email-error' : undefined}
               />
-              {errors.email ? (
-                <span id="email-error" className="register-field-error">
-                  {errors.email}
-                </span>
-              ) : null}
+              {errors.email ? <span id="email-error" className="register-field-error" role="alert">{errors.email}</span> : null}
             </label>
 
             <label className="login-field-group">
@@ -502,15 +490,12 @@ function RegisterPage({
                   <PasswordEyeIcon />
                 </button>
               </span>
-              {errors.password ? (
-                <span id="password-error" className="register-field-error">
-                  {errors.password}
-                </span>
-              ) : null}
+              {errors.password ? <span id="password-error" className="register-field-error" role="alert">{errors.password}</span> : null}
             </label>
           </div>
 
-          <label className="remember-option register-terms-option">
+          <div className="register-terms-group">
+            <label className="remember-option register-terms-option">
             <input
               id="terms"
               type="checkbox"
@@ -530,12 +515,9 @@ function RegisterPage({
                 Privacy Policy
               </button>
             </span>
-          </label>
-          {errors.terms ? (
-            <p id="terms-error" className="login-error register-message" role="alert">
-              {errors.terms}
-            </p>
-          ) : null}
+            </label>
+            {errors.terms ? <p id="terms-error" className="login-error register-message register-terms-error" role="alert">{errors.terms}</p> : null}
+          </div>
 
           {errors.form ? (
             <p className="login-error register-message" role="alert">

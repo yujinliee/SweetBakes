@@ -302,7 +302,11 @@ export async function saveAdminAvailabilitySettings(settings) {
     throw new Error('Unable to save availability settings.')
   }
 
-  return mapAvailabilitySettingsRow(data, normalizedSettings.blockedDates)
+  return mapAvailabilitySettingsRow({
+    ...data,
+    orderCounts: normalizedSettings.orderCounts,
+    orderCountsUnavailable: normalizedSettings.orderCountsUnavailable,
+  }, normalizedSettings.blockedDates)
 }
 
 export async function blockAdminDate(settings, dateValue, reason = 'Closed manually by admin') {

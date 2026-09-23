@@ -122,7 +122,7 @@ function getInitials(customer) {
   return parts[0].slice(0, 2).toUpperCase()
 }
 
-function CustomerDetailModal({ customer, onClose }) {
+export function CustomerDetailModal({ customer, onClose }) {
   const hasOrders = (customer.recentOrders || []).length > 0
 
   return (
@@ -203,7 +203,7 @@ function CustomerDetailModal({ customer, onClose }) {
   )
 }
 
-function Customers() {
+function Customers({ onNavigate }) {
   const selectAllRef = useRef(null)
   const filtersRef = useRef(null)
   const [searchValue, setSearchValue] = useState('')
@@ -212,7 +212,6 @@ function Customers() {
   const [rowsPerPage, setRowsPerPage] = useState(10)
   const [page, setPage] = useState(1)
   const [selectedIds, setSelectedIds] = useState(() => new Set())
-  const [managingCustomer, setManagingCustomer] = useState(null)
   const [customers, setCustomers] = useState([])
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(true)
   const [customersError, setCustomersError] = useState('')
@@ -466,7 +465,7 @@ function Customers() {
                       <button
                         type="button"
                         className="admin-customers-action-btn"
-                        onClick={() => setManagingCustomer(customer)}
+                        onClick={() => onNavigate?.(`/admin/customers/${encodeURIComponent(customer.id)}`)}
                       >
                         Manage
                       </button>
@@ -520,9 +519,6 @@ function Customers() {
         </div>
       </div>
 
-      {managingCustomer ? (
-        <CustomerDetailModal customer={managingCustomer} onClose={() => setManagingCustomer(null)} />
-      ) : null}
     </section>
   )
 }

@@ -1,19 +1,29 @@
 @import '../loginpage/LoginPage.css';
 
+.register-page {
+  height: auto;
+  min-height: 100vh;
+  overflow: visible;
+}
+
 .register-card {
   padding: 22px 40px 20px;
 }
 
 .register-page .login-page-content {
-  height: calc(100vh - 86px);
-  min-height: 0;
+  height: auto;
+  min-height: calc(100vh - 86px);
   margin: 86px auto 0;
-  overflow: hidden;
+  overflow: visible;
   padding: 0 40px 18px;
 }
 
 .register-card .login-brand {
   margin-bottom: 6px;
+}
+
+.register-card {
+  max-height: none;
 }
 
 .register-card .login-heading {
@@ -40,10 +50,11 @@
 }
 
 .register-field-error {
+  display: block;
   color: #b43b4a;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 14px;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 15px;
 }
 
 .register-card .login-field,
@@ -70,8 +81,12 @@
 }
 
 .register-terms-option {
-  margin-top: 10px;
+  margin-top: 0;
   line-height: 18px;
+}
+
+.register-terms-group {
+  margin-top: 10px;
 }
 
 .register-terms-option button {
@@ -104,12 +119,16 @@
   box-sizing: border-box;
   width: 100%;
   max-width: 100%;
-  margin-top: 8px;
+  margin: 8px 0 0;
   padding: 0;
   font-size: 12.5px;
   line-height: 16px;
   text-align: center;
   overflow-wrap: break-word;
+}
+
+.register-terms-error {
+  text-align: left;
 }
 
 @media (min-width: 700px) {
@@ -150,7 +169,8 @@
 
 @media (max-height: 750px) {
   .register-page .login-page-content {
-    height: calc(100vh - 78px);
+    height: auto;
+    min-height: calc(100vh - 78px);
     margin-top: 78px;
     padding-top: 0;
     padding-bottom: 14px;

@@ -110,3 +110,38 @@ export async function fetchAdminCustomers() {
     }
   })
 }
+
+export async function fetchAdminCustomerDetails(customerId) {
+  const { data: customer, error: customerError } = await supabase
+    .from('profiles').select(PROFILE_COLUMNS).eq('id', customerId).ilike('role', 'customer').maybeSingle()
+  if (customerError) throw customerError
+  if (!customer) return null
+  const { data: orders, error: ordersError } = await supabase
+    .from('orders')
+    .select(`${CUSTOMER_ORDER_COLUMNS}, order_items(id, product_name, product_type, quantity, subtotal)`)
+    .eq('customer_id', customerId).order('created_at', { ascending: false })
+  if (ordersError) throw ordersError
+  const validOrders = (orders || []).filter(isValidCustomerOrder)
+  return {
+    ...customer,
+    orders: validOrders,
+    stats: {
+      validOrderCount: validOrders.length,
+      totalSpent: validOrders.reduce((sum, order) => sum + (Number(order.total) || 0), 0),
+      lastOrder: validOrders[0] || null,
+      latestContactNumber: validOrders.find((order) => order.contact_number)?.contact_number || null,
+    },
+  }
+}
+
+export async function fetchAdminCustomerLoyalty(customerId) {
+  const { data, error } = await supabase.rpc('get_admin_customer_loyalty_state', { p_customer_id: customerId })
+  if (error) throw error
+  return data
+}
+
+export async function fetchAdminLoyaltyOverview() {
+  const { data, error } = await supabase.rpc('get_admin_loyalty_overview')
+  if (error) throw error
+  return data || { summary: {}, customers: [] }
+}

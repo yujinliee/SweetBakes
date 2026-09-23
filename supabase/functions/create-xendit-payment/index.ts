@@ -3,8 +3,8 @@ import { withSupabase } from "@supabase/server";
 import { createClient } from "@supabase/supabase-js";
 
 const XENDIT_SESSIONS_URL = "https://api.xendit.co/sessions";
+const XENDIT_CANCEL_SESSION_URL = (sessionId: string) => `https://api.xendit.co/sessions/${encodeURIComponent(sessionId)}/cancel`;
 const LOYALTY_DOWN_PAYMENT_PERCENT = 20;
-const LOYALTY_REQUIRED_COMPLETED_ORDERS = 2;
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, apikey, x-client-info, content-type",
@@ -204,56 +204,43 @@ export default {
       return jsonResponse({ error: paymentType === "regular" ? "This order does not have a valid total." : "This order does not have a valid required down payment." }, 400);
     }
 
-    // ── Backend-authoritative loyalty reward ────────────────────────────────
-    // The server decides eligibility from auth.uid() -> completed orders.
-    // Frontend-provided amount/discount/count fields are never trusted for the charge.
+    // ── Backend-authoritative loyalty reservation ──────────────────────────
+    // The client flag expresses intent only. Eligibility, cycle ownership,
+    // amount, and reservation state are decided by the database RPC.
     let voucherUsed = false;
     let voucherDiscountAmount = 0;
     let finalAmount = normalizedAmount;
+    let reservedRewardId: string | null = null;
 
     if (clientWantsVoucher) {
-      let completedCount = 0;
-      try {
-        const { data, error: rpcError } = await customerSupabase.rpc("get_customer_completed_order_count");
-        if (rpcError) {
-          console.error("[CREATE XENDIT PAYMENT] completed-order count error:", {
-            orderId,
-            userId: user.id,
-            code: rpcError.code ?? null,
-            message: rpcError.message ?? null,
-          });
-        }
-        completedCount = Number(data);
-      } catch (countError) {
-        console.error("[CREATE XENDIT PAYMENT] completed-order count threw:", {
+      const { data: reservation, error: reservationError } = await customerSupabase.rpc(
+        "reserve_customer_loyalty_reward",
+        { p_order_id: order.id },
+      ) as {
+        data: {
+          reward_reserved?: boolean;
+          reward_id?: string | null;
+          discount_amount?: number | string;
+          final_amount?: number | string;
+        } | null;
+        error: { code?: string; message?: string } | null;
+      };
+      if (reservationError || !reservation) {
+        console.error("[CREATE XENDIT PAYMENT] loyalty reservation failed", {
           orderId,
           userId: user.id,
-          error: countError instanceof Error ? countError.message : String(countError),
+          code: reservationError?.code ?? null,
+          message: reservationError?.message ?? null,
         });
+        return jsonResponse({ error: "Unable to prepare the loyalty reward reservation." }, 500);
       }
-      if (!Number.isFinite(completedCount)) completedCount = 0;
-
-      if (completedCount >= LOYALTY_REQUIRED_COMPLETED_ORDERS) {
-        voucherDiscountAmount = Math.round(normalizedAmount * (LOYALTY_DOWN_PAYMENT_PERCENT / 100) * 100) / 100;
-        finalAmount = Math.max(0, Math.round((normalizedAmount - voucherDiscountAmount) * 100) / 100);
-        voucherUsed = finalAmount > 0 && finalAmount < normalizedAmount;
-        console.log("[XENDIT LOYALTY] voucher applied", {
-          orderId,
-          userId: user.id,
-          completedOrders: completedCount,
-          originalDownPayment: normalizedAmount,
-          discountAmount: voucherDiscountAmount,
-          payableAmount: finalAmount,
-        });
-      } else {
-        console.log("[XENDIT LOYALTY] voucher denied - insufficient completed orders", {
-          orderId,
-          userId: user.id,
-          completedOrders: completedCount,
-          requiredCompletedOrders: LOYALTY_REQUIRED_COMPLETED_ORDERS,
-          serverAmount: normalizedAmount,
-        });
+      voucherUsed = reservation.reward_reserved === true;
+      reservedRewardId = voucherUsed ? reservation.reward_id ?? null : null;
+      if (voucherUsed && !reservedRewardId) {
+        return jsonResponse({ error: "Unable to identify the loyalty reward reservation." }, 500);
       }
+      voucherDiscountAmount = voucherUsed ? toMoney(reservation.discount_amount) : 0;
+      finalAmount = voucherUsed ? toMoney(reservation.final_amount) : normalizedAmount;
     }
 
     // Client-tamper guard: the charged amount is always computed here. If the
@@ -268,6 +255,12 @@ export default {
         originalDownPayment: normalizedAmount,
         voucherUsed,
       });
+      if (reservedRewardId) {
+        await ctx.supabaseAdmin.rpc("release_customer_loyalty_reservation", {
+          p_order_id: order.id,
+          p_session_id: null,
+        });
+      }
       return jsonResponse({
         error: "Payment amount does not match the calculated amount.",
         expected_amount: finalAmount,
@@ -316,6 +309,42 @@ export default {
     if (!secretKey) {
       console.error("[XENDIT] XENDIT_SECRET_KEY is not configured");
       return jsonResponse({ error: "Payment service is not configured." }, 500);
+    }
+
+    if (voucherUsed) {
+      const { data: existingReservation, error: existingReservationError } = await customerSupabase.rpc(
+        "get_customer_loyalty_reservation",
+        { p_order_id: order.id },
+      ) as {
+        data: { reserved?: boolean; session_id?: string | null; reservation_expires_at?: string | null } | null;
+        error: { message?: string } | null;
+      };
+      if (existingReservationError) {
+        return jsonResponse({ error: "Unable to verify the active payment reservation." }, 500);
+      }
+      if (existingReservation?.reserved && existingReservation.session_id) {
+        const existingSessionResponse = await fetch(`https://api.xendit.co/sessions/${encodeURIComponent(existingReservation.session_id)}`, {
+          headers: { Authorization: `Basic ${btoa(`${secretKey}:`)}` },
+        }).catch(() => null);
+        if (!existingSessionResponse?.ok) {
+          return jsonResponse({ error: "Unable to resume the active payment session." }, 502);
+        }
+        const existingSession = await existingSessionResponse.json() as Record<string, unknown>;
+        const existingPaymentUrl = typeof existingSession.payment_link_url === "string" ? existingSession.payment_link_url : null;
+        if (!existingPaymentUrl) {
+          return jsonResponse({ error: "The active payment session has no checkout URL." }, 502);
+        }
+        return jsonResponse({
+          paymentId: existingSession.payment_id ?? existingSession.payment_session_id ?? existingReservation.session_id,
+          referenceId: existingSession.reference_id ?? null,
+          status: existingSession.status ?? "ACTIVE",
+          paymentUrl: existingPaymentUrl,
+          amount: finalAmount,
+          originalDownPayment: normalizedAmount,
+          discountAmount: voucherDiscountAmount,
+          rewardApplied: true,
+        });
+      }
     }
 
     const orderReference = alphanumeric(
@@ -385,6 +414,7 @@ export default {
         },
       ],
       capture_method: "AUTOMATIC",
+      expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
       locale: "en",
       description: `Sweet Bakes ${paymentType === "regular" ? "payment" : voucherUsed ? "down payment (loyalty voucher)" : "down payment"} for order ${order.order_number ?? order.id}`.slice(0, 255),
       ...returnUrls,
@@ -401,6 +431,12 @@ export default {
         body: JSON.stringify(sessionPayload),
       });
     } catch {
+      if (reservedRewardId) {
+        await ctx.supabaseAdmin.rpc("release_customer_loyalty_reservation", {
+          p_order_id: order.id,
+          p_session_id: null,
+        });
+      }
       return jsonResponse({ error: "Unable to reach the payment service." }, 502);
     }
 
@@ -421,6 +457,12 @@ export default {
         message: xenditErrorBody.message ?? null,
         validationErrors: xenditErrorBody.errors ?? xenditErrorBody.validation_errors ?? null,
       });
+      if (reservedRewardId) {
+        await ctx.supabaseAdmin.rpc("release_customer_loyalty_reservation", {
+          p_order_id: order.id,
+          p_session_id: null,
+        });
+      }
       return jsonResponse({
         error: "Payment service rejected the payment request.",
         error_code: xenditErrorBody.error_code ?? null,
@@ -432,9 +474,59 @@ export default {
     const paymentUrl = typeof xenditErrorBody.payment_link_url === "string"
       ? xenditErrorBody.payment_link_url
       : null;
-    if (!paymentUrl) {
+    const paymentSessionId = typeof xenditErrorBody.payment_session_id === "string"
+      ? xenditErrorBody.payment_session_id
+      : null;
+    const returnedExpiresAt = typeof xenditErrorBody.expires_at === "string"
+      ? xenditErrorBody.expires_at
+      : null;
+    const returnedExpiryMs = returnedExpiresAt ? Date.parse(returnedExpiresAt) : NaN;
+    if (!paymentUrl || (reservedRewardId && (!paymentSessionId || !Number.isFinite(returnedExpiryMs)))) {
       console.error("[XENDIT] session response did not include payment_link_url");
+      if (reservedRewardId && paymentSessionId) {
+        await fetch(XENDIT_CANCEL_SESSION_URL(paymentSessionId), {
+          method: "POST",
+          headers: { Authorization: `Basic ${btoa(`${secretKey}:`)}` },
+        }).catch(() => undefined);
+      }
+      if (reservedRewardId) {
+        await ctx.supabaseAdmin.rpc("release_customer_loyalty_reservation", {
+          p_order_id: order.id,
+          p_session_id: null,
+        });
+      }
       return jsonResponse({ error: "Payment service returned no checkout URL." }, 502);
+    }
+
+    if (reservedRewardId) {
+      const { error: bindError } = await ctx.supabaseAdmin.rpc(
+        "bind_customer_loyalty_reservation_expiry",
+        {
+          p_order_id: order.id,
+          p_reward_id: reservedRewardId,
+          p_session_id: paymentSessionId,
+          p_expires_at: new Date(returnedExpiryMs).toISOString(),
+        },
+      );
+      if (bindError) {
+        console.error("[XENDIT] unable to bind returned session expiry", {
+          orderId: order.id,
+          rewardId: reservedRewardId,
+          paymentSessionId,
+          error: bindError.message ?? null,
+        });
+        const cancelResponse = await fetch(XENDIT_CANCEL_SESSION_URL(paymentSessionId), {
+          method: "POST",
+          headers: { Authorization: `Basic ${btoa(`${secretKey}:`)}` },
+        }).catch(() => null);
+        if (cancelResponse?.ok) {
+          await ctx.supabaseAdmin.rpc("release_customer_loyalty_reservation", {
+            p_order_id: order.id,
+            p_session_id: null,
+          });
+        }
+        return jsonResponse({ error: "Unable to safely finalize the payment reservation." }, 502);
+      }
     }
 
     return jsonResponse({

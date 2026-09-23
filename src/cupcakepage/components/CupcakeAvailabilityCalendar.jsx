@@ -23,7 +23,7 @@ const monthNames = [
 const weekdayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 function CupcakeAvailabilityCalendar({ selectedDate, validationError = '', onDateChange }) {
-  const availability = useAvailability()
+  const availability = useAvailability({ active: true })
   const [visibleMonth, setVisibleMonth] = useState(() => {
     const today = getTodayDate()
     return new Date(today.getFullYear(), today.getMonth(), 1)

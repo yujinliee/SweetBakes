@@ -9,6 +9,9 @@ type SessionData = {
   payment_session_id?: unknown;
   payment_id?: unknown;
   reference_id?: unknown;
+  created?: unknown;
+  updated?: unknown;
+  expires_at?: unknown;
   status?: unknown;
   currency?: unknown;
   amount?: unknown;
@@ -373,7 +376,34 @@ export default {
     });
 
     if (event === EXPIRED_EVENT) {
-      return jsonResponse({ received: true, result: "ignored_expired" });
+      const expiredStatus = typeof session.status === "string" ? session.status.toUpperCase() : "";
+      if (expiredStatus !== "EXPIRED" || !referenceId || !paymentSessionId) {
+        return jsonResponse({ received: true, result: "ignored_expired_invalid_payload" });
+      }
+      const expiredReference = referenceId.endsWith("DP") ? referenceId.slice(0, -2) : null;
+      if (!expiredReference) {
+        return jsonResponse({ received: true, result: "ignored_expired_regular_payment" });
+      }
+      const { data: expiredOrders } = await supabaseAdmin
+        .from("orders")
+        .select("id, order_number") as { data: Array<{ id: string; order_number: string | null }> | null };
+      const expiredOrder = (expiredOrders ?? []).find((candidate) => referenceForOrder(candidate) === referenceId) ?? null;
+      if (!expiredOrder) {
+        return jsonResponse({ received: true, result: "ignored_unknown_reference" });
+      }
+      const { data: releaseResult, error: releaseError } = await supabaseAdmin.rpc(
+        "release_customer_loyalty_reservation",
+        { p_order_id: expiredOrder.id, p_session_id: paymentSessionId },
+      );
+      if (releaseError) {
+        console.error("[XENDIT WEBHOOK] expired reservation release failed", {
+          orderId: expiredOrder.id,
+          paymentSessionId,
+          error: releaseError.message ?? null,
+        });
+        return jsonResponse({ error: "Unable to release the expired reservation." }, 500);
+      }
+      return jsonResponse({ received: true, result: releaseResult?.released ? "reservation_released" : "expired_noop", orderId: expiredOrder.id });
     }
     if (event !== COMPLETED_EVENT) {
       return jsonResponse({ received: true, result: "ignored_event" });
@@ -457,27 +487,52 @@ export default {
       return jsonResponse({ received: true, result: "ignored_order_state", orderId: order.id });
     }
 
-    let updateQuery = supabaseAdmin
-      .from("orders")
-      .update({
-        payment_status: "paid",
-        amount_paid: Math.round(amount * 100) / 100,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", order.id);
-    updateQuery = isRegularPayment
-      ? updateQuery.eq("order_status", "pending").in("payment_status", ["unpaid", "pending"])
-      : updateQuery.eq("order_status", "confirmed").eq("payment_status", "pending");
-    const { error: updateError } = await updateQuery;
-
-    if (updateError) {
-      console.error("[XENDIT WEBHOOK] order update failed", {
-        code: updateError.code ?? null,
-        message: updateError.message ?? null,
-        details: updateError.details ?? null,
-        hint: updateError.hint ?? null,
-      });
-      return jsonResponse({ error: "Unable to update the order." }, 500);
+    if (isRegularPayment) {
+      const { error: updateError } = await supabaseAdmin
+        .from("orders")
+        .update({
+          payment_status: "paid",
+          amount_paid: Math.round(amount * 100) / 100,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", order.id)
+        .eq("order_status", "pending")
+        .in("payment_status", ["unpaid", "pending"]);
+      if (updateError) {
+        console.error("[XENDIT WEBHOOK] order update failed", {
+          code: updateError.code ?? null,
+          message: updateError.message ?? null,
+          details: updateError.details ?? null,
+          hint: updateError.hint ?? null,
+        });
+        return jsonResponse({ error: "Unable to update the order." }, 500);
+      }
+    } else {
+      const rawUpdatedAt = typeof session.updated === "string" ? Date.parse(session.updated) : NaN;
+      const paidAt = Number.isFinite(rawUpdatedAt) ? new Date(rawUpdatedAt).toISOString() : new Date().toISOString();
+      const { data: completion, error: completionError } = await supabaseAdmin.rpc(
+        "complete_customer_loyalty_payment",
+        {
+          p_order_id: order.id,
+          p_session_id: paymentSessionId,
+          p_amount: Math.round(amount * 100) / 100,
+          p_paid_at: paidAt,
+        },
+      ) as { data: { result?: string; reward_consumed?: boolean } | null; error: { code?: string; message?: string } | null };
+      if (completionError) {
+        console.error("[XENDIT WEBHOOK] custom payment completion failed", {
+          orderId: order.id,
+          code: completionError.code ?? null,
+          message: completionError.message ?? null,
+        });
+        return jsonResponse({ error: "Unable to finalize the payment." }, 500);
+      }
+      if (completion?.result === "stale_session") {
+        return jsonResponse({ received: true, result: "ignored_stale_session", orderId: order.id });
+      }
+      if (completion?.result === "ignored_order_state") {
+        return jsonResponse({ received: true, result: "ignored_order_state", orderId: order.id });
+      }
     }
 
     console.log("[XENDIT WEBHOOK] payment verified", {

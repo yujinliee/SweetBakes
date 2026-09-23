@@ -9,6 +9,8 @@ import {
 let cachedSettings = null
 let cachedError = null
 let pendingAvailabilityRequest = null
+let lastForcedRefreshAt = 0
+const FRESHNESS_WINDOW_MS = 5000
 const availabilityListeners = new Set()
 
 const notifyAvailabilityListeners = () => {
@@ -19,6 +21,7 @@ async function loadAvailabilitySettings(force = false) {
   if (!force && cachedSettings) return cachedSettings
 
   if (!pendingAvailabilityRequest) {
+    if (force) lastForcedRefreshAt = Date.now()
     pendingAvailabilityRequest = fetchAvailabilitySettings()
       .then((settings) => {
         cachedSettings = settings
@@ -47,7 +50,11 @@ export function useAvailability({ active = false } = {}) {
   }))
 
   const refresh = useCallback(async () => {
-    setState((current) => ({ ...current, loading: true, error: null }))
+    if (Date.now() - lastForcedRefreshAt < FRESHNESS_WINDOW_MS && cachedSettings) {
+      return cachedSettings
+    }
+
+    setState((current) => ({ ...current, loading: !current.settings, error: null }))
 
     try {
       const settings = await loadAvailabilitySettings(true)
@@ -89,16 +96,17 @@ export function useAvailability({ active = false } = {}) {
     if (!active) return undefined
 
     const refreshActiveAvailability = () => {
+      if (document.visibilityState !== 'visible') return
       refresh().catch(() => {})
     }
 
     refreshActiveAvailability()
-    const intervalId = window.setInterval(refreshActiveAvailability, 25000)
     window.addEventListener('focus', refreshActiveAvailability)
+    document.addEventListener('visibilitychange', refreshActiveAvailability)
 
     return () => {
-      window.clearInterval(intervalId)
       window.removeEventListener('focus', refreshActiveAvailability)
+      document.removeEventListener('visibilitychange', refreshActiveAvailability)
     }
   }, [active, refresh])
 

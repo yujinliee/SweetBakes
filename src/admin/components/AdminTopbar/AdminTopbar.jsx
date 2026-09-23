@@ -16,6 +16,7 @@ const pageLabels = {
   '/admin/availability': 'Availability',
   '/admin/custom-orders': 'Custom Orders',
   '/admin/customers': 'Customers',
+  '/admin/loyalty-rewards': 'Loyalty Rewards',
   '/admin/settings': 'Settings',
 }
 

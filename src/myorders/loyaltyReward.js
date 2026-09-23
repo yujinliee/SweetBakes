@@ -1,70 +1,54 @@
 export const LOYALTY_DOWN_PAYMENT_PERCENT = 20
 export const LOYALTY_REQUIRED_COMPLETED_ORDERS = 2
 
-export function isLoyaltyEligible(completedOrdersCount) {
-  return Number(completedOrdersCount) >= LOYALTY_REQUIRED_COMPLETED_ORDERS
+const numberOr = (value, fallback = 0) => { const number = Number(value); return Number.isFinite(number) ? number : fallback }
+const nonNegativeInteger = (value) => Math.max(0, Math.floor(numberOr(value)))
+
+// Availability is always copied from the server-owned loyalty state. It is
+// intentionally never derived from completed orders in the browser.
+export function normalizeLoyaltyState(data) {
+  return {
+    completedOrders: nonNegativeInteger(data?.completed_orders),
+    threshold: Math.max(1, nonNegativeInteger(data?.threshold) || LOYALTY_REQUIRED_COMPLETED_ORDERS),
+    progress: nonNegativeInteger(data?.progress),
+    earnedRewards: nonNegativeInteger(data?.earned_rewards),
+    availableRewards: nonNegativeInteger(data?.available_rewards),
+    reservedRewards: nonNegativeInteger(data?.reserved_rewards),
+    usedRewards: nonNegativeInteger(data?.used_rewards),
+    discountPercent: Math.max(0, numberOr(data?.discount_percent, LOYALTY_DOWN_PAYMENT_PERCENT)),
+  }
 }
 
-// Display-floor calculation. The server recomputes every value authoritatively
-// from auth.uid() -> completed orders; nothing here is payment authority.
-export function calculateLoyaltyReward(requiredDownPayment, completedOrdersCount) {
-  const originalDownPayment = Math.max(0, Math.round((Number(requiredDownPayment) || 0) * 100) / 100)
-  const eligible = isLoyaltyEligible(completedOrdersCount)
-  const discountAmount = eligible
-    ? Math.round(originalDownPayment * (LOYALTY_DOWN_PAYMENT_PERCENT / 100) * 100) / 100
-    : 0
-  const payableAmount = Math.max(0, Math.round((originalDownPayment - discountAmount) * 100) / 100)
-  return { eligible, originalDownPayment, discountAmount, payableAmount, percent: LOYALTY_DOWN_PAYMENT_PERCENT }
+export function calculateRewardPreview(requiredDownPayment, discountPercent = LOYALTY_DOWN_PAYMENT_PERCENT) {
+  const originalDownPayment = Math.max(0, Math.round(numberOr(requiredDownPayment) * 100) / 100)
+  const percent = Math.max(0, numberOr(discountPercent, LOYALTY_DOWN_PAYMENT_PERCENT))
+  const discountAmount = Math.round(originalDownPayment * (percent / 100) * 100) / 100
+  return { originalDownPayment, discountAmount, payableAmount: Math.max(0, Math.round((originalDownPayment - discountAmount) * 100) / 100), percent }
 }
 
-// Guard the exact same rule the Edge Function applies: a client-supplied amount
-// is only accepted when it matches the server-calculated payable amount.
 export function clientAmountMatchesServer(clientAmount, serverPayableAmount) {
-  if (clientAmount === null || clientAmount === undefined || clientAmount === '') {
-    return { provided: false, matches: true }
-  }
+  if (clientAmount === null || clientAmount === undefined || clientAmount === '') return { provided: false, matches: true }
   const client = Number(clientAmount)
-  const server = Math.round((Number(serverPayableAmount) || 0) * 100) / 100
-  if (!Number.isFinite(client) || client <= 0) {
-    return { provided: true, matches: false }
-  }
-  const roundedClient = Math.round(client * 100) / 100
-  return { provided: true, matches: Math.abs(roundedClient - server) <= 0.009 }
+  const server = Math.round((numberOr(serverPayableAmount) || 0) * 100) / 100
+  if (!Number.isFinite(client) || client <= 0) return { provided: true, matches: false }
+  return { provided: true, matches: Math.abs(Math.round(client * 100) / 100 - server) <= 0.009 }
 }
 
-// Derive the full down-payment display state from persisted backend fields only,
-// so My Orders survives refresh without trusting frontend state or re-applying
-// an unlocked reward by accident.
-export function getCustomDownPaymentState(order, completedOrdersCount = 0) {
-  const originalDownPayment = Math.max(0, Math.round((Number(order?.required_down_payment) || 0) * 100) / 100)
-  const total = Math.max(0, Math.round((Number(order?.total) || 0) * 100) / 100)
+export function getCustomDownPaymentState(order) {
+  const originalDownPayment = Math.max(0, Math.round(numberOr(order?.required_down_payment) * 100) / 100)
+  const total = Math.max(0, Math.round(numberOr(order?.total) * 100) / 100)
   const rewardApplied = Boolean(order?.loyalty_reward_applied)
   const persistedDue = Number(order?.payment_amount_due)
   const hasPersistedSession = Number.isFinite(persistedDue) && persistedDue > 0
-  const discountAmount = rewardApplied
-    ? Math.max(0, Math.round((Number(order?.loyalty_discount_amount) || 0) * 100) / 100)
-    : 0
-  const payableAmount = hasPersistedSession
-    ? Math.max(0, Math.round(persistedDue * 100) / 100)
-    : originalDownPayment
-  const amountPaid = Math.max(0, Math.round((Number(order?.amount_paid) || 0) * 100) / 100)
+  const discountAmount = rewardApplied ? Math.max(0, Math.round(numberOr(order?.loyalty_discount_amount) * 100) / 100) : 0
+  const payableAmount = hasPersistedSession ? Math.max(0, Math.round(persistedDue * 100) / 100) : originalDownPayment
+  const amountPaid = Math.max(0, Math.round(numberOr(order?.amount_paid) * 100) / 100)
   const paid = ['paid', 'verified', 'payment_verified'].includes(String(order?.payment_status || '').toLowerCase())
-  const remainingBalance = Math.max(0, Math.round((total - amountPaid) * 100) / 100)
-  const eligible = isLoyaltyEligible(completedOrdersCount)
-  const percent = rewardApplied
-    ? Number(order?.loyalty_discount_percent) || LOYALTY_DOWN_PAYMENT_PERCENT
-    : LOYALTY_DOWN_PAYMENT_PERCENT
   return {
-    originalDownPayment,
-    total,
-    percent,
-    discountAmount,
-    payableAmount,
-    amountPaid,
-    remainingBalance,
-    rewardApplied,
-    hasPersistedSession,
-    paid,
-    eligible,
+    originalDownPayment, total,
+    percent: rewardApplied ? numberOr(order?.loyalty_discount_percent, LOYALTY_DOWN_PAYMENT_PERCENT) : LOYALTY_DOWN_PAYMENT_PERCENT,
+    discountAmount, payableAmount, amountPaid,
+    remainingBalance: Math.max(0, Math.round((total - amountPaid) * 100) / 100),
+    rewardApplied, hasPersistedSession, paid,
   }
 }

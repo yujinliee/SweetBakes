@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
 import { ADMIN_DASHBOARD_ROUTE } from '../admin/adminRouteConstants.js'
 import { SiteFooter, SiteTopbar } from '../landingpage/LandingPage.jsx'
 import { getOrderProgressStage, getOrderProgressStages, getOrderProgressLabel, isRegularProgressOrder } from '../services/orderStatusDisplay.js'
@@ -12,7 +12,7 @@ import OrderReviewModal from './OrderReviewModal.jsx'
 import { ORDER_TABS, EMPTY_MESSAGES, attachOrderReviews, getOrderTabCounts, matchesOrderTab, isAwaitingPrice, historyStatus, itemDescription, referenceImages, getHistoryItems } from './orderHistory.js'
 import { attachCatalogImages, itemImage, itemFallback } from './orderHistoryImages.js'
 import { formatDisplayTime } from '../components/timeUtils.js'
-import { calculateLoyaltyReward, getCustomDownPaymentState } from './loyaltyReward.js'
+import { calculateRewardPreview, getCustomDownPaymentState, normalizeLoyaltyState } from './loyaltyReward.js'
 import { RewardsTagIcon, RewardsHeader, RewardsReveal, RewardsEmpty } from '../components/RewardsAccordion.jsx'
 import '../components/rewardsAccordion.css'
 import './MyOrdersPage.css'
@@ -43,31 +43,16 @@ function StatusProgress({ order }) {
   </div>
 }
 
-function PaymentPanel({ order, completedOrdersCount = 0 }) {
+function PaymentPanel({ order, loyaltyState, loyaltyStateStatus = 'loading', onLoyaltyRefresh }) {
   const [isCreatingPayment, setIsCreatingPayment] = useState(false)
   const [paymentError, setPaymentError] = useState('')
   const [isRewardsExpanded, setIsRewardsExpanded] = useState(false)
   const [rewardAppliedLocally, setRewardAppliedLocally] = useState(false)
-  const [completedOrderCount, setCompletedOrderCount] = useState(completedOrdersCount)
-  const [eligibilityStatus, setEligibilityStatus] = useState('pending')
-
-  const reward = getCustomDownPaymentState(order, completedOrderCount)
-  const previewReward = calculateLoyaltyReward(reward.originalDownPayment, completedOrderCount)
-
-  useEffect(() => {
-    let isMounted = true
-    supabase.rpc('get_customer_completed_order_count')
-      .then(({ data, error }) => {
-        if (!isMounted) return
-        if (!error && Number.isFinite(Number(data))) {
-          setCompletedOrderCount(Number(data))
-          setEligibilityStatus('ready')
-        } else {
-          setEligibilityStatus('error')
-        }
-      })
-    return () => { isMounted = false }
-  }, [])
+  const [serverPayment, setServerPayment] = useState(null)
+  const reward = getCustomDownPaymentState(order)
+  const availableRewards = loyaltyStateStatus === 'ready' ? loyaltyState?.availableRewards || 0 : 0
+  const discountPercent = loyaltyState?.discountPercent || 20
+  const previewReward = calculateRewardPreview(reward.originalDownPayment, discountPercent)
 
   const canPay = String(order.order_status || '').toLowerCase() === 'confirmed'
     && ['pending', 'unpaid'].includes(String(order.payment_status || '').toLowerCase())
@@ -89,13 +74,13 @@ function PaymentPanel({ order, completedOrdersCount = 0 }) {
   if (!canPay) return null
 
   const hasPersistedSession = reward.hasPersistedSession
-  const hasApplied = reward.rewardApplied || (!hasPersistedSession && reward.eligible && rewardAppliedLocally)
-  const displayDiscount = hasPersistedSession ? reward.discountAmount : (hasApplied ? previewReward.discountAmount : 0)
-  const displayPayable = hasPersistedSession ? reward.payableAmount : (hasApplied ? previewReward.payableAmount : reward.originalDownPayment)
+  const hasApplied = reward.rewardApplied || (!hasPersistedSession && rewardAppliedLocally)
+  const displayDiscount = serverPayment ? Number(serverPayment.discountAmount) || 0 : (hasPersistedSession ? reward.discountAmount : (hasApplied ? previewReward.discountAmount : 0))
+  const displayPayable = serverPayment ? Number(serverPayment.amount) || reward.originalDownPayment : (hasPersistedSession ? reward.payableAmount : (hasApplied ? previewReward.payableAmount : reward.originalDownPayment))
 
   const handleToggleRewards = () => setIsRewardsExpanded((current) => !current)
   const handleApplyReward = () => {
-    if (hasPersistedSession) return
+    if (hasPersistedSession || loyaltyStateStatus !== 'ready' || availableRewards < 1) return
     setRewardAppliedLocally(true)
     setIsRewardsExpanded(false)
   }
@@ -108,6 +93,7 @@ function PaymentPanel({ order, completedOrdersCount = 0 }) {
     if (isCreatingPayment || !canPay) return
     setIsCreatingPayment(true)
     setPaymentError('')
+    setServerPayment(null)
     let responseError = null
     try {
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
@@ -120,6 +106,7 @@ function PaymentPanel({ order, completedOrdersCount = 0 }) {
       const body = {
         orderId: order.id,
         paymentType: 'custom_down_payment',
+        appliedVoucher: Boolean(hasApplied),
       }
       if (hasApplied) {
         body.appliedVoucher = true
@@ -147,10 +134,19 @@ function PaymentPanel({ order, completedOrdersCount = 0 }) {
         }
         throw invokeError
       }
+      if (!Number.isFinite(Number(invokeData?.amount)) || !Number.isFinite(Number(invokeData?.discountAmount)) || typeof invokeData?.rewardApplied !== 'boolean') throw new Error('Payment service returned an incomplete payment summary.')
+      setServerPayment({ amount: invokeData.amount, discountAmount: invokeData.discountAmount, rewardApplied: invokeData.rewardApplied })
+      if (invokeData.rewardApplied === false && hasApplied) {
+        setRewardAppliedLocally(false)
+        await onLoyaltyRefresh?.()
+      }
       if (!invokeData?.paymentUrl || typeof invokeData.paymentUrl !== 'string') throw new Error('Payment service returned no checkout URL.')
       window.location.assign(invokeData.paymentUrl)
     } catch (error) {
       console.error('[XENDIT PAYMENT]', error)
+      setRewardAppliedLocally(false)
+      setServerPayment(null)
+      try { await onLoyaltyRefresh?.() } catch { /* Refresh failure is already represented by the loyalty state. */ }
       setPaymentError(responseError || 'Unable to start payment. Please try again.')
     } finally {
       setIsCreatingPayment(false)
@@ -167,7 +163,7 @@ function PaymentPanel({ order, completedOrdersCount = 0 }) {
           <RewardsTagIcon />
           <div className="rewards-applied">
             <span className="rewards-applied-title">Loyalty Reward</span>
-            <span className="rewards-applied-sub">20% OFF Down Payment</span>
+            <span className="rewards-applied-sub">{reward.percent}% OFF Down Payment</span>
           </div>
           {!hasPersistedSession ? (
             <button type="button" className="rewards-remove" onClick={handleRemoveReward} aria-label="Remove loyalty reward">×</button>
@@ -185,16 +181,18 @@ function PaymentPanel({ order, completedOrdersCount = 0 }) {
       <div className="rewards-card rewards-dropdown">
         <RewardsHeader isExpanded={isRewardsExpanded} label="View available rewards" onClick={handleToggleRewards} ariaControls="my-orders-rewards-panel" />
         <RewardsReveal id="my-orders-rewards-panel" isOpen={isRewardsExpanded}>
-          {eligibilityStatus === 'pending' ? (
+          {loyaltyStateStatus === 'loading' ? (
             <p className="rewards-note">Checking your rewards...</p>
-          ) : (eligibilityStatus === 'error' || !reward.eligible) ? (
-            <RewardsEmpty title="No rewards available yet." sub="Complete 2 eligible orders to unlock this reward." />
+          ) : loyaltyStateStatus === 'error' ? (
+            <RewardsEmpty title="Rewards unavailable right now." sub="You can still pay the normal custom-order down payment." />
+          ) : availableRewards < 1 ? (
+            <RewardsEmpty title="No rewards available right now." sub={`${Math.max(0, (loyaltyState?.threshold || 2) - (loyaltyState?.progress || 0))} more completed order${Math.max(0, (loyaltyState?.threshold || 2) - (loyaltyState?.progress || 0)) === 1 ? '' : 's'} to earn your next reward.`} />
           ) : (
             <div className="my-orders-rewards-offer">
               <div className="my-orders-rewards-offer-copy">
                 <span className="my-orders-rewards-offer-title">Loyalty Reward</span>
-                <span className="my-orders-rewards-offer-sub">20% OFF Down Payment</span>
-                <span className="my-orders-rewards-offer-eligibility">Earned after 2 completed orders</span>
+                <span className="my-orders-rewards-offer-sub">{discountPercent}% OFF one custom-order down payment</span>
+                <span className="my-orders-rewards-offer-eligibility">{availableRewards} reward{availableRewards === 1 ? '' : 's'} available</span>
               </div>
               <button type="button" className="rewards-apply" onClick={handleApplyReward}>Apply</button>
             </div>
@@ -259,7 +257,7 @@ function PaymentReturnNotice({ order, paymentReturn, onRetry }) {
   return <section className="my-orders-payment-return" role="status"><strong>Confirming your payment...</strong><p>We’re waiting for payment verification from Xendit.</p></section>
 }
 
-function OrderDetails({ order, onClose, onImageOpen, paymentReturn, onPaymentRetry, completedOrdersCount = 0 }) {
+function OrderDetails({ order, onClose, onImageOpen, paymentReturn, onPaymentRetry, loyaltyState, loyaltyStateStatus, onLoyaltyRefresh }) {
   useLayoutEffect(() => {
     const root = document.documentElement
     const body = document.body
@@ -317,7 +315,7 @@ function OrderDetails({ order, onClose, onImageOpen, paymentReturn, onPaymentRet
         {items.length > 1 ? <div className="my-orders-detail-total"><span>Order Total</span><strong className="my-orders-detail-price">{isAwaitingPrice(order) ? 'Awaiting Price' : formatCurrency(finalPrice)}</strong></div> : null}
         {referenceImages.length ? <div className="my-orders-detail-references"><h4>Reference Images</h4><div className="my-orders-reference-images">{referenceImages.map((image, index) => <button type="button" key={image.path || image.signed_url || index} onClick={() => onImageOpen(image.signed_url || image.url)}><img src={image.signed_url || image.url} alt={image.name || 'Order reference'} /></button>)}</div></div> : null}
 <PaymentReturnNotice order={order} paymentReturn={paymentReturn} onRetry={onPaymentRetry} />
-        {isCustomOrder(order) ? <PaymentPanel order={order} completedOrdersCount={completedOrdersCount} /> : <RegularPaymentPanel order={order} />}
+        {isCustomOrder(order) ? <PaymentPanel order={order} loyaltyState={loyaltyState} loyaltyStateStatus={loyaltyStateStatus} onLoyaltyRefresh={onLoyaltyRefresh} /> : <RegularPaymentPanel order={order} />}
       </section>
       <section className="my-orders-detail-card"><h3>Fulfillment Details</h3><dl className="my-orders-detail-fulfillment"><div><dt>Preferred Date</dt><dd>{formatDate(order.preferred_date)}</dd></div><div><dt>Preferred Time</dt><dd>{formatTime(order.preferred_time)}</dd></div><div className="my-orders-detail-wide"><dt>Order Method</dt><dd>{isDelivery ? 'Delivery' : 'Store Pickup'}</dd></div>{isDelivery ? <><div className="my-orders-detail-wide"><dt>Delivery Address</dt><dd>{address || 'Not provided'}</dd></div>{order.different_recipient ? <div className="my-orders-detail-wide"><dt>Recipient</dt><dd>{order.recipient_name || 'Not provided'} {order.recipient_contact || ''}</dd></div> : null}</> : <div className="my-orders-detail-wide"><dt>Pickup Location</dt><dd>Sweet Bakes store pickup</dd></div>}</dl></section>
     </div>
@@ -356,6 +354,20 @@ function OrderHistoryCard({ order, onSelect, onReview }) {
 
 function MyOrdersPage({ onNavigate, onCustomerLogout, isCustomerAuthenticated = false }) {
   const [orders, setOrders] = useState([]); const [selectedOrder, setSelectedOrder] = useState(null); const [previewImage, setPreviewImage] = useState(''); const [isLoading, setIsLoading] = useState(true); const [error, setError] = useState(''); const [verifiedRegularOrder, setVerifiedRegularOrder] = useState(null); const [paymentReturn, setPaymentReturn] = useState(() => { const params = new URLSearchParams(window.location.search); const payment = params.get('payment'); const orderId = params.get('order'); if (!orderId || !['success', 'cancelled'].includes(payment)) return null; return { orderId, status: payment === 'success' ? 'checking' : 'cancelled' } })
+  const [loyaltyState, setLoyaltyState] = useState(null)
+  const [loyaltyStateStatus, setLoyaltyStateStatus] = useState('loading')
+  const refreshLoyaltyState = useCallback(async () => {
+    setLoyaltyStateStatus('loading')
+    const { data, error: loyaltyError } = await supabase.rpc('get_customer_loyalty_state')
+    if (loyaltyError) {
+      setLoyaltyStateStatus('error')
+      throw loyaltyError
+    }
+    const normalized = normalizeLoyaltyState(data)
+    setLoyaltyState(normalized)
+    setLoyaltyStateStatus('ready')
+    return normalized
+  }, [])
   useEffect(() => {
     if (!paymentReturn || !shouldConsumePaymentReturn(paymentReturn.status)) return
     const url = new URL(window.location.href)
@@ -390,6 +402,7 @@ function MyOrdersPage({ onNavigate, onCustomerLogout, isCustomerAuthenticated = 
     let initialLoad = true
     const scheduleRefresh = () => {
       if (!isMounted) return
+      refreshLoyaltyState().catch((loyaltyError) => console.error('[MY ORDERS] loyalty state:', loyaltyError))
       if (loading) { refreshQueued = true; return }
       window.clearTimeout(refreshTimer)
       refreshTimer = window.setTimeout(() => { refreshTimer = null; loadOrders() }, 150)
@@ -455,7 +468,7 @@ function MyOrdersPage({ onNavigate, onCustomerLogout, isCustomerAuthenticated = 
       authSubscription.unsubscribe()
       if (channel) supabase.removeChannel(channel)
     }
-  }, [onNavigate])
+  }, [onNavigate, refreshLoyaltyState])
   useEffect(() => {
     if (!paymentReturn?.orderId || !orders.length || paymentReturn.status === 'verified') return undefined
     const returnedOrder = orders.find((order) => order.id === paymentReturn.orderId)
@@ -487,6 +500,7 @@ function MyOrdersPage({ onNavigate, onCustomerLogout, isCustomerAuthenticated = 
           try { confirmedItems = await loadConfirmedItems(supabase, freshOrder.id) } catch (error) { logPaymentReturn('details-error', { errorCode: error.code }); throw error }
           const verifiedOrder = { ...freshOrder, order_items: await attachCatalogImages(confirmedItems) }
           if (!isMounted) return
+          await refreshLoyaltyState().catch((loyaltyError) => console.error('[MY ORDERS] loyalty refresh:', loyaltyError))
           if (isCustomOrder(verifiedOrder)) removePurchasedCartItems(verifiedOrder)
           else {
             let receipt = null
@@ -511,7 +525,7 @@ function MyOrdersPage({ onNavigate, onCustomerLogout, isCustomerAuthenticated = 
     }
     refreshPaymentStatus().catch((error) => { if (isMounted) { logPaymentReturn('verification-error', { errorCode: error.code, httpStatus: error.context?.status }); setPaymentReturn((current) => current ? { ...current, status: 'error', stage: 'verification' } : current) } })
     return () => { isMounted = false }
-  }, [paymentReturn?.orderId, paymentReturn?.status])
+  }, [paymentReturn?.orderId, paymentReturn?.status, refreshLoyaltyState])
   useEffect(() => {
     if (!selectedOrder?.id) return undefined
     let isMounted = true
@@ -533,6 +547,6 @@ function MyOrdersPage({ onNavigate, onCustomerLogout, isCustomerAuthenticated = 
           {activeTab === 'To Receive' ? <p className="my-orders-tab-note">Ready for store pickup.</p> : null}
           <div className="my-orders-list">{visibleOrders.map((order) => <OrderHistoryCard key={order.id} order={order} onSelect={handleSelectOrder} onReview={activeTab === 'To Review' ? setReviewOrder : undefined} />)}</div>
         </>}
-</div></section></main><SiteFooter />{reviewOrder ? <OrderReviewModal key={reviewOrder.id} order={reviewOrder} onSubmitted={handleReviewSubmitted} onClose={() => setReviewOrder(null)} /> : null}{selectedOrder ? <OrderDetails order={selectedOrder} paymentReturn={paymentReturn} onPaymentRetry={() => setPaymentReturn((current) => ({ ...current, status: 'checking' }))} onClose={() => setSelectedOrder(null)} onImageOpen={setPreviewImage} completedOrdersCount={orders.filter((order) => order.order_status === 'completed').length} /> : null}{previewImage ? <div className="my-orders-image-backdrop" role="presentation" onClick={() => setPreviewImage('')}><img src={previewImage} alt="Larger order reference" /></div> : null}{verifiedRegularOrder ? <PaymentSuccessModal order={verifiedRegularOrder} onClose={() => setVerifiedRegularOrder(null)} onPrimary={() => { setVerifiedRegularOrder(null); setActiveTab('All'); handleSelectOrder(verifiedRegularOrder) }} onContinue={() => { setVerifiedRegularOrder(null); onNavigate?.('/#sweet-treats') }} /> : null}</div>
+</div></section></main><SiteFooter />{reviewOrder ? <OrderReviewModal key={reviewOrder.id} order={reviewOrder} onSubmitted={handleReviewSubmitted} onClose={() => setReviewOrder(null)} /> : null}{selectedOrder ? <OrderDetails order={selectedOrder} paymentReturn={paymentReturn} onPaymentRetry={() => setPaymentReturn((current) => ({ ...current, status: 'checking' }))} onClose={() => setSelectedOrder(null)} onImageOpen={setPreviewImage} loyaltyState={loyaltyState} loyaltyStateStatus={loyaltyStateStatus} onLoyaltyRefresh={refreshLoyaltyState} /> : null}{previewImage ? <div className="my-orders-image-backdrop" role="presentation" onClick={() => setPreviewImage('')}><img src={previewImage} alt="Larger order reference" /></div> : null}{verifiedRegularOrder ? <PaymentSuccessModal order={verifiedRegularOrder} onClose={() => setVerifiedRegularOrder(null)} onPrimary={() => { setVerifiedRegularOrder(null); setActiveTab('All'); handleSelectOrder(verifiedRegularOrder) }} onContinue={() => { setVerifiedRegularOrder(null); onNavigate?.('/#sweet-treats') }} /> : null}</div>
 }
 export default MyOrdersPage
