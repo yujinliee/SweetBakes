@@ -1,5 +1,8 @@
 .admin-loyalty-page { max-width: 1280px; }
 .admin-loyalty-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-end; margin-bottom: 1.25rem; }
+.admin-loyalty-heading-actions { display: flex; align-items: center; gap: .5rem; }
+.admin-loyalty-maintenance { padding: .45rem .65rem; border: 1px solid #ead9df; border-radius: 7px; background: #fffafb; color: #8b3f52; cursor: pointer; font-size: .75rem; }
+.admin-loyalty-maintenance-result { margin-bottom: 1rem; padding: .65rem .8rem; border: 1px solid #e8e3eb; border-radius: 7px; background: #fff; color: #635a69; font-size: .78rem; }
 .admin-loyalty-eyebrow { margin: 0 0 .25rem; color: #8b5cae; font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .admin-loyalty-heading h2 { margin: 0; color: #29212f; font-size: 1.65rem; }
 .admin-loyalty-heading p:last-child { margin: .35rem 0 0; color: #756d7c; font-size: .9rem; }

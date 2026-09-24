@@ -383,6 +383,10 @@ const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   }, [])
 
   useEffect(() => {
+    setIsAccountMenuOpen(false)
+  }, [currentPathname])
+
+  useEffect(() => {
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
         setIsAccountMenuOpen(false)
@@ -475,14 +479,10 @@ const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
           <div
             className={`topbar-account${isAccountMenuOpen ? ' topbar-account--open' : ''}`}
             ref={accountMenuRef}
-            onMouseEnter={() => {
-              if (isAccountMenuEnabled) setIsAccountMenuOpen(true)
-            }}
-            onMouseLeave={() => setIsAccountMenuOpen(false)}
           >
-              <a
+              <button
+                type="button"
                 className="topbar-login topbar-login-link"
-                href={isAccountMenuEnabled ? profileHref : loginHref}
                 aria-label={isAccountMenuEnabled ? 'Account menu' : 'Login'}
                 aria-haspopup={isAccountMenuEnabled ? 'menu' : undefined}
                 aria-expanded={isAccountMenuEnabled ? isAccountMenuOpen : undefined}
@@ -500,7 +500,7 @@ const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
                     alt=""
                   />
                 </span>
-              </a>
+              </button>
 
               {isAccountMenuEnabled && isAccountMenuOpen ? (
                 <div className="topbar-account-menu" role="menu">
