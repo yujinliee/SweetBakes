@@ -198,14 +198,6 @@ export default {
         if (error) return respond({ error: "Unable to release the expired payment session safely." }, 409);
       }
     }
-    if (sessionId) {
-      const { error } = await ctx.supabaseAdmin.from("orders").update({ xendit_payment_session_id: sessionId }).eq("id", order.id).eq("payment_status", "unpaid");
-      if (error) {
-        await fetch(XENDIT_CANCEL_SESSION_URL(sessionId), { method: "POST", headers: { Authorization: `Basic ${btoa(`${secretKey}:`)}` } }).catch(() => undefined);
-        if (rewardId) await ctx.supabaseAdmin.rpc("release_customer_loyalty_reservation", { p_order_id: order.id, p_session_id: null });
-        return respond({ error: "Unable to safely persist the payment session." }, 502);
-      }
-    }
     if (rewardId) {
       const { data: activeReservation, error: activeReservationError } = await customerSupabase!.rpc("get_customer_loyalty_reservation", { p_order_id: order.id }) as { data: { reserved?: boolean; session_id?: string | null } | null; error: { message?: string } | null };
       if (activeReservationError) return respond({ error: "Unable to verify the active payment reservation." }, 500);
@@ -267,6 +259,14 @@ export default {
       if (rewardId && sessionId) await fetch(XENDIT_CANCEL_SESSION_URL(sessionId), { method: "POST", headers: { Authorization: `Basic ${btoa(`${secretKey}:`)}` } }).catch(() => undefined);
       if (rewardId) await ctx.supabaseAdmin.rpc("release_customer_loyalty_reservation", { p_order_id: order.id, p_session_id: null });
       return respond({ error: "Payment service returned an incomplete checkout session." }, 502);
+    }
+    if (sessionId) {
+      const { error } = await ctx.supabaseAdmin.from("orders").update({ xendit_payment_session_id: sessionId }).eq("id", order.id).eq("payment_status", "unpaid");
+      if (error) {
+        await fetch(XENDIT_CANCEL_SESSION_URL(sessionId), { method: "POST", headers: { Authorization: `Basic ${btoa(`${secretKey}:`)}` } }).catch(() => undefined);
+        if (rewardId) await ctx.supabaseAdmin.rpc("release_customer_loyalty_reservation", { p_order_id: order.id, p_session_id: null });
+        return respond({ error: "Unable to safely persist the payment session." }, 502);
+      }
     }
     if (rewardId) {
       const { error } = await ctx.supabaseAdmin.rpc("bind_customer_loyalty_reservation_expiry", { p_order_id: order.id, p_reward_id: rewardId, p_session_id: sessionId, p_expires_at: new Date(Date.parse(expiresAt)).toISOString() });
