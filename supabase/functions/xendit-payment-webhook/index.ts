@@ -1,6 +1,7 @@
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { withSupabase } from "@supabase/server";
 import { createClient } from "@supabase/supabase-js";
+import { expectedPaymentAmount, paymentAmountMatches } from "./amountValidation.js";
 
 const COMPLETED_EVENT = "payment_session.completed";
 const EXPIRED_EVENT = "payment_session.expired";
@@ -459,14 +460,8 @@ export default {
     // The discounted down payment (payment_amount_due) is the authoritative
     // charged amount recorded when the payment session was created. Fall back to
     // the full required_down_payment only when no session amount was persisted.
-    const expectedAmount = Number(
-      isRegularPayment
-        ? order.total
-        : Number(order.payment_amount_due) > 0
-          ? order.payment_amount_due
-          : order.required_down_payment,
-    );
-    if (!Number.isFinite(expectedAmount) || Math.round(expectedAmount * 100) !== Math.round(amount * 100)) {
+    const expectedAmount = expectedPaymentAmount(order, isRegularPayment);
+    if (!paymentAmountMatches(expectedAmount, amount)) {
       console.error("[XENDIT WEBHOOK] amount mismatch", {
         event,
         referenceId,
