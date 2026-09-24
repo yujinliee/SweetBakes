@@ -233,7 +233,7 @@ function CouponsRewardsRow({ isAuthenticated, appliedReward, isExpanded, onToggl
           <p className="rewards-note">Loading your rewards...</p>
         ) : error ? (
           <p className="rewards-note rewards-note--error">{error}</p>
-        ) : loyaltyState?.availableRewards > 0 ? (
+        ) : isAuthenticated && loyaltyState?.availableRewards > 0 ? (
           <LoyaltyRewardOption availableRewards={loyaltyState.availableRewards} disabled={!isAuthenticated} onClick={() => onApply({ id: 'customer-loyalty-reward', title: '20% Off Reward', description: 'Get 20% off your merchandise subtotal.', discountType: 'percent', percent: 20 })} description="Get 20% off your merchandise subtotal." />
         ) : rewards.length === 0 ? (
           <RewardsEmpty title="No rewards available yet." sub="Complete eligible orders to unlock future rewards." />
@@ -286,6 +286,31 @@ function CartPage({
   const [rewardsLoading, setRewardsLoading] = useState(false)
   const [rewardsError, setRewardsError] = useState('')
   const items = useSyncExternalStore(subscribeCart, getCartItems)
+
+  useEffect(() => {
+    if (!isCustomerAuthenticated) return undefined
+
+    let cancelled = false
+    queueMicrotask(() => {
+      if (cancelled) return
+      setRewardsLoading(true)
+      setRewardsError('')
+    })
+    supabase.rpc('get_customer_loyalty_state').then(({ data, error }) => {
+      if (cancelled) return
+      if (error) throw error
+      setLoyaltyState(normalizeLoyaltyState(data))
+      setAvailableRewards([])
+      setRewardsLoading(false)
+    }).catch(() => {
+      if (cancelled) return
+      setRewardsError('Unable to load your rewards. Please try again.')
+      setRewardsLoading(false)
+    })
+
+    return () => { cancelled = true }
+  }, [isCustomerAuthenticated])
+
   const availability = useAvailability({ active: true })
   const serviceHoursLabel = availability.serviceHoursLabel || 'Loading...'
   const timeAvailabilityMessage = availability.serviceHoursLabel
@@ -780,19 +805,6 @@ function CartPage({
     }
     const nextExpanded = !isRewardsExpanded
     setIsRewardsExpanded(nextExpanded)
-    if (!nextExpanded) return
-    setRewardsError('')
-    setRewardsLoading(true)
-    try {
-      const { data, error } = await supabase.rpc('get_customer_loyalty_state')
-      if (error) throw error
-      setLoyaltyState(normalizeLoyaltyState(data))
-      setAvailableRewards([])
-    } catch {
-      setRewardsError('Unable to load your rewards. Please try again.')
-    } finally {
-      setRewardsLoading(false)
-    }
   }
 
   const handleApplyReward = (reward) => {
@@ -1353,7 +1365,7 @@ function CartPage({
                   className={`cart-rewards-section${isRewardsExpanded ? ' is-expanded' : ''}`}
                   aria-label="Coupons and rewards"
                 >
-                  <h3 className="cart-rewards-heading">Coupons &amp; Rewards {loyaltyState?.availableRewards > 0 ? <span className="rewards-count-badge" aria-label={`${loyaltyState.availableRewards} available reward${loyaltyState.availableRewards === 1 ? '' : 's'}`}>{loyaltyState.availableRewards}</span> : null}</h3>
+                  <h3 className="cart-rewards-heading">Coupons &amp; Rewards {isCustomerAuthenticated && loyaltyState?.availableRewards > 0 ? <span className="rewards-count-badge" aria-label={`${loyaltyState.availableRewards} available reward${loyaltyState.availableRewards === 1 ? '' : 's'}`}>{loyaltyState.availableRewards}</span> : null}</h3>
                   <CouponsRewardsRow
                     isAuthenticated={isCustomerAuthenticated}
                     appliedReward={appliedReward}
