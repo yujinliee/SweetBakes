@@ -52,3 +52,13 @@ export function getCustomDownPaymentState(order) {
     rewardApplied, hasPersistedSession, paid,
   }
 }
+
+export function getRegularPaymentDisplayAmount(order) {
+  const paid = Math.max(0, Math.round(numberOr(order?.amount_paid) * 100) / 100)
+  const due = Math.max(0, Math.round(numberOr(order?.payment_amount_due) * 100) / 100)
+  const total = Math.max(0, Math.round(numberOr(order?.total) * 100) / 100)
+  const paymentStatus = String(order?.payment_status || '').toLowerCase()
+  if (['paid', 'verified', 'payment_verified'].includes(paymentStatus) && paid > 0) return paid
+  if (Boolean(order?.loyalty_reward_applied) && due > 0) return due
+  return total
+}

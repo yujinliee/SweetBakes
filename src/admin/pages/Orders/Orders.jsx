@@ -21,6 +21,7 @@ import {
 import { resolveOrderThumbnail } from './orderThumbnailResolver.js'
 import { formatDisplayTime } from '../../../components/timeUtils.js'
 import './Orders.css'
+import { getRegularPaymentDisplayAmount } from '../../../myorders/loyaltyReward.js'
 
 const TAB_OPTIONS = ['All Orders', 'Pending', 'Confirmed', 'Completed', 'Cancelled']
 const ORDER_DETAIL_TABS = ['Overview', 'Customer', 'Fulfillment', 'Items', 'Payment']
@@ -275,6 +276,7 @@ function mapAdminOrder(order) {
     status: formatStatus(order.order_status),
     paymentStatus: formatPaymentStatus(order.payment_status),
     total: order.total === null || order.total === undefined ? null : Number(order.total) || 0,
+    paymentDisplayAmount: isCustomizedOrder(order) ? (order.total === null || order.total === undefined ? null : Number(order.total) || 0) : getRegularPaymentDisplayAmount(order),
     subtotal: order.subtotal === null || order.subtotal === undefined ? null : Number(order.subtotal) || 0,
     deliveryFee:
       order.delivery_fee === null || order.delivery_fee === undefined
@@ -1032,7 +1034,7 @@ function Orders() {
                 <th>Requested Date</th>
                 <th title="Bakery acceptance and fulfillment; payment is tracked separately">Fulfillment Status</th>
                 <th>Payment</th>
-                <th>Total</th>
+                <th>Amount Paid</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -1091,7 +1093,7 @@ function Orders() {
                     <td>
                       <span className={getPaymentClassName(order.paymentStatus)}>{order.paymentStatus}</span>
                     </td>
-                    <td className="admin-orders-total">{formatPrice(order.total, order)}</td>
+                    <td className="admin-orders-total">{formatPrice(order.paymentDisplayAmount, order)}</td>
                     <td>
                       <button
                         type="button"

@@ -12,7 +12,7 @@ import OrderReviewModal from './OrderReviewModal.jsx'
 import { ORDER_TABS, EMPTY_MESSAGES, attachOrderReviews, getOrderTabCounts, matchesOrderTab, isAwaitingPrice, historyStatus, itemDescription, referenceImages, getHistoryItems } from './orderHistory.js'
 import { attachCatalogImages, itemImage, itemFallback } from './orderHistoryImages.js'
 import { formatDisplayTime } from '../components/timeUtils.js'
-import { calculateRewardPreview, getCustomDownPaymentState, normalizeLoyaltyState } from './loyaltyReward.js'
+import { calculateRewardPreview, getCustomDownPaymentState, getRegularPaymentDisplayAmount, normalizeLoyaltyState } from './loyaltyReward.js'
 import { RewardsTagIcon, RewardsHeader, RewardsReveal, RewardsEmpty, LoyaltyRewardOption } from '../components/RewardsAccordion.jsx'
 import '../components/rewardsAccordion.css'
 import './MyOrdersPage.css'
@@ -289,6 +289,7 @@ function OrderDetails({ order, onClose, onImageOpen, paymentReturn, onPaymentRet
   const items = order.order_items || []
   const priceItems = order.price_items || []
   const finalPrice = priceItems.length ? priceItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0) : Number(order.total) || 0
+  const regularPaymentAmount = getRegularPaymentDisplayAmount(order)
   const referenceImages = items.flatMap((item) => (Array.isArray(item.customization_data?.reference_images) ? item.customization_data.reference_images : [])).filter((image) => image.signed_url || image.url)
   const isDelivery = String(order.order_method || '').toLowerCase() === 'delivery'
   const address = [order.address, [order.barangay, order.city_municipality].filter(Boolean).join(', '), [order.province, order.postal_code].filter(Boolean).join(' ')].filter(Boolean).join(', ')
@@ -312,6 +313,7 @@ function OrderDetails({ order, onClose, onImageOpen, paymentReturn, onPaymentRet
           </div>
         </div>)}</div>
         {items.length > 1 ? <div className="my-orders-detail-total"><span>Order Total</span><strong className="my-orders-detail-price">{isAwaitingPrice(order) ? 'Awaiting Price' : formatCurrency(finalPrice)}</strong></div> : null}
+        {!isCustomOrder(order) && Number(order.loyalty_discount_amount) > 0 ? <div className="my-orders-price-list"><div><dt>Subtotal</dt><dd>{formatCurrency(order.total)}</dd></div><div><dt>Loyalty Discount ({Number(order.loyalty_discount_percent) || 20}%)</dt><dd>−{formatCurrency(order.loyalty_discount_amount)}</dd></div><div className="is-total"><dt>Amount Paid</dt><dd>{formatCurrency(regularPaymentAmount)}</dd></div></div> : null}
         {referenceImages.length ? <div className="my-orders-detail-references"><h4>Reference Images</h4><div className="my-orders-reference-images">{referenceImages.map((image, index) => <button type="button" key={image.path || image.signed_url || index} onClick={() => onImageOpen(image.signed_url || image.url)}><img src={image.signed_url || image.url} alt={image.name || 'Order reference'} /></button>)}</div></div> : null}
 <PaymentReturnNotice order={order} paymentReturn={paymentReturn} onRetry={onPaymentRetry} />
         {isCustomOrder(order) ? <PaymentPanel order={order} loyaltyState={loyaltyState} loyaltyStateStatus={loyaltyStateStatus} onLoyaltyRefresh={onLoyaltyRefresh} /> : <RegularPaymentPanel order={order} />}
@@ -346,7 +348,7 @@ function OrderHistoryCard({ order, onSelect, onReview }) {
           </div>
         </div>
       </div>) : <div className="my-orders-product-info"><p>Product details unavailable.</p></div>}</div>
-      {onReview ? <div className="my-orders-review-column"><strong className="my-orders-product-price" aria-label="Order total">{isAwaitingPrice(order) ? 'Awaiting Price' : formatCurrency(order.total)}</strong><button type="button" className="my-orders-review-button" onClick={() => onReview(order)} aria-label={'Review order ' + (order.order_number || '')}>Review</button></div> : <strong className="my-orders-product-price" aria-label="Order total">{isAwaitingPrice(order) ? 'Awaiting Price' : formatCurrency(order.total)}</strong>}
+      {onReview ? <div className="my-orders-review-column"><strong className="my-orders-product-price" aria-label="Order total">{isAwaitingPrice(order) ? 'Awaiting Price' : formatCurrency(isCustomOrder(order) ? order.total : getRegularPaymentDisplayAmount(order))}</strong><button type="button" className="my-orders-review-button" onClick={() => onReview(order)} aria-label={'Review order ' + (order.order_number || '')}>Review</button></div> : <strong className="my-orders-product-price" aria-label="Order total">{isAwaitingPrice(order) ? 'Awaiting Price' : formatCurrency(isCustomOrder(order) ? order.total : getRegularPaymentDisplayAmount(order))}</strong>}
     </div>
   </article>
 }
