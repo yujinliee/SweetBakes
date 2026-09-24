@@ -240,6 +240,7 @@ function RegularPaymentPanel({ order }) {
 
 function PaymentReturnNotice({ order, paymentReturn, onRetry }) {
   if (!paymentReturn || paymentReturn.orderId !== order.id) return null
+  if (isPaymentVerified(order.payment_status)) return null
   if (['checking', 'error', 'timeout'].includes(paymentReturn.status)) return <PaymentReturnStatus state={paymentReturn} onRetry={onRetry} />
   const receivedAmount = Number(order.amount_paid) > 0 ? order.amount_paid : (isCustomOrder(order) ? order.required_down_payment : order.total)
   const amount = formatCurrency(receivedAmount)
@@ -504,7 +505,7 @@ function MyOrdersPage({ onNavigate, onCustomerLogout, isCustomerAuthenticated = 
             let receipt = null
             try { receipt = JSON.parse(window.localStorage.getItem(CART_PAYMENT_RETURN_STORAGE_KEY) || 'null') } catch { /* Invalid context is not payment proof. */ }
             logPaymentReturn('verification result', { phase: 'context', contextFound: receipt?.orderId === freshOrder.id, hasGuestEmail: Boolean(receipt?.guestEmail) })
-            if (receipt?.orderId === freshOrder.id && !receipt.guestEmail) {
+            if (!receipt?.guestEmail) {
               clearCart()
               window.localStorage.removeItem(CART_PAYMENT_RETURN_STORAGE_KEY)
               setSelectedOrder(null)
@@ -539,7 +540,7 @@ function MyOrdersPage({ onNavigate, onCustomerLogout, isCustomerAuthenticated = 
     return () => { isMounted = false }
   }, [selectedOrder?.id])
   return <div className="my-orders-page"><SiteTopbar forceScrolled homeHref="/" locationHref="/#location" contactHref="#contact" onNavigate={onNavigate} onCustomerLogout={onCustomerLogout} isCustomerAuthenticated={isCustomerAuthenticated} /><main className="my-orders-content"><section className="my-orders-shell" aria-labelledby="my-orders-title"><div className="my-orders-heading"><p className="my-orders-eyebrow">Sweet Bakes Account</p><h1 id="my-orders-title">My Orders</h1></div><nav className="my-orders-tabs" aria-label="Filter orders by status">{ORDER_TABS.map((tab) => <button type="button" key={tab} className={activeTab === tab ? 'is-active' : ''} aria-pressed={activeTab === tab} aria-controls="my-orders-results" onClick={() => setActiveTab(tab)}>{tab}<span className="my-orders-tab-count">{tabCounts[tab]}</span></button>)}</nav>
-      {['checking', 'error', 'timeout'].includes(paymentReturn?.status) ? <PaymentReturnStatus state={paymentReturn} onRetry={() => setPaymentReturn((current) => ({ ...current, status: 'checking' }))} /> : null}
+      {['checking', 'error', 'timeout'].includes(paymentReturn?.status) && !isPaymentVerified(orders.find((order) => order.id === paymentReturn?.orderId)?.payment_status) ? <PaymentReturnStatus state={paymentReturn} onRetry={() => setPaymentReturn((current) => ({ ...current, status: 'checking' }))} /> : null}
       {reviewMessage ? <p role="status" className="my-orders-review-success">{reviewMessage}</p> : null}<div id="my-orders-results" aria-live="polite" aria-busy={isLoading}>
         {isLoading ? <div className="my-orders-card my-orders-state">Loading orders...</div> : error ? <div className="my-orders-card my-orders-state my-orders-state--error" role="alert">{error}</div> : visibleOrders.length === 0 ? <div className="my-orders-card my-orders-empty"><p>{EMPTY_MESSAGES[activeTab]}</p></div> : <>
           {activeTab === 'To Receive' ? <p className="my-orders-tab-note">Ready for store pickup.</p> : null}
