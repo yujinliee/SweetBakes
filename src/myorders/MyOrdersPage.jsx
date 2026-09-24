@@ -221,8 +221,8 @@ function RegularPaymentPanel({ order }) {
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
       const session = sessionData?.session
       if (sessionError || !session?.access_token) throw new Error('Authentication is required.')
-      const { data, error } = await supabase.functions.invoke('create-xendit-payment', {
-        body: { orderId: order.id, paymentType: 'regular' },
+      const { data, error } = await supabase.functions.invoke('create-cart-xendit-payment', {
+        body: { orderId: order.id, appliedVoucher: Boolean(order.loyalty_reward_applied) },
         headers: { Authorization: `Bearer ${session.access_token}` },
       })
       if (error || !data?.paymentUrl) throw error || new Error('Payment service returned no checkout URL.')

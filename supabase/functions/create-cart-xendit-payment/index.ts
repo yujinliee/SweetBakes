@@ -29,6 +29,7 @@ type Order = {
   last_name: string | null;
   created_at: string | null;
   total: number | string | null;
+  xendit_payment_session_id: string | null;
   subtotal: number | string | null;
   delivery_fee: number | string | null;
   payment_status: string | null;
@@ -96,7 +97,7 @@ export default {
       });
       const result = await customerSupabase
         .from("orders")
-        .select("id, order_number, customer_id, email, first_name, last_name, created_at, subtotal, delivery_fee, total, payment_status, order_status")
+        .select("id, order_number, customer_id, email, first_name, last_name, created_at, subtotal, delivery_fee, total, payment_status, order_status, xendit_payment_session_id")
         .eq("id", orderId)
         .eq("customer_id", user.id)
         .maybeSingle() as { data: Order | null; error: { message?: string; code?: string } | null };
@@ -108,7 +109,7 @@ export default {
       }
       const result = await ctx.supabaseAdmin
         .from("orders")
-        .select("id, order_number, customer_id, email, first_name, last_name, created_at, subtotal, delivery_fee, total, payment_status, order_status")
+        .select("id, order_number, customer_id, email, first_name, last_name, created_at, subtotal, delivery_fee, total, payment_status, order_status, xendit_payment_session_id")
         .eq("id", orderId)
         .is("customer_id", null)
         .maybeSingle() as { data: Order | null; error: { message?: string; code?: string } | null };
@@ -166,6 +167,45 @@ export default {
 
     const secretKey = Deno.env.get("XENDIT_SECRET_KEY");
     if (!secretKey) return respond({ error: "Payment service is not configured." }, 500);
+    const existingSessionId = order.xendit_payment_session_id;
+    if (existingSessionId) {
+      const existing = await fetch(`https://api.xendit.co/sessions/${encodeURIComponent(existingSessionId)}`, { headers: { Authorization: `Basic ${btoa(`${secretKey}:`)}` } }).catch(() => null);
+      if (!existing?.ok) return respond({ error: "Unable to reconcile the existing payment session before retrying." }, 502);
+      const existingBody = await existing.json() as Record<string, unknown>;
+      const existingStatus = typeof existingBody.status === "string" ? existingBody.status.toUpperCase() : "UNKNOWN";
+      const existingAmount = Number(existingBody.amount);
+      if (existingStatus === "COMPLETED") {
+        if (existingAmount !== normalizedAmount || existingBody.reference_id !== referenceId) return respond({ error: "The existing payment session does not match this order." }, 409);
+        if (rewardApplied && rewardId) {
+          const { error } = await ctx.supabaseAdmin.rpc("complete_customer_loyalty_payment", { p_order_id: order.id, p_session_id: existingSessionId, p_amount: existingAmount });
+          if (error) return respond({ error: "Payment completed but reconciliation is still pending." }, 409);
+        } else {
+          const { error } = await ctx.supabaseAdmin.from("orders").update({ payment_status: "paid", amount_paid: existingAmount, updated_at: new Date().toISOString() }).eq("id", order.id).eq("payment_status", "unpaid");
+          if (error) return respond({ error: "Payment completed but reconciliation is still pending." }, 409);
+        }
+        return respond({ error: "This order is already paid.", reconciled: true }, 400);
+      }
+      if (existingStatus === "ACTIVE") {
+        if (existingAmount !== normalizedAmount || existingBody.reference_id !== referenceId || typeof existingBody.payment_link_url !== "string") return respond({ error: "The existing payment session does not match this order." }, 409);
+        return respond({ paymentId: existingBody.payment_id ?? existingSessionId, referenceId, status: existingBody.status, paymentUrl: existingBody.payment_link_url, amount: normalizedAmount, discountAmount, rewardApplied });
+      }
+      if (!["EXPIRED", "CANCELED", "CANCELLED"].includes(existingStatus)) return respond({ error: "Payment reconciliation is pending. Please try again after provider status is available." }, 409);
+      if (rewardId) {
+        const { error } = await ctx.supabaseAdmin.rpc("release_customer_loyalty_reservation", { p_order_id: order.id, p_session_id: existingSessionId });
+        if (error) return respond({ error: "Unable to release the expired payment reservation safely." }, 409);
+      } else {
+        const { error } = await ctx.supabaseAdmin.from("orders").update({ xendit_payment_session_id: null }).eq("id", order.id).eq("xendit_payment_session_id", existingSessionId);
+        if (error) return respond({ error: "Unable to release the expired payment session safely." }, 409);
+      }
+    }
+    if (sessionId) {
+      const { error } = await ctx.supabaseAdmin.from("orders").update({ xendit_payment_session_id: sessionId }).eq("id", order.id).eq("payment_status", "unpaid");
+      if (error) {
+        await fetch(XENDIT_CANCEL_SESSION_URL(sessionId), { method: "POST", headers: { Authorization: `Basic ${btoa(`${secretKey}:`)}` } }).catch(() => undefined);
+        if (rewardId) await ctx.supabaseAdmin.rpc("release_customer_loyalty_reservation", { p_order_id: order.id, p_session_id: null });
+        return respond({ error: "Unable to safely persist the payment session." }, 502);
+      }
+    }
     if (rewardId) {
       const { data: activeReservation, error: activeReservationError } = await customerSupabase!.rpc("get_customer_loyalty_reservation", { p_order_id: order.id }) as { data: { reserved?: boolean; session_id?: string | null } | null; error: { message?: string } | null };
       if (activeReservationError) return respond({ error: "Unable to verify the active payment reservation." }, 500);
